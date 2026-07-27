@@ -45,3 +45,43 @@ CREATE TABLE `proc_table_dependency` (
     KEY `idx_proc_name` (`proc_name`),
     KEY `idx_table_name` (`table_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='存储过程依赖表关系表';
+
+-- --------------------------------------------
+-- 表3：表间派生血缘关系表
+-- --------------------------------------------
+DROP TABLE IF EXISTS `table_lineage`;
+CREATE TABLE `table_lineage` (
+    `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `proc_id`         BIGINT       NOT NULL COMMENT '关联proc_info.id',
+    `proc_name`       VARCHAR(200) NOT NULL COMMENT '存储过程名(冗余)',
+    `source_table`    VARCHAR(300) NOT NULL COMMENT '派生源表(完整名schema.table)',
+    `source_table_short` VARCHAR(200) NOT NULL COMMENT '源表短名(去schema)',
+    `target_table`    VARCHAR(300) NOT NULL COMMENT '派生目标表(完整名)',
+    `target_table_short` VARCHAR(200) NOT NULL COMMENT '目标表短名',
+    `target_is_temp`  TINYINT      NOT NULL DEFAULT 0 COMMENT '目标是否临时表(VT_前缀):0否1是',
+    `operation`       VARCHAR(30)  NOT NULL COMMENT '派生操作:CREATE TEMP/INSERT SELECT/MERGE/UPDATE FROM/DELETE FROM',
+    `sql_block_seq`   INT          NOT NULL COMMENT 'SQL块序号(从1开始,标识派生顺序)',
+    `extract_time`    DATETIME     NOT NULL COMMENT '提取时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_proc_id` (`proc_id`),
+    KEY `idx_proc_name` (`proc_name`),
+    KEY `idx_source` (`source_table_short`),
+    KEY `idx_target` (`target_table_short`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='表间派生血缘关系';
+
+-- --------------------------------------------
+-- 表4：血缘条件详情表(JOIN/WHERE)
+-- --------------------------------------------
+DROP TABLE IF EXISTS `table_lineage_filter`;
+CREATE TABLE `table_lineage_filter` (
+    `id`              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `lineage_id`      BIGINT       NOT NULL COMMENT '关联table_lineage.id',
+    `proc_name`       VARCHAR(200) NOT NULL COMMENT '存储过程名(冗余)',
+    `filter_type`     VARCHAR(10)  NOT NULL COMMENT '条件类型:JOIN/WHERE',
+    `filter_clause`   TEXT         NOT NULL COMMENT '条件原文(如a.cust_id=b.id)',
+    `fields_involved` VARCHAR(500) DEFAULT NULL COMMENT '涉及字段JSON数组(如["a.cust_id","b.id"])',
+    `extract_time`    DATETIME     NOT NULL COMMENT '提取时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_lineage_id` (`lineage_id`),
+    KEY `idx_proc_name` (`proc_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='血缘条件详情(JOIN/WHERE)';

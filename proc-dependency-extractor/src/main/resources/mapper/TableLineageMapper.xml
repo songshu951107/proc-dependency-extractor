@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hb.extractor.mapper.TableLineageMapper">
+
+    <!-- 递归查询上游血缘 -->
+    <select id="findUpstream" resultType="java.util.Map">
+        WITH RECURSIVE upstream AS (
+            SELECT id, proc_id, proc_name,
+                   source_table, source_table_short,
+                   target_table, target_table_short,
+                   target_is_temp, operation, sql_block_seq,
+                   1 AS depth
+            FROM table_lineage
+            WHERE target_table_short = #{targetTableShort}
+            UNION ALL
+            SELECT t.id, t.proc_id, t.proc_name,
+                   t.source_table, t.source_table_short,
+                   t.target_table, t.target_table_short,
+                   t.target_is_temp, t.operation, t.sql_block_seq,
+                   u.depth + 1
+            FROM table_lineage t
+            JOIN upstream u ON t.target_table_short = u.source_table_short
+            WHERE u.depth &lt; #{maxDepth}
+        )
+        SELECT DISTINCT id, proc_id, proc_name,
+               source_table, source_table_short,
+               target_table, target_table_short,
+               target_is_temp, operation, sql_block_seq,
+               depth
+        FROM upstream
+        ORDER BY depth, sql_block_seq
+    </select>
+
+    <!-- 递归查询下游血缘 -->
+    <select id="findDownstream" resultType="java.util.Map">
+        WITH RECURSIVE downstream AS (
+            SELECT id, proc_id, proc_name,
+                   source_table, source_table_short,
+                   target_table, target_table_short,
+                   target_is_temp, operation, sql_block_seq,
+                   1 AS depth
+            FROM table_lineage
+            WHERE source_table_short = #{sourceTableShort}
+            UNION ALL
+            SELECT t.id, t.proc_id, t.proc_name,
+                   t.source_table, t.source_table_short,
+                   t.target_table, t.target_table_short,
+                   t.target_is_temp, t.operation, t.sql_block_seq,
+                   d.depth + 1
+            FROM table_lineage t
+            JOIN downstream d ON t.source_table_short = d.target_table_short
+            WHERE d.depth &lt; #{maxDepth}
+        )
+        SELECT DISTINCT id, proc_id, proc_name,
+               source_table, source_table_short,
+               target_table, target_table_short,
+               target_is_temp, operation, sql_block_seq,
+               depth
+        FROM downstream
+        ORDER BY depth, sql_block_seq
+    </select>
+
+</mapper>

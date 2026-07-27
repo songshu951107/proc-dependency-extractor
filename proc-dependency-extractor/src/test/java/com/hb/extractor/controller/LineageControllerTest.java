@@ -20,21 +20,23 @@ class LineageControllerTest {
     void testGetLineageNotFound() throws Exception {
         mockMvc.perform(get("/api/lineage/non_existent_proc"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").exists());
+                .andExpect(jsonPath("$.code").value(404))
+                .andExpect(jsonPath("$.message").value("存储过程不存在"));
     }
 
     @Test
     void testMaxDepthValidation() throws Exception {
         mockMvc.perform(get("/api/lineage/table/SOME_TABLE/upstream").param("maxDepth", "11"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").exists());
+                .andExpect(jsonPath("$.code").value(400))
+                .andExpect(jsonPath("$.message").value("maxDepth 不能超过 10"));
     }
 
     @Test
     void testUpstreamEmptyResult() throws Exception {
         mockMvc.perform(get("/api/lineage/table/NON_EXISTENT/upstream"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").exists())
+                .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data").exists());
     }
 }

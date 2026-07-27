@@ -58,13 +58,17 @@ public class SqlBlockExtractor {
             return blocks;
         }
 
-        // 按 /*StepN:...*\/ 注释切分
+        // 按 /*StepN:...*\/ 注释切分（Step 标记作为分隔符被消费）
         Pattern stepPattern = Pattern.compile("/\\*Step\\d+[^*]*\\*/");
         String[] segments = stepPattern.split(sqlContent);
 
         for (String seg : segments) {
             if (seg == null) continue;
-            String trimmed = seg.trim();
+            // 先移除 /* ... */ 块注释（Step 标记已被 split 消费，剩余块注释可能含分号）
+            String noBlock = seg.replaceAll("(?s)/\\*.*?\\*/", " ");
+            // 再移除 -- 行注释（防止注释内的分号被误当作语句分隔符）
+            String noComments = noBlock.replaceAll("(?m)--.*$", "");
+            String trimmed = noComments.trim();
             if (!trimmed.isEmpty()) {
                 // 进一步按分号切分（处理一个 Step 内多条语句）
                 String[] stmts = trimmed.split(";");

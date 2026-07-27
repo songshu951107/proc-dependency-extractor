@@ -66,6 +66,9 @@ public class LineageServiceImpl implements LineageService {
                         new LambdaQueryWrapper<TableLineageFilter>()
                                 .in(TableLineageFilter::getLineageId, edgeIds));
 
+        // 保守判断：存在 depth=maxDepth 的记录时标记 truncated。
+        // 这可能产生误报（叶子节点恰好到达 maxDepth），但不会漏报。
+        // 精确判断需要额外查询该 source 是否仍有上游，后续迭代优化。
         boolean truncated = records.stream().anyMatch(r -> Integer.valueOf(depth).equals(r.get("depth")));
         return buildGraphVO(null, null, edges, filters, truncated);
     }
@@ -83,8 +86,16 @@ public class LineageServiceImpl implements LineageService {
                         new LambdaQueryWrapper<TableLineageFilter>()
                                 .in(TableLineageFilter::getLineageId, edgeIds));
 
+        // 保守判断：存在 depth=maxDepth 的记录时标记 truncated（同 traceUpstream）
         boolean truncated = records.stream().anyMatch(r -> Integer.valueOf(depth).equals(r.get("depth")));
         return buildGraphVO(null, null, edges, filters, truncated);
+    }
+
+    @Override
+    public List<TableLineageFilter> getFilters(String procName) {
+        return tableLineageFilterMapper.selectList(
+                new LambdaQueryWrapper<TableLineageFilter>()
+                        .eq(TableLineageFilter::getProcName, procName));
     }
 
     private LineageGraphVO buildGraphVO(String procName, String updateTarget,
@@ -131,10 +142,11 @@ public class LineageServiceImpl implements LineageService {
             if (sample != null) {
                 if (shortName.equals(sample.getSourceTableShort())) {
                     node.setFullTableName(sample.getSourceTable());
+                    node.setSchemaName(extractSchema(sample.getSourceTable()));
                 } else {
                     node.setFullTableName(sample.getTargetTable());
+                    node.setSchemaName(extractSchema(sample.getTargetTable()));
                 }
-                node.setSchemaName(extractSchema(sample.getSourceTable()));
             }
 
             nodes.add(node);

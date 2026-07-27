@@ -52,15 +52,26 @@ public class LineageExtractor {
             Pattern.compile("DELETE\\s+FROM\\s+(?:\\{\\w+\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
 
     private static final Pattern FROM_TABLE_PATTERN =
-            Pattern.compile("\\bFROM\\s+(?:\\{\\w+\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("\\bFROM\\s+(?:\\{(\\w+)\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern JOIN_TABLE_PATTERN =
-            Pattern.compile("\\bJOIN\\s+(?:\\{\\w+\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("\\bJOIN\\s+(?:\\{(\\w+)\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern USING_TABLE_PATTERN =
-            Pattern.compile("\\bUSING\\s+(?:\\{\\w+\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("\\bUSING\\s+(?:\\{(\\w+)\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
 
     private static final Pattern JOIN_CLAUSE_PATTERN =
             Pattern.compile("\\bJOIN\\s+(?:\\{\\w+\\}\\.)?(\\w+)\\s+(?:\\w+\\s+)?ON\\s+(.+?)(?=\\s+(?:JOIN|WHERE|GROUP|ORDER|LIMIT)\\b|;|$)",
                     Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+    /** 提取 FROM/JOIN 后的表名和别名，用于 WHERE 字段归属判定 */
+    private static final Pattern ALIAS_PATTERN = Pattern.compile(
+            "\\b(?:FROM|JOIN)\\s+(?:\\{\\w+\\}\\.)?(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?",
+            Pattern.CASE_INSENSITIVE);
+
+    /** SQL 关键字集合，用于过滤别名误匹配 */
+    private static final Set<String> SQL_KEYWORDS = new HashSet<>(Arrays.asList(
+            "ON", "WHERE", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "FULL", "CROSS",
+            "GROUP", "ORDER", "LIMIT", "UNION", "AND", "OR", "HAVING", "SELECT",
+            "FROM", "INTO", "VALUES", "SET", "BY", "DISTINCT", "ALL", "AS"));
 
     private static final Pattern WHERE_CLAUSE_PATTERN =
             Pattern.compile("\\bWHERE\\s+(.+?)(?=\\s+(?:GROUP|ORDER|LIMIT)\\b|;|$)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
@@ -142,19 +153,26 @@ public class LineageExtractor {
         String targetFull = buildFullName(targetSchema, targetTable, schemaVarMap);
         boolean targetIsTemp = targetTable.startsWith(TEMP_PREFIX);
 
-        Set<String> sourceShortSet = new LinkedHashSet<>();
-        List<String> sources = extractSourceTables(trimmed, 0);
-        for (String src : sources) {
-            if (!src.equals(targetTable) && !src.equals(updateTargetShort)) {
-                sourceShortSet.add(src);
+        // 提取 source 表及其 schema 变量，构建完整名
+        Map<String, String> sourceSchemaMap = new LinkedHashMap<>();
+        List<String[]> sources = extractSourceTables(trimmed, 0);
+        for (String[] src : sources) {
+            String shortName = src[0];
+            String schemaVar = src[1];
+            if (!shortName.equals(targetTable) && !shortName.equals(updateTargetShort)) {
+                sourceSchemaMap.putIfAbsent(shortName, schemaVar);
             }
         }
 
+        Set<String> sourceShortSet = sourceSchemaMap.keySet();
+
         int startEdgeIndex = result.getEdges().size();
         for (String sourceShort : sourceShortSet) {
+            String sourceSchema = sourceSchemaMap.get(sourceShort);
+            String sourceFull = buildFullName(sourceSchema, sourceShort, schemaVarMap);
             LineageEdge edge = new LineageEdge();
             edge.setSourceTableShort(sourceShort);
-            edge.setSourceTable(sourceShort);
+            edge.setSourceTable(sourceFull);
             edge.setTargetTableShort(targetTable);
             edge.setTargetTable(targetFull);
             edge.setTargetIsTemp(targetIsTemp);
@@ -163,11 +181,13 @@ public class LineageExtractor {
             result.getEdges().add(edge);
         }
 
-        extractFilters(trimmed, startEdgeIndex, sourceShortSet, result);
+        // 构建 alias -> tableShort 映射，用于 WHERE 字段归属判定
+        Map<String, String> aliasMap = extractAliasMap(trimmed);
+        extractFilters(trimmed, startEdgeIndex, sourceShortSet, aliasMap, result);
     }
 
-    private List<String> extractSourceTables(String sql, int depth) {
-        List<String> sources = new ArrayList<>();
+    private List<String[]> extractSourceTables(String sql, int depth) {
+        List<String[]> sources = new ArrayList<>();
         if (depth > MAX_SUBQUERY_DEPTH) {
             log.warn("子查询递归深度超过 {}, 停止递归", MAX_SUBQUERY_DEPTH);
             return sources;
@@ -216,15 +236,18 @@ public class LineageExtractor {
         return sb.toString();
     }
 
-    private void addMatches(Pattern pattern, String sql, List<String> sources) {
+    private void addMatches(Pattern pattern, String sql, List<String[]> sources) {
         Matcher m = pattern.matcher(sql);
         while (m.find()) {
-            sources.add(m.group(1));
+            String schemaVar = m.group(1);
+            String tableName = m.group(2);
+            sources.add(new String[]{tableName, schemaVar});
         }
     }
 
     private void extractFilters(String sql, int startEdgeIndex,
-                                 Set<String> sourceSet, LineageParseResult result) {
+                                 Set<String> sourceSet, Map<String, String> aliasMap,
+                                 LineageParseResult result) {
         Matcher joinMatcher = JOIN_CLAUSE_PATTERN.matcher(sql);
         while (joinMatcher.find()) {
             String joinTable = joinMatcher.group(1);
@@ -254,7 +277,7 @@ public class LineageExtractor {
 
                 String firstField = fields.get(0);
                 String prefix = firstField.split("\\.")[0].toUpperCase();
-                int edgeIndex = findEdgeIndexByAlias(sourceSet, prefix, startEdgeIndex);
+                int edgeIndex = findEdgeIndexByAlias(aliasMap, sourceSet, prefix, startEdgeIndex);
                 if (edgeIndex >= 0) {
                     LineageFilter filter = new LineageFilter();
                     filter.setEdgeIndex(edgeIndex);
@@ -265,6 +288,25 @@ public class LineageExtractor {
                 }
             }
         }
+    }
+
+    /**
+     * 从 SQL 块中提取 alias -> tableShort 映射。
+     * 扫描 FROM/JOIN {schema}.table alias 模式，排除 SQL 关键字误匹配。
+     * 若表未显式指定别名，则将表名本身作为别名存入映射。
+     */
+    private Map<String, String> extractAliasMap(String sql) {
+        Map<String, String> aliasMap = new LinkedHashMap<>();
+        Matcher m = ALIAS_PATTERN.matcher(sql);
+        while (m.find()) {
+            String tableShort = m.group(1);
+            String alias = m.group(2);
+            if (alias != null && !SQL_KEYWORDS.contains(alias.toUpperCase())) {
+                aliasMap.put(alias.toUpperCase(), tableShort);
+            }
+            aliasMap.putIfAbsent(tableShort.toUpperCase(), tableShort);
+        }
+        return aliasMap;
     }
 
     private List<String> extractFields(String clause) {
@@ -288,17 +330,17 @@ public class LineageExtractor {
         return -1;
     }
 
-    private int findEdgeIndexByAlias(Set<String> sourceSet, String alias,
-                                      int startEdgeIndex) {
-        int i = 0;
-        for (String src : sourceSet) {
-            String expected = src.replaceAll(".*_", "").substring(0, 1).toUpperCase();
-            if (expected.equalsIgnoreCase(alias.substring(0, 1))) {
-                return startEdgeIndex + i;
-            }
-            i++;
+    /**
+     * 通过 alias -> tableShort 映射查找对应的 edge 下标。
+     * 若 alias 不在映射中（如子查询别名），返回 -1，跳过该 filter 而非误归属。
+     */
+    private int findEdgeIndexByAlias(Map<String, String> aliasMap, Set<String> sourceSet,
+                                      String alias, int startEdgeIndex) {
+        String tableShort = aliasMap.get(alias.toUpperCase());
+        if (tableShort == null) {
+            return -1;
         }
-        return -1;
+        return findEdgeIndex(sourceSet, tableShort, startEdgeIndex, 0);
     }
 
     private String extractSchemaFromBlock(String sql, String regex) {

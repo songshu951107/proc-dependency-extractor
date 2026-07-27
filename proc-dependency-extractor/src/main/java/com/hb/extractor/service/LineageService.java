@@ -1,6 +1,9 @@
 package com.hb.extractor.service;
 
 import com.hb.extractor.dto.LineageGraphVO;
+import com.hb.extractor.entity.TableLineageFilter;
+
+import java.util.List;
 
 /**
  * 血缘查询服务
@@ -23,4 +26,9 @@ public interface LineageService {
      * 递归查询某表的下游血缘
      */
     LineageGraphVO traceDownstream(String tableName, Integer maxDepth);
+
+    /**
+     * 查询某存储过程的所有血缘条件（JOIN/WHERE）
+     */
+    List<TableLineageFilter> getFilters(String procName);
 }

@@ -152,7 +152,10 @@ class LineageExtractorTest {
             System.out.println("  " + e.getSourceTableShort() + " -> " + e.getTargetTableShort() + " (" + e.getOperation() + ")");
         }
 
-        assertTrue(result.getEdges().size() >= 1,
-                "应提取至少 1 条派生关系, 实际: " + result.getEdges().size());
+        assertTrue(result.getEdges().size() >= 7,
+                "应提取至少 7 条派生关系, 实际: " + result.getEdges().size());
+        boolean hasFrozenBook = result.getEdges().stream()
+                .anyMatch(e -> e.getSourceTableShort().contains("FROZEN_BOOK"));
+        assertTrue(hasFrozenBook, "应包含子查询内的 F_EV_CRBS_DEPOSIT_ACCT_FROZEN_BOOK");
     }
 }

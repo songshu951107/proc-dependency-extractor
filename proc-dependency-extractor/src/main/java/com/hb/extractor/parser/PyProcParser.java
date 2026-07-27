@@ -1,0 +1,74 @@
+package com.hb.extractor.parser;
+
+import com.hb.extractor.parser.dto.ProcMetadata;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
+
+/**
+ * Python 存储过程主解析器(编排)
+ *
+ * 解析流程:
+ * 1. 读取 .py 文件内容
+ * 2. 提取头部注释元数据(脚本名称/功能说明/更新对象)
+ * 3. 解析 schema 变量映射(CDM=etl.dwa_db_cdm)
+ * 4. 抽取三引号 SQL 块
+ * 5. 从 SQL 中提取临时表和依赖表
+ */
+@Component
+public class PyProcParser {
+
+    @Autowired
+    private ProcHeaderParser headerParser;
+
+    @Autowired
+    private SchemaVarResolver schemaVarResolver;
+
+    @Autowired
+    private SqlBlockExtractor sqlBlockExtractor;
+
+    @Autowired
+    private SqlTableExtractor sqlTableExtractor;
+
+    /**
+     * 解析单个 Python 存储过程文件
+     *
+     * @param filePath 文件路径
+     * @return 解析结果
+     */
+    public ProcMetadata parse(Path filePath) throws IOException {
+        String content = Files.readString(filePath, StandardCharsets.UTF_8);
+
+        ProcMetadata metadata = new ProcMetadata();
+        metadata.setFilePath(filePath.toString());
+        metadata.setProcFileName(filePath.getFileName().toString());
+        metadata.setExtractTime(LocalDateTime.now());
+
+        // 如果头部未提供脚本名称,使用文件名(去.py)
+        String fileName = filePath.getFileName().toString();
+        if (fileName.endsWith(".py")) {
+            metadata.setProcName(fileName.substring(0, fileName.length() - 3));
+        } else {
+            metadata.setProcName(fileName);
+        }
+
+        // 1. 头部元数据
+        headerParser.parse(content, metadata);
+
+        // 2. schema 变量映射
+        metadata.setSchemaVarMap(schemaVarResolver.resolve(content));
+
+        // 3. 抽取 SQL 块
+        String sql = sqlBlockExtractor.extract(content);
+
+        // 4. 提取表名
+        sqlTableExtractor.extract(sql, metadata);
+
+        return metadata;
+    }
+}

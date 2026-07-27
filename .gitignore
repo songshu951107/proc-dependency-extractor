@@ -1,0 +1,25 @@
+# Maven
+target/
+*.jar
+*.war
+
+# Node
+node_modules/
+dist/
+npm-debug.log*
+
+# IDE
+.idea/
+*.iml
+*.iws
+.vscode/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Superpowers 临时文件
+.superpowers/
+
+# 日志
+*.log

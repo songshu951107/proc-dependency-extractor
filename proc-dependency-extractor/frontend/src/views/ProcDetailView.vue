@@ -12,6 +12,9 @@
             </span>
           </div>
           <div>
+            <el-button type="primary" size="small" @click="viewLineage" style="margin-right: 8px;">
+              <el-icon><Connection /></el-icon>&nbsp;查看血缘图
+            </el-button>
             <el-tag type="success" style="margin-right: 8px;">依赖表: {{ depCount }}</el-tag>
             <el-tag type="warning">临时表: {{ tempCount }}</el-tag>
           </div>
@@ -73,7 +76,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft } from '@element-plus/icons-vue'
+import { ArrowLeft, Connection } from '@element-plus/icons-vue'
 import { listDependencies } from '../api/proc'
 
 const route = useRoute()
@@ -131,6 +134,10 @@ async function fetchData() {
 
 function goBack() {
   router.push('/procs')
+}
+
+function viewLineage() {
+  router.push(`/procs/${procName.value}/lineage`)
 }
 
 onMounted(() => {

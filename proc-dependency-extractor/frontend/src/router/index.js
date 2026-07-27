@@ -18,6 +18,12 @@ const routes = [
     name: 'ProcDetail',
     component: () => import('../views/ProcDetailView.vue'),
     meta: { title: '依赖表详情' }
+  },
+  {
+    path: '/procs/:procName/lineage',
+    name: 'Lineage',
+    component: () => import('../views/LineageView.vue'),
+    meta: { title: '血缘图' }
   }
 ]
 

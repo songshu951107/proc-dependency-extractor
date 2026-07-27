@@ -38,4 +38,50 @@ public class SqlBlockExtractor {
         }
         return sb.toString();
     }
+
+    /**
+     * 按顺序切分 SQL 块，返回每个块独立的内容
+     * 切分依据：先抽取三引号内的 SQL 文本，再按 /*StepN*\/ 注释起点 和 分号 切分
+     *
+     * @param content Python 文件原文 或 已抽取的 SQL 文本
+     * @return SQL 块列表（按出现顺序）
+     */
+    public List<String> extractBlocks(String content) {
+        List<String> blocks = new ArrayList<>();
+        if (content == null || content.trim().isEmpty()) {
+            return blocks;
+        }
+
+        // 先抽取三引号内的 SQL 文本（兼容直接传入 SQL 文本的情况）
+        String sqlContent = extract(content);
+        if (sqlContent == null || sqlContent.trim().isEmpty()) {
+            return blocks;
+        }
+
+        // 按 /*StepN:...*\/ 注释切分
+        Pattern stepPattern = Pattern.compile("/\\*Step\\d+[^*]*\\*/");
+        String[] segments = stepPattern.split(sqlContent);
+
+        for (String seg : segments) {
+            if (seg == null) continue;
+            String trimmed = seg.trim();
+            if (!trimmed.isEmpty()) {
+                // 进一步按分号切分（处理一个 Step 内多条语句）
+                String[] stmts = trimmed.split(";");
+                for (String stmt : stmts) {
+                    String s = stmt.trim();
+                    if (!s.isEmpty()) {
+                        blocks.add(s);
+                    }
+                }
+            }
+        }
+
+        // 如果未切分出块，整体作为一个块
+        if (blocks.isEmpty() && !sqlContent.trim().isEmpty()) {
+            blocks.add(sqlContent.trim());
+        }
+
+        return blocks;
+    }
 }

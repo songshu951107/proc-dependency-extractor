@@ -3,12 +3,20 @@ package com.hb.extractor.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hb.extractor.dto.BatchExtractResult;
 import com.hb.extractor.entity.ProcInfo;
 import com.hb.extractor.entity.ProcTableDependency;
+import com.hb.extractor.entity.TableLineage;
+import com.hb.extractor.entity.TableLineageFilter;
 import com.hb.extractor.mapper.ProcInfoMapper;
 import com.hb.extractor.mapper.ProcTableDependencyMapper;
+import com.hb.extractor.mapper.TableLineageFilterMapper;
+import com.hb.extractor.mapper.TableLineageMapper;
 import com.hb.extractor.parser.PyProcParser;
+import com.hb.extractor.parser.dto.LineageEdge;
+import com.hb.extractor.parser.dto.LineageFilter;
+import com.hb.extractor.parser.dto.LineageParseResult;
 import com.hb.extractor.parser.dto.ProcMetadata;
 import com.hb.extractor.service.ProcExtractService;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +50,12 @@ public class ProcExtractServiceImpl implements ProcExtractService {
 
     @Autowired
     private ProcTableDependencyMapper procTableDependencyMapper;
+
+    @Autowired
+    private TableLineageMapper tableLineageMapper;
+
+    @Autowired
+    private TableLineageFilterMapper tableLineageFilterMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -248,6 +262,13 @@ public class ProcExtractServiceImpl implements ProcExtractService {
         LambdaQueryWrapper<ProcTableDependency> depWrapper = new LambdaQueryWrapper<>();
         depWrapper.eq(ProcTableDependency::getProcId, procInfo.getId());
         procTableDependencyMapper.delete(depWrapper);
+
+        // 级联删除血缘
+        tableLineageFilterMapper.delete(new LambdaQueryWrapper<TableLineageFilter>()
+                .eq(TableLineageFilter::getProcName, procName));
+        tableLineageMapper.delete(new LambdaQueryWrapper<TableLineage>()
+                .eq(TableLineage::getProcName, procName));
+
         procInfoMapper.deleteById(procInfo.getId());
         return true;
     }
@@ -306,6 +327,57 @@ public class ProcExtractServiceImpl implements ProcExtractService {
         // 批量插入
         for (ProcTableDependency dep : depList) {
             procTableDependencyMapper.insert(dep);
+        }
+
+        // === 血缘数据双写入库 ===
+        LineageParseResult lineageResult = metadata.getLineageResult();
+        if (lineageResult != null) {
+            String procName = metadata.getProcName();
+
+            // 先删旧血缘（按 proc_name）
+            tableLineageMapper.delete(new LambdaQueryWrapper<TableLineage>()
+                    .eq(TableLineage::getProcName, procName));
+            tableLineageFilterMapper.delete(new LambdaQueryWrapper<TableLineageFilter>()
+                    .eq(TableLineageFilter::getProcName, procName));
+
+            // 插入 edges
+            List<TableLineage> lineageRecords = new ArrayList<>();
+            for (LineageEdge edge : lineageResult.getEdges()) {
+                TableLineage record = new TableLineage();
+                record.setProcId(procInfo.getId());
+                record.setProcName(procName);
+                record.setSourceTable(edge.getSourceTable());
+                record.setSourceTableShort(edge.getSourceTableShort());
+                record.setTargetTable(edge.getTargetTable());
+                record.setTargetTableShort(edge.getTargetTableShort());
+                record.setTargetIsTemp(edge.isTargetIsTemp() ? 1 : 0);
+                record.setOperation(edge.getOperation());
+                record.setSqlBlockSeq(edge.getSqlBlockSeq());
+                record.setExtractTime(now);
+                tableLineageMapper.insert(record);
+                lineageRecords.add(record);
+            }
+
+            // 插入 filters
+            ObjectMapper objectMapper = new ObjectMapper();
+            for (LineageFilter filter : lineageResult.getFilters()) {
+                int idx = filter.getEdgeIndex();
+                if (idx < 0 || idx >= lineageRecords.size()) continue;
+                TableLineageFilter record = new TableLineageFilter();
+                record.setLineageId(lineageRecords.get(idx).getId());
+                record.setProcName(procName);
+                record.setFilterType(filter.getFilterType());
+                record.setFilterClause(filter.getFilterClause());
+                try {
+                    record.setFieldsInvolved(filter.getFieldsInvolved() != null
+                            ? objectMapper.writeValueAsString(filter.getFieldsInvolved())
+                            : null);
+                } catch (Exception e) {
+                    record.setFieldsInvolved(null);
+                }
+                record.setExtractTime(now);
+                tableLineageFilterMapper.insert(record);
+            }
         }
 
         return procInfo;

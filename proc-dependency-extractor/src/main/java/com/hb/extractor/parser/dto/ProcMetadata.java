@@ -52,6 +52,9 @@ public class ProcMetadata {
     /** 提取时间 */
     private LocalDateTime extractTime;
 
+    /** 血缘解析结果 */
+    private LineageParseResult lineageResult;
+
     /**
      * 表引用记录
      */

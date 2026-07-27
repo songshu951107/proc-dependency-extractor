@@ -1,5 +1,6 @@
 package com.hb.extractor.parser;
 
+import com.hb.extractor.parser.dto.LineageParseResult;
 import com.hb.extractor.parser.dto.ProcMetadata;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -9,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Python 存储过程主解析器(编排)
@@ -34,6 +36,9 @@ public class PyProcParser {
 
     @Autowired
     private SqlTableExtractor sqlTableExtractor;
+
+    @Autowired
+    private LineageExtractor lineageExtractor;
 
     /**
      * 解析单个 Python 存储过程文件
@@ -68,6 +73,12 @@ public class PyProcParser {
 
         // 4. 提取表名
         sqlTableExtractor.extract(sql, metadata);
+
+        // 5. 血缘派生关系（新增）
+        List<String> blocks = sqlBlockExtractor.extractBlocks(content);
+        LineageParseResult lineageResult = lineageExtractor.extract(
+                blocks, metadata.getSchemaVarMap(), metadata.getUpdateTarget());
+        metadata.setLineageResult(lineageResult);
 
         return metadata;
     }

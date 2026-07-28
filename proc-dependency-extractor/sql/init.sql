@@ -85,3 +85,43 @@ CREATE TABLE `table_lineage_filter` (
     KEY `idx_lineage_id` (`lineage_id`),
     KEY `idx_proc_name` (`proc_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='血缘条件详情(JOIN/WHERE)';
+
+-- --------------------------------------------
+-- 表5：字段级血缘映射表
+-- --------------------------------------------
+DROP TABLE IF EXISTS `table_field_mapping`;
+CREATE TABLE `table_field_mapping` (
+    `id`                  BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `lineage_id`          BIGINT       NOT NULL COMMENT '关联 table_lineage.id',
+    `proc_name`           VARCHAR(200) NOT NULL COMMENT '存储过程名(冗余)',
+    `target_field`        VARCHAR(200) NOT NULL COMMENT '目标表字段名',
+    `field_order`         INT          NOT NULL COMMENT 'SELECT 列序号(从1开始)',
+    `source_expr`         TEXT                  DEFAULT NULL COMMENT 'SELECT 表达式原文',
+    `source_alias`        VARCHAR(100)          DEFAULT NULL COMMENT '表达式主别名(如 T01)',
+    `source_table_short`  VARCHAR(200)          DEFAULT NULL COMMENT '推断的来源表短名',
+    `extract_time`        DATETIME     NOT NULL COMMENT '提取时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_lineage_id` (`lineage_id`),
+    KEY `idx_proc_name` (`proc_name`),
+    KEY `idx_target_field` (`target_field`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='字段级血缘映射';
+
+-- --------------------------------------------
+-- 表6：SQL 块信息表
+-- --------------------------------------------
+DROP TABLE IF EXISTS `sql_block_info`;
+CREATE TABLE `sql_block_info` (
+    `id`            BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `proc_name`     VARCHAR(200) NOT NULL COMMENT '存储过程名',
+    `block_seq`     INT          NOT NULL COMMENT 'SQL 块序号',
+    `block_type`    VARCHAR(50)           DEFAULT NULL COMMENT 'INSERT_SELECT / CREATE_TEMP / OTHER',
+    `target_table`  VARCHAR(200)          DEFAULT NULL COMMENT '目标表短名',
+    `main_table`    VARCHAR(200)          DEFAULT NULL COMMENT '主表(FROM 后第一个表)短名',
+    `start_line`    INT                   DEFAULT NULL COMMENT '脚本中起始行号',
+    `end_line`      INT                   DEFAULT NULL COMMENT '脚本中结束行号',
+    `sql_content`   MEDIUMTEXT            DEFAULT NULL COMMENT 'SQL 块原文',
+    `extract_time`  DATETIME     NOT NULL COMMENT '提取时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_proc_block` (`proc_name`, `block_seq`),
+    KEY `idx_proc_target` (`proc_name`, `target_table`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='SQL 块信息';

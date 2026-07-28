@@ -1,7 +1,9 @@
 package com.hb.extractor.controller;
 
+import com.hb.extractor.dto.FieldMappingVO;
 import com.hb.extractor.dto.LineageGraphVO;
 import com.hb.extractor.dto.Result;
+import com.hb.extractor.dto.SqlBlockVO;
 import com.hb.extractor.entity.TableLineageFilter;
 import com.hb.extractor.service.LineageService;
 import lombok.extern.slf4j.Slf4j;
@@ -66,5 +68,30 @@ public class LineageController {
         }
         LineageGraphVO vo = lineageService.traceDownstream(tableName, maxDepth);
         return Result.success(vo);
+    }
+
+    /**
+     * 查询字段映射（含递归追溯）
+     * GET /api/lineage/{procName}/field-mapping?tableName=X&recursive=true
+     */
+    @GetMapping("/{procName}/field-mapping")
+    public Result<FieldMappingVO> fieldMapping(@PathVariable String procName,
+                                                @RequestParam String tableName,
+                                                @RequestParam(defaultValue = "false") boolean recursive) {
+        FieldMappingVO vo = lineageService.getFieldMapping(procName, tableName, recursive);
+        if (vo == null) {
+            return Result.error(404, "存储过程不存在");
+        }
+        return Result.success(vo);
+    }
+
+    /**
+     * 查询 SQL 块详情
+     * GET /api/lineage/{procName}/sql-blocks
+     */
+    @GetMapping("/{procName}/sql-blocks")
+    public Result<List<SqlBlockVO>> sqlBlocks(@PathVariable String procName) {
+        List<SqlBlockVO> list = lineageService.getSqlBlocks(procName);
+        return Result.success(list);
     }
 }

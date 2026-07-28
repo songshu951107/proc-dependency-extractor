@@ -5,9 +5,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hb.extractor.dto.LineageGraphVO;
 import com.hb.extractor.entity.ProcInfo;
+import com.hb.extractor.entity.TableFieldMapping;
 import com.hb.extractor.entity.TableLineage;
 import com.hb.extractor.entity.TableLineageFilter;
 import com.hb.extractor.mapper.ProcInfoMapper;
+import com.hb.extractor.mapper.TableFieldMappingMapper;
 import com.hb.extractor.mapper.TableLineageFilterMapper;
 import com.hb.extractor.mapper.TableLineageMapper;
 import com.hb.extractor.service.LineageService;
@@ -31,6 +33,9 @@ public class LineageServiceImpl implements LineageService {
     @Autowired
     private TableLineageFilterMapper tableLineageFilterMapper;
 
+    @Autowired
+    private TableFieldMappingMapper tableFieldMappingMapper;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -50,7 +55,11 @@ public class LineageServiceImpl implements LineageService {
                 new LambdaQueryWrapper<TableLineageFilter>()
                         .eq(TableLineageFilter::getProcName, procName));
 
-        return buildGraphVO(procName, procInfo.getUpdateTarget(), edges, filters, false);
+        List<TableFieldMapping> fieldMappings = tableFieldMappingMapper.selectList(
+                new LambdaQueryWrapper<TableFieldMapping>()
+                        .eq(TableFieldMapping::getProcName, procName));
+
+        return buildGraphVO(procName, procInfo.getUpdateTarget(), edges, filters, fieldMappings, false);
     }
 
     @Override
@@ -66,11 +75,16 @@ public class LineageServiceImpl implements LineageService {
                         new LambdaQueryWrapper<TableLineageFilter>()
                                 .in(TableLineageFilter::getLineageId, edgeIds));
 
+        List<TableFieldMapping> fieldMappings = edgeIds.isEmpty() ? Collections.emptyList() :
+                tableFieldMappingMapper.selectList(
+                        new LambdaQueryWrapper<TableFieldMapping>()
+                                .in(TableFieldMapping::getLineageId, edgeIds));
+
         // 保守判断：存在 depth=maxDepth 的记录时标记 truncated。
         // 这可能产生误报（叶子节点恰好到达 maxDepth），但不会漏报。
         // 精确判断需要额外查询该 source 是否仍有上游，后续迭代优化。
         boolean truncated = records.stream().anyMatch(r -> Integer.valueOf(depth).equals(r.get("depth")));
-        return buildGraphVO(null, null, edges, filters, truncated);
+        return buildGraphVO(null, null, edges, filters, fieldMappings, truncated);
     }
 
     @Override
@@ -86,9 +100,14 @@ public class LineageServiceImpl implements LineageService {
                         new LambdaQueryWrapper<TableLineageFilter>()
                                 .in(TableLineageFilter::getLineageId, edgeIds));
 
+        List<TableFieldMapping> fieldMappings = edgeIds.isEmpty() ? Collections.emptyList() :
+                tableFieldMappingMapper.selectList(
+                        new LambdaQueryWrapper<TableFieldMapping>()
+                                .in(TableFieldMapping::getLineageId, edgeIds));
+
         // 保守判断：存在 depth=maxDepth 的记录时标记 truncated（同 traceUpstream）
         boolean truncated = records.stream().anyMatch(r -> Integer.valueOf(depth).equals(r.get("depth")));
-        return buildGraphVO(null, null, edges, filters, truncated);
+        return buildGraphVO(null, null, edges, filters, fieldMappings, truncated);
     }
 
     @Override
@@ -101,6 +120,7 @@ public class LineageServiceImpl implements LineageService {
     private LineageGraphVO buildGraphVO(String procName, String updateTarget,
                                           List<TableLineage> edges,
                                           List<TableLineageFilter> filters,
+                                          List<TableFieldMapping> fieldMappings,
                                           boolean truncated) {
         LineageGraphVO vo = new LineageGraphVO();
         vo.setProcName(procName);
@@ -126,12 +146,21 @@ public class LineageServiceImpl implements LineageService {
             LineageGraphVO.Node node = new LineageGraphVO.Node();
             node.setId(shortName);
 
+            // 节点类型判定优先级：
+            // 1. 匹配 updateTarget → TARGET
+            // 2. 以 VT_ 开头 → TEMP
+            // 3. 作为边的 target 且 targetIsTemp=1 → TEMP
+            // 4. 不在任何边的 target 中 → SOURCE（纯源表）
+            // 5. 作为边的 target 且 targetIsTemp=0 → TARGET（真正的目标表）
             if (shortName.equals(updateTargetShort)) {
                 node.setNodeType("TARGET");
             } else if (shortName.startsWith("VT_") || isTempInEdges(shortName, edges)) {
                 node.setNodeType("TEMP");
             } else if (!targetShorts.contains(shortName)) {
                 node.setNodeType("SOURCE");
+            } else if (isTargetInEdges(shortName, edges)) {
+                // 作为 target 且非临时表 → 真正的目标表
+                node.setNodeType("TARGET");
             } else {
                 node.setNodeType("TEMP");
             }
@@ -173,6 +202,19 @@ public class LineageServiceImpl implements LineageService {
                 filterDetails.add(fd);
             }
             edge.setFilters(filterDetails);
+            edge.setMainTable(e.getMainTable() != null ? e.getMainTable() : null);
+
+            List<LineageGraphVO.FieldMappingBrief> briefs = new ArrayList<>();
+            for (TableFieldMapping fm : fieldMappings) {
+                if (fm.getLineageId() != null && fm.getLineageId().equals(e.getId())) {
+                    LineageGraphVO.FieldMappingBrief brief = new LineageGraphVO.FieldMappingBrief();
+                    brief.setTargetField(fm.getTargetField());
+                    brief.setSourceExpr(fm.getSourceExpr());
+                    brief.setSourceTableShort(fm.getSourceTableShort());
+                    briefs.add(brief);
+                }
+            }
+            edge.setFieldMappings(briefs);
             edgeList.add(edge);
         }
 
@@ -184,6 +226,14 @@ public class LineageServiceImpl implements LineageService {
     private boolean isTempInEdges(String shortName, List<TableLineage> edges) {
         return edges.stream().anyMatch(e ->
                 shortName.equals(e.getTargetTableShort()) && Integer.valueOf(1).equals(e.getTargetIsTemp()));
+    }
+
+    /**
+     * 判断 shortName 是否作为某条边的 target 且 targetIsTemp=0（真正的目标表，非临时表）
+     */
+    private boolean isTargetInEdges(String shortName, List<TableLineage> edges) {
+        return edges.stream().anyMatch(e ->
+                shortName.equals(e.getTargetTableShort()) && Integer.valueOf(0).equals(e.getTargetIsTemp()));
     }
 
     private List<String> parseFields(String json) {
@@ -225,6 +275,7 @@ public class LineageServiceImpl implements LineageService {
             e.setOperation((String) r.get("operation"));
             Object seqVal = r.get("sql_block_seq");
             e.setSqlBlockSeq(seqVal instanceof Number ? ((Number) seqVal).intValue() : 0);
+            e.setMainTable((String) r.get("main_table"));
             list.add(e);
         }
         return list;

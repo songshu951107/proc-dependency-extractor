@@ -35,6 +35,10 @@ public class LineageGraphVO {
         private String operation;
         private Integer sqlBlockSeq;
         private List<FilterDetail> filters;
+        /** 主表短名 */
+        private String mainTable;
+        /** 字段映射概要 */
+        private List<FieldMappingBrief> fieldMappings;
     }
 
     @Data
@@ -42,5 +46,12 @@ public class LineageGraphVO {
         private String filterType;
         private String filterClause;
         private List<String> fields;
+    }
+
+    @Data
+    public static class FieldMappingBrief {
+        private String targetField;
+        private String sourceExpr;
+        private String sourceTableShort;
     }
 }

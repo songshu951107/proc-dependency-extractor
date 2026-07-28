@@ -44,6 +44,9 @@ public class TableLineage {
     /** SQL块序号(从1开始) */
     private Integer sqlBlockSeq;
 
+    /** 主表短名(FROM 后第一个表) */
+    private String mainTable;
+
     /** 提取时间 */
     private LocalDateTime extractTime;
 }

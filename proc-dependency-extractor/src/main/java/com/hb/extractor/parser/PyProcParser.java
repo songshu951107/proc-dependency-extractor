@@ -2,6 +2,7 @@ package com.hb.extractor.parser;
 
 import com.hb.extractor.parser.dto.LineageParseResult;
 import com.hb.extractor.parser.dto.ProcMetadata;
+import com.hb.extractor.parser.dto.SqlBlockInfoDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -10,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -75,9 +77,14 @@ public class PyProcParser {
         sqlTableExtractor.extract(sql, metadata);
 
         // 5. 血缘派生关系（新增）
-        List<String> blocks = sqlBlockExtractor.extractBlocks(content);
+        List<SqlBlockInfoDTO> blockInfos = sqlBlockExtractor.extractBlocksWithMeta(content);
+        List<String> blocks = new ArrayList<>();
+        for (SqlBlockInfoDTO bi : blockInfos) {
+            blocks.add(bi.getContent());
+        }
         LineageParseResult lineageResult = lineageExtractor.extract(
                 blocks, metadata.getSchemaVarMap(), metadata.getUpdateTarget());
+        lineageResult.setSqlBlocks(blockInfos);
         metadata.setLineageResult(lineageResult);
 
         return metadata;

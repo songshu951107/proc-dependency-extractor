@@ -1,5 +1,6 @@
 package com.hb.extractor.parser;
 
+import com.hb.extractor.parser.dto.FieldMapping;
 import com.hb.extractor.parser.dto.LineageEdge;
 import com.hb.extractor.parser.dto.LineageFilter;
 import com.hb.extractor.parser.dto.LineageParseResult;
@@ -25,6 +26,12 @@ public class LineageExtractor {
     @Autowired
     private SqlBlockExtractor sqlBlockExtractor;
 
+    @Autowired
+    private DdlParser ddlParser;
+
+    @Autowired
+    private FieldMappingExtractor fieldMappingExtractor;
+
     private static final Pattern SCHEMA_VAR_PATTERN = Pattern.compile("\\{(\\w+)\\}");
     private static final String TEMP_PREFIX = "VT_";
     private static final int MAX_SUBQUERY_DEPTH = 5;
@@ -40,31 +47,33 @@ public class LineageExtractor {
     private static final Pattern DELETE_FROM_PATTERN =
             Pattern.compile("DELETE\\s+FROM", Pattern.CASE_INSENSITIVE);
 
+    // target 正则：schema 前缀用非捕获组，支持 {var}.table 和 schema.table 两种形式
     private static final Pattern CREATE_TEMP_TARGET_PATTERN =
-            Pattern.compile("CREATE\\s+(TEMP|TEMPORARY)\\s+TABLE\\s+(?:\\{\\w+\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("CREATE\\s+(TEMP|TEMPORARY)\\s+TABLE\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern INSERT_TARGET_PATTERN =
-            Pattern.compile("INSERT\\s+INTO\\s+(?:\\{\\w+\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("INSERT\\s+INTO\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern MERGE_TARGET_PATTERN =
-            Pattern.compile("MERGE\\s+INTO\\s+(?:\\{\\w+\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("MERGE\\s+INTO\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern UPDATE_TARGET_PATTERN =
-            Pattern.compile("UPDATE\\s+(?:\\{\\w+\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("UPDATE\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern DELETE_TARGET_PATTERN =
-            Pattern.compile("DELETE\\s+FROM\\s+(?:\\{\\w+\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("DELETE\\s+FROM\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
 
+    // source 正则：schema 前缀用捕获组，group(1)={var} 形式，group(2)=schema 名形式，group(3)=表名
     private static final Pattern FROM_TABLE_PATTERN =
-            Pattern.compile("\\bFROM\\s+(?:\\{(\\w+)\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("\\bFROM\\s+(?:(?:\\{(\\w+)\\}|(\\w+))\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern JOIN_TABLE_PATTERN =
-            Pattern.compile("\\bJOIN\\s+(?:\\{(\\w+)\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("\\bJOIN\\s+(?:(?:\\{(\\w+)\\}|(\\w+))\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern USING_TABLE_PATTERN =
-            Pattern.compile("\\bUSING\\s+(?:\\{(\\w+)\\}\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("\\bUSING\\s+(?:(?:\\{(\\w+)\\}|(\\w+))\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
 
     private static final Pattern JOIN_CLAUSE_PATTERN =
-            Pattern.compile("\\bJOIN\\s+(?:\\{\\w+\\}\\.)?(\\w+)\\s+(?:\\w+\\s+)?ON\\s+(.+?)(?=\\s+(?:JOIN|WHERE|GROUP|ORDER|LIMIT)\\b|;|$)",
+            Pattern.compile("\\bJOIN\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)\\s+(?:\\w+\\s+)?ON\\s+(.+?)(?=\\s+(?:JOIN|WHERE|GROUP|ORDER|LIMIT)\\b|;|$)",
                     Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
     /** 提取 FROM/JOIN 后的表名和别名，用于 WHERE 字段归属判定 */
     private static final Pattern ALIAS_PATTERN = Pattern.compile(
-            "\\b(?:FROM|JOIN)\\s+(?:\\{\\w+\\}\\.)?(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?",
+            "\\b(?:FROM|JOIN)\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?",
             Pattern.CASE_INSENSITIVE);
 
     /** SQL 关键字集合，用于过滤别名误匹配 */
@@ -113,35 +122,35 @@ public class LineageExtractor {
             Matcher m = CREATE_TEMP_TARGET_PATTERN.matcher(trimmed);
             if (m.find()) {
                 targetTable = m.group(2);
-                targetSchema = extractSchemaFromBlock(trimmed, "TABLE\\s+(?:\\{(\\w+)\\}\\.)?");
+                targetSchema = extractSchemaFromBlock(trimmed, "TABLE\\s+(?:(?:\\{(\\w+)\\}|(\\w+))\\.)?");
                 operation = "CREATE TEMP";
             }
         } else if (INSERT_INTO_PATTERN.matcher(trimmed).find()) {
             Matcher m = INSERT_TARGET_PATTERN.matcher(trimmed);
             if (m.find()) {
                 targetTable = m.group(1);
-                targetSchema = extractSchemaFromBlock(trimmed, "INTO\\s+(?:\\{(\\w+)\\}\\.)?");
+                targetSchema = extractSchemaFromBlock(trimmed, "INTO\\s+(?:(?:\\{(\\w+)\\}|(\\w+))\\.)?");
                 operation = "INSERT SELECT";
             }
         } else if (MERGE_INTO_PATTERN.matcher(trimmed).find()) {
             Matcher m = MERGE_TARGET_PATTERN.matcher(trimmed);
             if (m.find()) {
                 targetTable = m.group(1);
-                targetSchema = extractSchemaFromBlock(trimmed, "INTO\\s+(?:\\{(\\w+)\\}\\.)?");
+                targetSchema = extractSchemaFromBlock(trimmed, "INTO\\s+(?:(?:\\{(\\w+)\\}|(\\w+))\\.)?");
                 operation = "MERGE";
             }
         } else if (UPDATE_FROM_PATTERN.matcher(trimmed).find()) {
             Matcher m = UPDATE_TARGET_PATTERN.matcher(trimmed);
             if (m.find()) {
                 targetTable = m.group(1);
-                targetSchema = extractSchemaFromBlock(trimmed, "UPDATE\\s+(?:\\{(\\w+)\\}\\.)?");
+                targetSchema = extractSchemaFromBlock(trimmed, "UPDATE\\s+(?:(?:\\{(\\w+)\\}|(\\w+))\\.)?");
                 operation = "UPDATE FROM";
             }
         } else if (DELETE_FROM_PATTERN.matcher(trimmed).find()) {
             Matcher m = DELETE_TARGET_PATTERN.matcher(trimmed);
             if (m.find()) {
                 targetTable = m.group(1);
-                targetSchema = extractSchemaFromBlock(trimmed, "FROM\\s+(?:\\{(\\w+)\\}\\.)?");
+                targetSchema = extractSchemaFromBlock(trimmed, "FROM\\s+(?:(?:\\{(\\w+)\\}|(\\w+))\\.)?");
                 operation = "DELETE FROM";
             }
         }
@@ -184,6 +193,29 @@ public class LineageExtractor {
         // 构建 alias -> tableShort 映射，用于 WHERE 字段归属判定
         Map<String, String> aliasMap = extractAliasMap(trimmed);
         extractFilters(trimmed, startEdgeIndex, sourceShortSet, aliasMap, result);
+
+        // 提取主表（FROM 后第一个表）
+        String mainTable = extractMainTable(trimmed);
+        // 回填到本块产生的所有 edge
+        for (int i = startEdgeIndex; i < result.getEdges().size(); i++) {
+            result.getEdges().get(i).setMainTable(mainTable);
+        }
+
+        // 提取字段映射（仅 INSERT SELECT / CREATE TEMP）
+        if ("INSERT SELECT".equals(operation) || "CREATE TEMP".equals(operation)) {
+            try {
+                List<String> ddlFields = ddlParser.parse(targetTable);
+                List<FieldMapping> mappings = fieldMappingExtractor.extract(
+                        trimmed, targetTable, aliasMap, ddlFields);
+                for (FieldMapping fm : mappings) {
+                    int edgeIndex = findMainEdgeIndex(result.getEdges(), mainTable, startEdgeIndex);
+                    fm.setEdgeIndex(edgeIndex >= 0 ? edgeIndex : startEdgeIndex);
+                    result.getFieldMappings().add(fm);
+                }
+            } catch (Exception e) {
+                log.warn("SQL 块 {} 字段映射提取失败: {}", seq, e.getMessage());
+            }
+        }
     }
 
     private List<String[]> extractSourceTables(String sql, int depth) {
@@ -239,8 +271,9 @@ public class LineageExtractor {
     private void addMatches(Pattern pattern, String sql, List<String[]> sources) {
         Matcher m = pattern.matcher(sql);
         while (m.find()) {
-            String schemaVar = m.group(1);
-            String tableName = m.group(2);
+            // group(1) = {var} 形式的 schema 变量，group(2) = schema 名形式，group(3) = 表名
+            String schemaVar = m.group(1) != null ? m.group(1) : m.group(2);
+            String tableName = m.group(3);
             sources.add(new String[]{tableName, schemaVar});
         }
     }
@@ -347,7 +380,8 @@ public class LineageExtractor {
         Pattern p = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
         Matcher m = p.matcher(sql);
         if (m.find()) {
-            return m.group(1);
+            // group(1) = {var} 形式，group(2) = schema 名形式
+            return m.group(1) != null ? m.group(1) : m.group(2);
         }
         return null;
     }
@@ -363,6 +397,30 @@ public class LineageExtractor {
         if (fullName == null) return null;
         int idx = fullName.lastIndexOf('.');
         return idx >= 0 ? fullName.substring(idx + 1) : fullName;
+    }
+
+    /**
+     * 提取 FROM 后的主表短名
+     */
+    private String extractMainTable(String sql) {
+        Matcher m = FROM_TABLE_PATTERN.matcher(sql);
+        if (m.find()) {
+            return m.group(3);
+        }
+        return null;
+    }
+
+    /**
+     * 在 startEdgeIndex 之后的 edges 中查找主表对应的 edge 下标
+     */
+    private int findMainEdgeIndex(java.util.List<LineageEdge> edges, String mainTable, int startEdgeIndex) {
+        if (mainTable == null) return -1;
+        for (int i = startEdgeIndex; i < edges.size(); i++) {
+            if (mainTable.equals(edges.get(i).getSourceTableShort())) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     public SqlBlockExtractor getSqlBlockExtractor() {

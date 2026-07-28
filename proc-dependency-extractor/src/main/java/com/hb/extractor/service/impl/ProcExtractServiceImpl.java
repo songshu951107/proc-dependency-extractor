@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hb.extractor.dto.BatchExtractResult;
+import com.hb.extractor.dto.ScriptVO;
 import com.hb.extractor.entity.ProcInfo;
 import com.hb.extractor.entity.ProcTableDependency;
 import com.hb.extractor.entity.SqlBlockInfo;
@@ -287,6 +288,43 @@ public class ProcExtractServiceImpl implements ProcExtractService {
 
         procInfoMapper.deleteById(procInfo.getId());
         return true;
+    }
+
+    @Override
+    public ScriptVO getScript(String procName) {
+        ProcInfo procInfo = getProcByName(procName);
+        if (procInfo == null) {
+            return null;
+        }
+        ScriptVO vo = new ScriptVO();
+        vo.setProcName(procName);
+        vo.setFileName(procInfo.getProcFileName());
+
+        try {
+            Path path = Paths.get(procInfo.getFilePath());
+            if (Files.exists(path)) {
+                vo.setContent(Files.readString(path, java.nio.charset.StandardCharsets.UTF_8));
+            } else {
+                vo.setContent("");
+            }
+        } catch (IOException e) {
+            vo.setContent("");
+            log.warn("读取脚本文件失败: {}", procInfo.getFilePath());
+        }
+
+        List<SqlBlockInfo> blocks = sqlBlockInfoMapper.selectList(
+                new LambdaQueryWrapper<SqlBlockInfo>()
+                        .eq(SqlBlockInfo::getProcName, procName)
+                        .orderByAsc(SqlBlockInfo::getBlockSeq));
+        List<ScriptVO.SqlBlockRange> ranges = blocks.stream().map(b -> {
+            ScriptVO.SqlBlockRange r = new ScriptVO.SqlBlockRange();
+            r.setSeq(b.getBlockSeq());
+            r.setStartLine(b.getStartLine());
+            r.setEndLine(b.getEndLine());
+            return r;
+        }).collect(Collectors.toList());
+        vo.setSqlBlocks(ranges);
+        return vo;
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.hb.extractor.service;
 
 import com.hb.extractor.dto.BatchExtractResult;
+import com.hb.extractor.dto.ScriptVO;
 import com.hb.extractor.entity.ProcInfo;
 import com.hb.extractor.entity.ProcTableDependency;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -58,4 +59,11 @@ public interface ProcExtractService {
      * 删除存储过程及其依赖
      */
     boolean deleteProc(String procName);
+
+    /**
+     * 查询脚本内容（含 SQL 块行号范围）
+     *
+     * @param procName 存储过程名
+     */
+    ScriptVO getScript(String procName);
 }

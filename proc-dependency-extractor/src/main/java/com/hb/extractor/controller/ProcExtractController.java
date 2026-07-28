@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.hb.extractor.dto.BatchExtractResult;
 import com.hb.extractor.dto.ExtractRequest;
 import com.hb.extractor.dto.Result;
+import com.hb.extractor.dto.ScriptVO;
 import com.hb.extractor.entity.ProcInfo;
 import com.hb.extractor.entity.ProcTableDependency;
 import com.hb.extractor.service.ProcExtractService;
@@ -125,5 +126,18 @@ public class ProcExtractController {
     public Result<Boolean> delete(@PathVariable String procName) {
         boolean ok = procExtractService.deleteProc(procName);
         return Result.success(ok);
+    }
+
+    /**
+     * 查询脚本内容
+     * GET /api/proc/{procName}/script
+     */
+    @GetMapping("/{procName}/script")
+    public Result<ScriptVO> script(@PathVariable String procName) {
+        ScriptVO vo = procExtractService.getScript(procName);
+        if (vo == null) {
+            return Result.error(404, "存储过程不存在");
+        }
+        return Result.success(vo);
     }
 }

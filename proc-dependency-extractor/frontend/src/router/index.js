@@ -24,6 +24,12 @@ const routes = [
     name: 'Lineage',
     component: () => import('../views/LineageView.vue'),
     meta: { title: '血缘图' }
+  },
+  {
+    path: '/procs/:procName/lineage/list',
+    name: 'LineageList',
+    component: () => import('../views/LineageView.vue'),
+    meta: { title: '血缘列表' }
   }
 ]
 

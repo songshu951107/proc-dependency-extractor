@@ -14,4 +14,6 @@ public class LineageParseResult {
     private List<LineageFilter> filters = new ArrayList<>();
     /** 字段级映射 */
     private List<FieldMapping> fieldMappings = new ArrayList<>();
+    /** SQL 块信息（含行号） */
+    private List<SqlBlockInfoDTO> sqlBlocks = new ArrayList<>();
 }

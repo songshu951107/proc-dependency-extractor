@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hb.extractor.dto.FieldMappingVO;
 import com.hb.extractor.dto.LineageGraphVO;
+import com.hb.extractor.dto.SqlBlockVO;
 import com.hb.extractor.entity.ProcInfo;
 import com.hb.extractor.entity.SqlBlockInfo;
 import com.hb.extractor.entity.TableFieldMapping;
@@ -266,6 +267,74 @@ public class LineageServiceImpl implements LineageService {
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\w+)\\.(\\w+)").matcher(expr);
         if (m.find()) return m.group(2).toLowerCase();
         return expr.toLowerCase();
+    }
+
+    @Override
+    public List<SqlBlockVO> getSqlBlocks(String procName) {
+        List<SqlBlockInfo> blocks = sqlBlockInfoMapper.selectList(
+                new LambdaQueryWrapper<SqlBlockInfo>()
+                        .eq(SqlBlockInfo::getProcName, procName)
+                        .orderByAsc(SqlBlockInfo::getBlockSeq));
+        if (blocks.isEmpty()) return Collections.emptyList();
+
+        List<TableLineageFilter> allFilters = tableLineageFilterMapper.selectList(
+                new LambdaQueryWrapper<TableLineageFilter>()
+                        .eq(TableLineageFilter::getProcName, procName));
+
+        List<TableLineage> allEdges = tableLineageMapper.selectList(
+                new LambdaQueryWrapper<TableLineage>()
+                        .eq(TableLineage::getProcName, procName)
+                        .orderByAsc(TableLineage::getSqlBlockSeq));
+
+        List<SqlBlockVO> result = new ArrayList<>();
+        for (SqlBlockInfo block : blocks) {
+            SqlBlockVO vo = new SqlBlockVO();
+            vo.setBlockSeq(block.getBlockSeq());
+            vo.setBlockType(block.getBlockType());
+            vo.setTargetTable(block.getTargetTable());
+            vo.setTargetTableType(determineTableType(procName, block.getTargetTable()));
+            vo.setMainTable(block.getMainTable());
+            vo.setMainTableType(determineTableType(procName, block.getMainTable()));
+            vo.setStartLine(block.getStartLine());
+            vo.setEndLine(block.getEndLine());
+            vo.setSqlContent(block.getSqlContent());
+
+            List<TableLineage> blockEdges = allEdges.stream()
+                    .filter(e -> Integer.valueOf(block.getBlockSeq()).equals(e.getSqlBlockSeq()))
+                    .collect(Collectors.toList());
+            List<Long> blockEdgeIds = blockEdges.stream().map(TableLineage::getId).collect(Collectors.toList());
+            List<TableLineageFilter> blockFilters = allFilters.stream()
+                    .filter(f -> blockEdgeIds.contains(f.getLineageId()))
+                    .collect(Collectors.toList());
+
+            List<SqlBlockVO.JoinTable> joinTables = new ArrayList<>();
+            StringBuilder whereSb = new StringBuilder();
+            for (TableLineageFilter f : blockFilters) {
+                if ("JOIN".equals(f.getFilterType())) {
+                    SqlBlockVO.JoinTable jt = new SqlBlockVO.JoinTable();
+                    jt.setConditions(f.getFilterClause());
+                    joinTables.add(jt);
+                } else if ("WHERE".equals(f.getFilterType())) {
+                    if (whereSb.length() > 0) whereSb.append(" AND ");
+                    whereSb.append(f.getFilterClause());
+                }
+            }
+            vo.setJoinTables(joinTables);
+            vo.setWhereConditions(whereSb.length() > 0 ? whereSb.toString() : null);
+
+            List<LineageGraphVO.FilterDetail> filterDetails = new ArrayList<>();
+            for (TableLineageFilter f : blockFilters) {
+                LineageGraphVO.FilterDetail fd = new LineageGraphVO.FilterDetail();
+                fd.setFilterType(f.getFilterType());
+                fd.setFilterClause(f.getFilterClause());
+                fd.setFields(parseFields(f.getFieldsInvolved()));
+                filterDetails.add(fd);
+            }
+            vo.setFilters(filterDetails);
+
+            result.add(vo);
+        }
+        return result;
     }
 
     private LineageGraphVO buildGraphVO(String procName, String updateTarget,

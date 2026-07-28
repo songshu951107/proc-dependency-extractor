@@ -2,6 +2,7 @@ package com.hb.extractor.service;
 
 import com.hb.extractor.dto.FieldMappingVO;
 import com.hb.extractor.dto.LineageGraphVO;
+import com.hb.extractor.dto.SqlBlockVO;
 import com.hb.extractor.entity.TableLineageFilter;
 
 import java.util.List;
@@ -41,4 +42,11 @@ public interface LineageService {
      * @param recursive 是否递归追溯临时表字段的最终来源
      */
     FieldMappingVO getFieldMapping(String procName, String tableName, boolean recursive);
+
+    /**
+     * 查询 SQL 块详情
+     *
+     * @param procName 存储过程名
+     */
+    List<SqlBlockVO> getSqlBlocks(String procName);
 }

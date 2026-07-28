@@ -12,4 +12,6 @@ import java.util.List;
 public class LineageParseResult {
     private List<LineageEdge> edges = new ArrayList<>();
     private List<LineageFilter> filters = new ArrayList<>();
+    /** 字段级映射 */
+    private List<FieldMapping> fieldMappings = new ArrayList<>();
 }

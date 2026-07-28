@@ -21,4 +21,6 @@ public class LineageEdge {
     private String operation;
     /** SQL块序号(从1开始) */
     private int sqlBlockSeq;
+    /** FROM 后的主表短名 */
+    private String mainTable;
 }

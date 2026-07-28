@@ -9,7 +9,7 @@
             SELECT id, proc_id, proc_name,
                    source_table, source_table_short,
                    target_table, target_table_short,
-                   target_is_temp, operation, sql_block_seq,
+                   target_is_temp, operation, sql_block_seq, main_table,
                    1 AS depth
             FROM table_lineage
             WHERE target_table_short = #{targetTableShort}
@@ -17,7 +17,7 @@
             SELECT t.id, t.proc_id, t.proc_name,
                    t.source_table, t.source_table_short,
                    t.target_table, t.target_table_short,
-                   t.target_is_temp, t.operation, t.sql_block_seq,
+                   t.target_is_temp, t.operation, t.sql_block_seq, t.main_table,
                    u.depth + 1
             FROM table_lineage t
             JOIN upstream u ON t.target_table_short = u.source_table_short
@@ -26,7 +26,7 @@
         SELECT DISTINCT id, proc_id, proc_name,
                source_table, source_table_short,
                target_table, target_table_short,
-               target_is_temp, operation, sql_block_seq,
+               target_is_temp, operation, sql_block_seq, main_table,
                depth
         FROM upstream
         ORDER BY depth, sql_block_seq
@@ -38,7 +38,7 @@
             SELECT id, proc_id, proc_name,
                    source_table, source_table_short,
                    target_table, target_table_short,
-                   target_is_temp, operation, sql_block_seq,
+                   target_is_temp, operation, sql_block_seq, main_table,
                    1 AS depth
             FROM table_lineage
             WHERE source_table_short = #{sourceTableShort}
@@ -46,7 +46,7 @@
             SELECT t.id, t.proc_id, t.proc_name,
                    t.source_table, t.source_table_short,
                    t.target_table, t.target_table_short,
-                   t.target_is_temp, t.operation, t.sql_block_seq,
+                   t.target_is_temp, t.operation, t.sql_block_seq, t.main_table,
                    d.depth + 1
             FROM table_lineage t
             JOIN downstream d ON t.source_table_short = d.target_table_short
@@ -55,7 +55,7 @@
         SELECT DISTINCT id, proc_id, proc_name,
                source_table, source_table_short,
                target_table, target_table_short,
-               target_is_temp, operation, sql_block_seq,
+               target_is_temp, operation, sql_block_seq, main_table,
                depth
         FROM downstream
         ORDER BY depth, sql_block_seq

@@ -29,6 +29,10 @@ mybatis-plus:
     db-config:
       id-type: auto
 
+extractor:
+  ddl:
+    dir: d:/HB/work_zuoye/jiaoben
+
 logging:
   level:
     com.hb.extractor: debug

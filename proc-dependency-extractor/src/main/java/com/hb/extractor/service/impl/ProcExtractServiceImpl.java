@@ -7,17 +7,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hb.extractor.dto.BatchExtractResult;
 import com.hb.extractor.entity.ProcInfo;
 import com.hb.extractor.entity.ProcTableDependency;
+import com.hb.extractor.entity.SqlBlockInfo;
+import com.hb.extractor.entity.TableFieldMapping;
 import com.hb.extractor.entity.TableLineage;
 import com.hb.extractor.entity.TableLineageFilter;
 import com.hb.extractor.mapper.ProcInfoMapper;
 import com.hb.extractor.mapper.ProcTableDependencyMapper;
+import com.hb.extractor.mapper.SqlBlockInfoMapper;
+import com.hb.extractor.mapper.TableFieldMappingMapper;
 import com.hb.extractor.mapper.TableLineageFilterMapper;
 import com.hb.extractor.mapper.TableLineageMapper;
 import com.hb.extractor.parser.PyProcParser;
+import com.hb.extractor.parser.dto.FieldMapping;
 import com.hb.extractor.parser.dto.LineageEdge;
 import com.hb.extractor.parser.dto.LineageFilter;
 import com.hb.extractor.parser.dto.LineageParseResult;
 import com.hb.extractor.parser.dto.ProcMetadata;
+import com.hb.extractor.parser.dto.SqlBlockInfoDTO;
 import com.hb.extractor.service.ProcExtractService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,6 +62,12 @@ public class ProcExtractServiceImpl implements ProcExtractService {
 
     @Autowired
     private TableLineageFilterMapper tableLineageFilterMapper;
+
+    @Autowired
+    private TableFieldMappingMapper tableFieldMappingMapper;
+
+    @Autowired
+    private SqlBlockInfoMapper sqlBlockInfoMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -268,6 +280,10 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                 .eq(TableLineageFilter::getProcName, procName));
         tableLineageMapper.delete(new LambdaQueryWrapper<TableLineage>()
                 .eq(TableLineage::getProcName, procName));
+        tableFieldMappingMapper.delete(new LambdaQueryWrapper<TableFieldMapping>()
+                .eq(TableFieldMapping::getProcName, procName));
+        sqlBlockInfoMapper.delete(new LambdaQueryWrapper<SqlBlockInfo>()
+                .eq(SqlBlockInfo::getProcName, procName));
 
         procInfoMapper.deleteById(procInfo.getId());
         return true;
@@ -339,6 +355,10 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                     .eq(TableLineage::getProcName, procName));
             tableLineageFilterMapper.delete(new LambdaQueryWrapper<TableLineageFilter>()
                     .eq(TableLineageFilter::getProcName, procName));
+            tableFieldMappingMapper.delete(new LambdaQueryWrapper<TableFieldMapping>()
+                    .eq(TableFieldMapping::getProcName, procName));
+            sqlBlockInfoMapper.delete(new LambdaQueryWrapper<SqlBlockInfo>()
+                    .eq(SqlBlockInfo::getProcName, procName));
 
             // 插入 edges
             List<TableLineage> lineageRecords = new ArrayList<>();
@@ -353,6 +373,7 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                 record.setTargetIsTemp(edge.isTargetIsTemp() ? 1 : 0);
                 record.setOperation(edge.getOperation());
                 record.setSqlBlockSeq(edge.getSqlBlockSeq());
+                record.setMainTable(edge.getMainTable());
                 record.setExtractTime(now);
                 tableLineageMapper.insert(record);
                 lineageRecords.add(record);
@@ -377,6 +398,59 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                 }
                 record.setExtractTime(now);
                 tableLineageFilterMapper.insert(record);
+            }
+
+            // 插入字段映射
+            for (FieldMapping fm : lineageResult.getFieldMappings()) {
+                int idx = fm.getEdgeIndex();
+                if (idx < 0 || idx >= lineageRecords.size()) continue;
+                TableFieldMapping record = new TableFieldMapping();
+                record.setLineageId(lineageRecords.get(idx).getId());
+                record.setProcName(procName);
+                record.setTargetField(fm.getTargetField());
+                record.setFieldOrder(fm.getFieldOrder());
+                record.setSourceExpr(fm.getSourceExpr());
+                record.setSourceAlias(fm.getSourceAlias());
+                record.setSourceTableShort(fm.getSourceTableShort());
+                record.setExtractTime(now);
+                tableFieldMappingMapper.insert(record);
+            }
+
+            // 插入 SQL 块信息
+            for (SqlBlockInfoDTO bi : lineageResult.getSqlBlocks()) {
+                SqlBlockInfo record = new SqlBlockInfo();
+                record.setProcName(procName);
+                record.setBlockSeq(bi.getBlockSeq());
+                String c = bi.getContent().trim().toUpperCase();
+                String blockType;
+                String targetTable = null;
+                if (c.startsWith("CREATE TEMP") || c.startsWith("CREATE TEMPORARY")) {
+                    blockType = "CREATE_TEMP";
+                    java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                            "CREATE\\s+(?:TEMP|TEMPORARY)\\s+TABLE\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)",
+                            java.util.regex.Pattern.CASE_INSENSITIVE).matcher(bi.getContent());
+                    if (m.find()) targetTable = m.group(1);
+                } else if (c.startsWith("INSERT")) {
+                    blockType = "INSERT_SELECT";
+                    java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                            "INSERT\\s+INTO\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)",
+                            java.util.regex.Pattern.CASE_INSENSITIVE).matcher(bi.getContent());
+                    if (m.find()) targetTable = m.group(1);
+                } else {
+                    blockType = "OTHER";
+                }
+                record.setBlockType(blockType);
+                record.setTargetTable(targetTable);
+                String mainTable = lineageResult.getEdges().stream()
+                        .filter(e -> e.getSqlBlockSeq() == bi.getBlockSeq())
+                        .map(LineageEdge::getMainTable)
+                        .findFirst().orElse(null);
+                record.setMainTable(mainTable);
+                record.setStartLine(bi.getStartLine());
+                record.setEndLine(bi.getEndLine());
+                record.setSqlContent(bi.getContent());
+                record.setExtractTime(now);
+                sqlBlockInfoMapper.insert(record);
             }
         }
 

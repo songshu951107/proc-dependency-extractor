@@ -3,12 +3,15 @@ package com.hb.extractor.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hb.extractor.dto.FieldMappingVO;
 import com.hb.extractor.dto.LineageGraphVO;
 import com.hb.extractor.entity.ProcInfo;
+import com.hb.extractor.entity.SqlBlockInfo;
 import com.hb.extractor.entity.TableFieldMapping;
 import com.hb.extractor.entity.TableLineage;
 import com.hb.extractor.entity.TableLineageFilter;
 import com.hb.extractor.mapper.ProcInfoMapper;
+import com.hb.extractor.mapper.SqlBlockInfoMapper;
 import com.hb.extractor.mapper.TableFieldMappingMapper;
 import com.hb.extractor.mapper.TableLineageFilterMapper;
 import com.hb.extractor.mapper.TableLineageMapper;
@@ -35,6 +38,9 @@ public class LineageServiceImpl implements LineageService {
 
     @Autowired
     private TableFieldMappingMapper tableFieldMappingMapper;
+
+    @Autowired
+    private SqlBlockInfoMapper sqlBlockInfoMapper;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -115,6 +121,151 @@ public class LineageServiceImpl implements LineageService {
         return tableLineageFilterMapper.selectList(
                 new LambdaQueryWrapper<TableLineageFilter>()
                         .eq(TableLineageFilter::getProcName, procName));
+    }
+
+    @Override
+    public FieldMappingVO getFieldMapping(String procName, String tableName, boolean recursive) {
+        FieldMappingVO vo = new FieldMappingVO();
+        vo.setTargetTable(tableName);
+
+        String targetTableType = determineTableType(procName, tableName);
+        vo.setTargetTableType(targetTableType);
+
+        List<TableLineage> edges = tableLineageMapper.selectList(
+                new LambdaQueryWrapper<TableLineage>()
+                        .eq(TableLineage::getProcName, procName)
+                        .eq(TableLineage::getTargetTableShort, tableName)
+                        .orderByAsc(TableLineage::getSqlBlockSeq));
+        if (edges.isEmpty()) {
+            vo.setFields(Collections.emptyList());
+            vo.setUnmappedFields(Collections.emptyList());
+            return vo;
+        }
+
+        List<Long> edgeIds = edges.stream().map(TableLineage::getId).collect(Collectors.toList());
+        List<TableFieldMapping> mappings = tableFieldMappingMapper.selectList(
+                new LambdaQueryWrapper<TableFieldMapping>()
+                        .in(TableFieldMapping::getLineageId, edgeIds)
+                        .orderByAsc(TableFieldMapping::getFieldOrder));
+
+        List<FieldMappingVO.FieldItem> fieldItems = new ArrayList<>();
+        for (TableFieldMapping fm : mappings) {
+            FieldMappingVO.FieldItem item = new FieldMappingVO.FieldItem();
+            item.setTargetField(fm.getTargetField());
+            item.setFieldOrder(fm.getFieldOrder());
+
+            List<FieldMappingVO.DirectMapping> directs = new ArrayList<>();
+            FieldMappingVO.DirectMapping dm = new FieldMappingVO.DirectMapping();
+            dm.setSourceTable(fm.getSourceTableShort());
+            dm.setSourceTableType(determineTableType(procName, fm.getSourceTableShort()));
+            dm.setSourceExpr(fm.getSourceExpr());
+            dm.setSourceAlias(fm.getSourceAlias());
+            directs.add(dm);
+            item.setDirectMappings(directs);
+
+            if (recursive && fm.getSourceTableShort() != null
+                    && fm.getSourceTableShort().startsWith("VT_")) {
+                item.setUltimateSource(traceUltimateSource(procName, fm.getSourceTableShort(),
+                        fm.getTargetField(), new LinkedHashSet<>()));
+            }
+
+            fieldItems.add(item);
+        }
+        vo.setFields(fieldItems);
+        vo.setUnmappedFields(new ArrayList<>());
+        return vo;
+    }
+
+    /**
+     * 判定表类型：TEMP / SOURCE / TARGET
+     */
+    private String determineTableType(String procName, String tableShort) {
+        if (tableShort == null) return null;
+        if (tableShort.startsWith("VT_")) return "TEMP";
+        List<SqlBlockInfo> blocks = sqlBlockInfoMapper.selectList(
+                new LambdaQueryWrapper<SqlBlockInfo>()
+                        .eq(SqlBlockInfo::getProcName, procName)
+                        .eq(SqlBlockInfo::getTargetTable, tableShort));
+        if (!blocks.isEmpty()) {
+            return "TARGET";
+        }
+        return "SOURCE";
+    }
+
+    /**
+     * 递归追溯临时表字段的最终来源
+     */
+    private FieldMappingVO.UltimateSource traceUltimateSource(String procName, String tempTable,
+                                                                String tempField, Set<String> visited) {
+        String key = tempTable + "." + tempField;
+        if (visited.contains(key)) {
+            return null;
+        }
+        visited.add(key);
+
+        List<TableLineage> edges = tableLineageMapper.selectList(
+                new LambdaQueryWrapper<TableLineage>()
+                        .eq(TableLineage::getProcName, procName)
+                        .eq(TableLineage::getTargetTableShort, tempTable));
+        if (edges.isEmpty()) return null;
+
+        List<Long> edgeIds = edges.stream().map(TableLineage::getId).collect(Collectors.toList());
+        List<TableFieldMapping> mappings = tableFieldMappingMapper.selectList(
+                new LambdaQueryWrapper<TableFieldMapping>()
+                        .in(TableFieldMapping::getLineageId, edgeIds)
+                        .eq(TableFieldMapping::getTargetField, tempField.toLowerCase()));
+        if (mappings.isEmpty()) return null;
+
+        TableFieldMapping fm = mappings.get(0);
+        String sourceTable = fm.getSourceTableShort();
+        if (sourceTable == null) return null;
+
+        FieldMappingVO.UltimateSource result = new FieldMappingVO.UltimateSource();
+        List<FieldMappingVO.PathNode> path = new ArrayList<>();
+        FieldMappingVO.PathNode n1 = new FieldMappingVO.PathNode();
+        n1.setTable(tempTable);
+        n1.setField(tempField);
+        path.add(n1);
+
+        if (sourceTable.startsWith("VT_")) {
+            FieldMappingVO.UltimateSource deeper = traceUltimateSource(procName, sourceTable,
+                    extractFieldFromExpr(fm.getSourceExpr()), visited);
+            if (deeper != null) {
+                result.setSourceTable(deeper.getSourceTable());
+                result.setSourceTableType(deeper.getSourceTableType());
+                result.setSourceField(deeper.getSourceField());
+                path.addAll(deeper.getPath());
+            } else {
+                result.setSourceTable(sourceTable);
+                result.setSourceTableType("TEMP");
+                result.setSourceField(extractFieldFromExpr(fm.getSourceExpr()));
+                path.add(buildPathNode(sourceTable, extractFieldFromExpr(fm.getSourceExpr())));
+            }
+        } else {
+            result.setSourceTable(sourceTable);
+            result.setSourceTableType("SOURCE");
+            result.setSourceField(extractFieldFromExpr(fm.getSourceExpr()));
+            path.add(buildPathNode(sourceTable, extractFieldFromExpr(fm.getSourceExpr())));
+        }
+        result.setPath(path);
+        return result;
+    }
+
+    private FieldMappingVO.PathNode buildPathNode(String table, String field) {
+        FieldMappingVO.PathNode n = new FieldMappingVO.PathNode();
+        n.setTable(table);
+        n.setField(field);
+        return n;
+    }
+
+    /**
+     * 从 T01.acct_no 这样的表达式中提取字段名 acct_no
+     */
+    private String extractFieldFromExpr(String expr) {
+        if (expr == null) return null;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\w+)\\.(\\w+)").matcher(expr);
+        if (m.find()) return m.group(2).toLowerCase();
+        return expr.toLowerCase();
     }
 
     private LineageGraphVO buildGraphVO(String procName, String updateTarget,

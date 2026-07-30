@@ -53,11 +53,25 @@ const NODE_COLORS = {
   FIELD: '#1890ff'
 }
 
+let initRetryCount = 0
+const MAX_INIT_RETRY = 5
+
 const initGraph = () => {
   if (!graphContainer.value) return
   try {
-    const width = graphContainer.value.offsetWidth
+    // 容器宽度可能因父级 el-col 布局未完成而很小，加 fallback
+    let width = graphContainer.value.offsetWidth
     const height = graphContainer.value.offsetHeight || 500
+
+    // 宽度过小（< 100）说明布局未完成，延迟重试（最多 5 次，每次 200ms）
+    if (width < 100 && initRetryCount < MAX_INIT_RETRY) {
+      initRetryCount++
+      setTimeout(() => initGraph(), 200)
+      return
+    }
+    initRetryCount = 0
+    // 仍不足时给 fallback 宽度，避免 G6 因 width=0 渲染失败
+    width = width > 0 ? width : 800
 
     graph = new G6.Graph({
       container: graphContainer.value,
@@ -199,7 +213,13 @@ onUnmounted(() => {
 })
 
 watch(() => [props.nodes, props.edges], () => {
-  renderGraph()
+  // 若 graph 尚未初始化（首次布局延迟导致 initGraph 等待重试），则在数据到达后立即初始化
+  if (!graph && !fallbackMode.value && props.nodes?.length > 0) {
+    initRetryCount = 0
+    initGraph()
+  } else {
+    renderGraph()
+  }
 }, { deep: true })
 
 defineExpose({ addNodes, removeDownstream })

@@ -22,6 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -149,28 +151,49 @@ public class LineageServiceImpl implements LineageService {
                         .in(TableFieldMapping::getLineageId, edgeIds)
                         .orderByAsc(TableFieldMapping::getFieldOrder));
 
-        List<FieldMappingVO.FieldItem> fieldItems = new ArrayList<>();
-        for (TableFieldMapping fm : mappings) {
-            FieldMappingVO.FieldItem item = new FieldMappingVO.FieldItem();
-            item.setTargetField(fm.getTargetField());
-            item.setFieldOrder(fm.getFieldOrder());
+        // 按 targetField 聚合：同一目标字段可能来自多个源表（多个 INSERT 块），
+        // 应合并为一个 FieldItem，多源作为 directMappings 列表，避免前端出现重复行
+        // 同时建立 edgeId → sqlBlockSeq 映射，让前端可按 SQL 块筛选
+        Map<Long, Integer> edgeIdToBlockSeq = new HashMap<>();
+        for (TableLineage edge : edges) {
+            edgeIdToBlockSeq.put(edge.getId(), edge.getSqlBlockSeq());
+        }
 
-            List<FieldMappingVO.DirectMapping> directs = new ArrayList<>();
+        List<FieldMappingVO.FieldItem> fieldItems = new ArrayList<>();
+        Map<String, FieldMappingVO.FieldItem> itemByField = new LinkedHashMap<>();
+        for (TableFieldMapping fm : mappings) {
+            String key = fm.getTargetField() == null ? "" : fm.getTargetField();
+            FieldMappingVO.FieldItem item = itemByField.get(key);
+            if (item == null) {
+                item = new FieldMappingVO.FieldItem();
+                item.setTargetField(fm.getTargetField());
+                item.setFieldOrder(fm.getFieldOrder());
+                item.setDirectMappings(new ArrayList<>());
+                fieldItems.add(item);
+                itemByField.put(key, item);
+            }
+
             FieldMappingVO.DirectMapping dm = new FieldMappingVO.DirectMapping();
             dm.setSourceTable(fm.getSourceTableShort());
             dm.setSourceTableType(determineTableType(procName, fm.getSourceTableShort()));
             dm.setSourceExpr(fm.getSourceExpr());
             dm.setSourceAlias(fm.getSourceAlias());
-            directs.add(dm);
-            item.setDirectMappings(directs);
+            dm.setSqlBlockSeq(edgeIdToBlockSeq.get(fm.getLineageId()));
+            item.getDirectMappings().add(dm);
 
+            // 递归追溯临时表来源：取第一个临时表源进行追溯（避免多次追溯覆盖）
+            // 注意：传入临时表后应用 sourceExpr 中提取的字段名（如 DECODE(T7.M_AVG,...) → m_avg），
+            // 而非目标字段名（如 kh_mavg），因为临时表中存储的是 sourceExpr 引用的字段名
             if (recursive && fm.getSourceTableShort() != null
-                    && fm.getSourceTableShort().startsWith("VT_")) {
+                    && fm.getSourceTableShort().startsWith("VT_")
+                    && item.getUltimateSource() == null) {
+                String traceField = extractFieldFromExpr(fm.getSourceExpr());
+                if (traceField == null) {
+                    traceField = fm.getTargetField();
+                }
                 item.setUltimateSource(traceUltimateSource(procName, fm.getSourceTableShort(),
-                        fm.getTargetField(), new LinkedHashSet<>()));
+                        traceField, new LinkedHashSet<>()));
             }
-
-            fieldItems.add(item);
         }
         vo.setFields(fieldItems);
         vo.setUnmappedFields(new ArrayList<>());
@@ -195,10 +218,16 @@ public class LineageServiceImpl implements LineageService {
 
     /**
      * 递归追溯临时表字段的最终来源
+     *
+     * 注意：target_field 在 DB 中可能为大小写混合（DDL 原始大小写）或小写（无 DDL 时），
+     * tempField 可能来自 extractFieldFromExpr（小写）或上层 target_field（混合大小写），
+     * 因此这里查询全部映射后用 equalsIgnoreCase 过滤，避免大小写不匹配导致溯源失败。
      */
     private FieldMappingVO.UltimateSource traceUltimateSource(String procName, String tempTable,
                                                                 String tempField, Set<String> visited) {
-        String key = tempTable + "." + tempField;
+        if (tempField == null) return null;
+        // 统一转为大写作为 visited 的 key，避免大小写差异导致重复访问或漏访问
+        String key = tempTable + "." + tempField.toUpperCase();
         if (visited.contains(key)) {
             return null;
         }
@@ -211,10 +240,14 @@ public class LineageServiceImpl implements LineageService {
         if (edges.isEmpty()) return null;
 
         List<Long> edgeIds = edges.stream().map(TableLineage::getId).collect(Collectors.toList());
-        List<TableFieldMapping> mappings = tableFieldMappingMapper.selectList(
+        // 查询全部映射后在 Java 侧用 equalsIgnoreCase 过滤，兼容 M_AVG / m_avg 等大小写差异
+        List<TableFieldMapping> allMappings = tableFieldMappingMapper.selectList(
                 new LambdaQueryWrapper<TableFieldMapping>()
-                        .in(TableFieldMapping::getLineageId, edgeIds)
-                        .eq(TableFieldMapping::getTargetField, tempField.toLowerCase()));
+                        .in(TableFieldMapping::getLineageId, edgeIds));
+        List<TableFieldMapping> mappings = allMappings.stream()
+                .filter(m -> m.getTargetField() != null
+                        && m.getTargetField().equalsIgnoreCase(tempField))
+                .collect(Collectors.toList());
         if (mappings.isEmpty()) return null;
 
         TableFieldMapping fm = mappings.get(0);
@@ -260,12 +293,36 @@ public class LineageServiceImpl implements LineageService {
     }
 
     /**
-     * 从 T01.acct_no 这样的表达式中提取字段名 acct_no
+     * 从表达式中提取代表性字段名（用于溯源）
+     *
+     * 字段提取优先级（避免 CASE WHEN 条件字段干扰）：
+     * 1. CASE WHEN ... THEN alias.field ... END → 取 THEN 后的 field（实际取值字段）
+     * 2. 取最后一个 alias.field 的 field 部分
+     * 3. 无 alias.field → 返回表达式小写
+     *
+     * 示例：
+     *   "SUM(CASE WHEN A.appl_dt ... THEN LR_DISTR.dist_amt_thmonth END)" → "dist_amt_thmonth"
+     *   "NVL(a.x, b.y)" → "y"
+     *   "COUNT(*)" → "count(*)"
      */
     private String extractFieldFromExpr(String expr) {
         if (expr == null) return null;
+        // 1. CASE WHEN ... THEN alias.field 模式：取 THEN 后的 field
+        java.util.regex.Matcher thenM = java.util.regex.Pattern.compile(
+            "\\bTHEN\\s+(\\w+)\\.(\\w+)", Pattern.CASE_INSENSITIVE).matcher(expr);
+        if (thenM.find()) {
+            return thenM.group(2).toLowerCase();
+        }
+        // 2. 非 CASE 表达式：取最后一个 alias.field 的 field 部分
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\w+)\\.(\\w+)").matcher(expr);
-        if (m.find()) return m.group(2).toLowerCase();
+        String lastField = null;
+        while (m.find()) {
+            lastField = m.group(2);
+        }
+        if (lastField != null) {
+            return lastField.toLowerCase();
+        }
+        // 3. 无 alias.field
         return expr.toLowerCase();
     }
 
@@ -286,55 +343,148 @@ public class LineageServiceImpl implements LineageService {
                         .eq(TableLineage::getProcName, procName)
                         .orderByAsc(TableLineage::getSqlBlockSeq));
 
-        List<SqlBlockVO> result = new ArrayList<>();
+        // 先按原逻辑构建所有块的 VO
+        List<SqlBlockVO> rawResult = new ArrayList<>();
         for (SqlBlockInfo block : blocks) {
-            SqlBlockVO vo = new SqlBlockVO();
-            vo.setBlockSeq(block.getBlockSeq());
-            vo.setBlockType(block.getBlockType());
-            vo.setTargetTable(block.getTargetTable());
-            vo.setTargetTableType(determineTableType(procName, block.getTargetTable()));
-            vo.setMainTable(block.getMainTable());
-            vo.setMainTableType(determineTableType(procName, block.getMainTable()));
-            vo.setStartLine(block.getStartLine());
-            vo.setEndLine(block.getEndLine());
-            vo.setSqlContent(block.getSqlContent());
+            rawResult.add(buildSqlBlockVO(procName, block, allEdges, allFilters));
+        }
 
-            List<TableLineage> blockEdges = allEdges.stream()
-                    .filter(e -> Integer.valueOf(block.getBlockSeq()).equals(e.getSqlBlockSeq()))
-                    .collect(Collectors.toList());
-            List<Long> blockEdgeIds = blockEdges.stream().map(TableLineage::getId).collect(Collectors.toList());
-            List<TableLineageFilter> blockFilters = allFilters.stream()
-                    .filter(f -> blockEdgeIds.contains(f.getLineageId()))
-                    .collect(Collectors.toList());
+        return mergeBlocksByTargetTable(rawResult);
+    }
 
-            List<SqlBlockVO.JoinTable> joinTables = new ArrayList<>();
-            StringBuilder whereSb = new StringBuilder();
-            for (TableLineageFilter f : blockFilters) {
-                if ("JOIN".equals(f.getFilterType())) {
-                    SqlBlockVO.JoinTable jt = new SqlBlockVO.JoinTable();
-                    jt.setConditions(f.getFilterClause());
-                    joinTables.add(jt);
-                } else if ("WHERE".equals(f.getFilterType())) {
-                    if (whereSb.length() > 0) whereSb.append(" AND ");
-                    whereSb.append(f.getFilterClause());
-                }
+    /**
+     * 构建单个 SQL 块的 VO（不含 createDdl 信息）
+     */
+    private SqlBlockVO buildSqlBlockVO(String procName, SqlBlockInfo block,
+                                        List<TableLineage> allEdges,
+                                        List<TableLineageFilter> allFilters) {
+        SqlBlockVO vo = new SqlBlockVO();
+        vo.setBlockSeq(block.getBlockSeq());
+        vo.setBlockType(block.getBlockType());
+        vo.setTargetTable(block.getTargetTable());
+        vo.setTargetTableType(determineTableType(procName, block.getTargetTable()));
+        vo.setMainTable(block.getMainTable());
+        vo.setMainTableType(determineTableType(procName, block.getMainTable()));
+        vo.setStartLine(block.getStartLine());
+        vo.setEndLine(block.getEndLine());
+        vo.setSqlContent(block.getSqlContent());
+
+        List<TableLineage> blockEdges = allEdges.stream()
+                .filter(e -> Integer.valueOf(block.getBlockSeq()).equals(e.getSqlBlockSeq()))
+                .collect(Collectors.toList());
+        List<Long> blockEdgeIds = blockEdges.stream().map(TableLineage::getId).collect(Collectors.toList());
+        List<TableLineageFilter> blockFilters = allFilters.stream()
+                .filter(f -> blockEdgeIds.contains(f.getLineageId()))
+                .collect(Collectors.toList());
+
+        // JOIN 表信息直接从 sqlContent 解析，因为 table_lineage_filter 只存了 filterClause，
+        // 没有单独存储 tableName/joinType/alias，且 filterClause 末尾会误带 JOIN 前缀关键字（如 LEFT）
+        List<SqlBlockVO.JoinTable> joinTables = parseJoinTablesFromSql(block.getSqlContent());
+        vo.setJoinTables(joinTables);
+
+        // WHERE 条件仍从 filters 遍历（已按字段拆分，更精确）
+        StringBuilder whereSb = new StringBuilder();
+        for (TableLineageFilter f : blockFilters) {
+            if ("WHERE".equals(f.getFilterType())) {
+                if (whereSb.length() > 0) whereSb.append(" AND ");
+                whereSb.append(f.getFilterClause());
             }
-            vo.setJoinTables(joinTables);
-            vo.setWhereConditions(whereSb.length() > 0 ? whereSb.toString() : null);
+        }
+        vo.setWhereConditions(whereSb.length() > 0 ? whereSb.toString() : null);
 
-            List<LineageGraphVO.FilterDetail> filterDetails = new ArrayList<>();
-            for (TableLineageFilter f : blockFilters) {
-                LineageGraphVO.FilterDetail fd = new LineageGraphVO.FilterDetail();
-                fd.setFilterType(f.getFilterType());
-                fd.setFilterClause(f.getFilterClause());
-                fd.setFields(parseFields(f.getFieldsInvolved()));
-                filterDetails.add(fd);
+        List<LineageGraphVO.FilterDetail> filterDetails = new ArrayList<>();
+        for (TableLineageFilter f : blockFilters) {
+            LineageGraphVO.FilterDetail fd = new LineageGraphVO.FilterDetail();
+            fd.setFilterType(f.getFilterType());
+            fd.setFilterClause(f.getFilterClause());
+            fd.setFields(parseFields(f.getFieldsInvolved()));
+            filterDetails.add(fd);
+        }
+        vo.setFilters(filterDetails);
+        return vo;
+    }
+
+    /**
+     * 按 targetTable 合并 SQL 块：
+     * 同一 targetTable 同时存在 CREATE_TEMP 和 INSERT_SELECT 块时，
+     * 把 CREATE_TEMP 块的建表语句（含字段定义）合并到 INSERT_SELECT 块的 createDdl 字段，
+     * 并从结果中移除 CREATE_TEMP 块，避免子 tab 重复且保留字段定义不丢失。
+     * targetTable 为 null 的块（如 DELETE、DROP）不参与合并，直接保留。
+     */
+    private List<SqlBlockVO> mergeBlocksByTargetTable(List<SqlBlockVO> rawResult) {
+        // 找出每个 targetTable 是否存在 INSERT_SELECT 块
+        Set<String> targetTablesWithInsert = rawResult.stream()
+                .filter(v -> v.getTargetTable() != null && "INSERT_SELECT".equals(v.getBlockType()))
+                .map(SqlBlockVO::getTargetTable)
+                .collect(Collectors.toSet());
+
+        // 构建 CREATE_TEMP 块的 targetTable -> VO 映射（取第一个，用于合并到 INSERT_SELECT 块）
+        Map<String, SqlBlockVO> createTempByTarget = new LinkedHashMap<>();
+        for (SqlBlockVO vo : rawResult) {
+            if (vo.getTargetTable() != null && "CREATE_TEMP".equals(vo.getBlockType())
+                    && !createTempByTarget.containsKey(vo.getTargetTable())) {
+                createTempByTarget.put(vo.getTargetTable(), vo);
             }
-            vo.setFilters(filterDetails);
+        }
 
+        List<SqlBlockVO> result = new ArrayList<>();
+        for (SqlBlockVO vo : rawResult) {
+            String targetTable = vo.getTargetTable();
+            if (targetTable == null) {
+                // targetTable 为 null 的块不参与合并，直接保留
+                result.add(vo);
+                continue;
+            }
+            if ("CREATE_TEMP".equals(vo.getBlockType()) && targetTablesWithInsert.contains(targetTable)) {
+                // 该 CREATE_TEMP 块已被同 targetTable 的 INSERT_SELECT 块覆盖，跳过
+                // 其建表语句会合并到对应的 INSERT_SELECT 块的 createDdl 字段
+                continue;
+            }
+            if ("INSERT_SELECT".equals(vo.getBlockType()) && createTempByTarget.containsKey(targetTable)) {
+                // 把同 targetTable 的 CREATE_TEMP 块的建表语句合并到此处
+                SqlBlockVO createTemp = createTempByTarget.get(targetTable);
+                vo.setCreateDdl(createTemp.getSqlContent());
+                vo.setCreateBlockSeq(createTemp.getBlockSeq());
+                vo.setCreateStartLine(createTemp.getStartLine());
+                vo.setCreateEndLine(createTemp.getEndLine());
+            }
             result.add(vo);
         }
         return result;
+    }
+
+    /**
+     * 从 SQL 块原文解析 JOIN 子句，提取表名、JOIN 类型、别名、ON 条件。
+     * 支持 LEFT/RIGHT/INNER/OUTER/FULL/CROSS JOIN 和普通 JOIN。
+     * 能正确处理子查询内嵌套的 JOIN。
+     */
+    private List<SqlBlockVO.JoinTable> parseJoinTablesFromSql(String sqlContent) {
+        List<SqlBlockVO.JoinTable> joinTables = new ArrayList<>();
+        if (sqlContent == null || sqlContent.isEmpty()) {
+            return joinTables;
+        }
+
+        // 匹配: [LEFT|RIGHT|INNER|OUTER|FULL|CROSS] JOIN {schema}.table alias ON conditions
+        // conditions 非贪婪匹配，直到下一个 JOIN 前缀关键字或 WHERE/GROUP/ORDER/LIMIT/;/$
+        Pattern joinPattern = Pattern.compile(
+                "(?im)\\b(?:(LEFT|RIGHT|INNER|OUTER|FULL|CROSS)\\s+)?JOIN\\s+" +
+                        "(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)" +
+                        "(?:\\s+(?:AS\\s+)?(\\w+))?\\s+ON\\s+" +
+                        "(.+?)" +
+                        "(?=\\s+(?:(?:LEFT|RIGHT|INNER|OUTER|FULL|CROSS)\\s+)?JOIN\\b|WHERE\\b|GROUP\\b|ORDER\\b|LIMIT\\b|;|$)"
+        );
+
+        Matcher m = joinPattern.matcher(sqlContent);
+        while (m.find()) {
+            SqlBlockVO.JoinTable jt = new SqlBlockVO.JoinTable();
+            String joinType = m.group(1);
+            jt.setJoinType(joinType != null ? joinType.toUpperCase() + " JOIN" : "INNER JOIN");
+            jt.setTableName(m.group(2));
+            jt.setAlias(m.group(3));
+            jt.setConditions(m.group(4).trim());
+            joinTables.add(jt);
+        }
+        return joinTables;
     }
 
     private LineageGraphVO buildGraphVO(String procName, String updateTarget,

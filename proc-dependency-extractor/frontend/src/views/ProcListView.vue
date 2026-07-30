@@ -51,10 +51,13 @@
           </template>
         </el-table-column>
         <el-table-column prop="extractTime" label="提取时间" width="170" />
-        <el-table-column label="操作" width="180" align="center" fixed="right">
+        <el-table-column label="操作" width="280" align="center" fixed="right">
           <template #default="{ row }">
             <el-button size="small" type="primary" link @click="viewDetail(row)">
               <el-icon><View /></el-icon>&nbsp;依赖详情
+            </el-button>
+            <el-button size="small" type="success" link @click="viewLineage(row)">
+              <el-icon><Connection /></el-icon>&nbsp;查看血缘
             </el-button>
             <el-button size="small" type="danger" link @click="handleDelete(row)">
               <el-icon><Delete /></el-icon>&nbsp;删除
@@ -83,7 +86,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Upload, Search, View, Delete } from '@element-plus/icons-vue'
+import { Upload, Search, View, Delete, Connection } from '@element-plus/icons-vue'
 import { listProcs, deleteProc } from '../api/proc'
 
 const router = useRouter()
@@ -126,6 +129,10 @@ function handleReset() {
 
 function viewDetail(row) {
   router.push(`/procs/${row.procName}`)
+}
+
+function viewLineage(row) {
+  router.push(`/procs/${row.procName}/lineage`)
 }
 
 async function handleDelete(row) {

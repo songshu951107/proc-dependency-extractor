@@ -5,8 +5,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -52,6 +54,8 @@ public class FieldMappingExtractor {
      */
     public List<FieldMapping> extract(String sqlBlock, String targetTableShort,
                                        Map<String, String> aliasMap, List<String> ddlFields) {
+        // 预计算唯一源表（排除目标表自身），用于无别名前缀字段的源表推断
+        String singleSourceTable = computeSingleSourceTable(aliasMap, targetTableShort);
         List<FieldMapping> mappings = new ArrayList<>();
         if (sqlBlock == null || targetTableShort == null) {
             return mappings;
@@ -134,7 +138,7 @@ public class FieldMappingExtractor {
                 fm.setFieldOrder(matchedIdx + 1);
                 fm.setSourceExpr(matchedExpr);
                 fm.setTargetField(ddlField);
-                extractAliasAndTable(matchedExpr, aliasMap, fm);
+                extractAliasAndTable(matchedExpr, aliasMap, fm, singleSourceTable);
                 mappings.add(fm);
             }
         } else {
@@ -150,7 +154,7 @@ public class FieldMappingExtractor {
                 String targetField = determineTargetField(expr, order, ddlFields, i);
                 fm.setTargetField(targetField);
 
-                extractAliasAndTable(expr, aliasMap, fm);
+                extractAliasAndTable(expr, aliasMap, fm, singleSourceTable);
 
                 mappings.add(fm);
             }
@@ -215,19 +219,92 @@ public class FieldMappingExtractor {
 
     /**
      * 从表达式中提取 alias 和 source_table_short
+     * aliasMap 的 key 统一为大写，这里查找时也转大写以兼容大小写
+     *
+     * 当表达式无 alias 前缀（如 cust_no 而非 t1.cust_no）时，
+     * 若 singleSourceTable 非空（FROM 子句仅有唯一源表），则自动关联到该源表。
+     *
+     * 字段提取优先级（避免 CASE WHEN 条件字段干扰）：
+     * 1. CASE WHEN ... THEN alias.field ... END → 取 THEN 后的 alias.field（实际取值字段）
+     * 2. 取最后一个 alias.field（SUM(t1.amt) → t1.amt；NVL(a.x, b.y) → b.y）
+     * 3. 无 alias.field → 使用 singleSourceTable 推断
+     *
+     * @param expr SELECT 列表达式
+     * @param aliasMap 别名 → 表短名映射
+     * @param fm 待填充的 FieldMapping
+     * @param singleSourceTable 预计算的唯一源表（无别名前缀时使用），可为 null
      */
-    private void extractAliasAndTable(String expr, Map<String, String> aliasMap, FieldMapping fm) {
+    private void extractAliasAndTable(String expr, Map<String, String> aliasMap, FieldMapping fm,
+                                       String singleSourceTable) {
         if (aliasMap == null || aliasMap.isEmpty()) {
             return;
         }
-        Matcher m = ALIAS_FIELD_PATTERN.matcher(expr);
-        if (m.find()) {
-            String alias = m.group(1);
-            String tableShort = aliasMap.get(alias);
-            if (tableShort != null) {
-                fm.setSourceAlias(alias);
-                fm.setSourceTableShort(tableShort);
+        String primaryAliasField = extractPrimaryAliasField(expr);
+        if (primaryAliasField != null) {
+            Matcher m = ALIAS_FIELD_PATTERN.matcher(primaryAliasField);
+            if (m.find()) {
+                String alias = m.group(1);
+                // aliasMap 的 key 已在 LineageExtractor.extractAliasMap 中转为大写，
+                // 这里查找时统一转大写，避免 t3/T3 大小写不匹配
+                String tableShort = aliasMap.get(alias.toUpperCase());
+                if (tableShort != null) {
+                    fm.setSourceAlias(alias);
+                    fm.setSourceTableShort(tableShort);
+                    return;
+                }
             }
         }
+        // 无 alias.field 或 aliasMap 未命中：使用单源表推断
+        if (singleSourceTable != null) {
+            fm.setSourceTableShort(singleSourceTable);
+        }
+    }
+
+    /**
+     * 从 SELECT 列表达式中提取代表性的 alias.field（实际取值字段）
+     *
+     * 优先级：
+     * 1. CASE WHEN ... THEN alias.field ... END → 返回 THEN 后首个 alias.field
+     *    （避免误取条件中的 A.appl_dt，应取 THEN 后的 LR_DISTR.dist_amt_thmonth）
+     * 2. 取最后一个 alias.field（SUM(t1.amt) → t1.amt；NVL(a.x, b.y) → b.y）
+     *
+     * @param expr SELECT 列表达式
+     * @return 含 alias.field 的子串，未找到返回 null
+     */
+    private String extractPrimaryAliasField(String expr) {
+        if (expr == null) return null;
+        // 1. CASE WHEN ... THEN alias.field 模式：取 THEN 后首个 alias.field
+        Matcher thenM = Pattern.compile("\\bTHEN\\s+(\\w+\\.\\w+)", Pattern.CASE_INSENSITIVE).matcher(expr);
+        if (thenM.find()) {
+            return thenM.group(1);
+        }
+        // 2. 非 CASE 表达式：取最后一个 alias.field（避免 SUM(CASE WHEN...) 中误取条件字段）
+        Matcher m = ALIAS_FIELD_PATTERN.matcher(expr);
+        String last = null;
+        while (m.find()) {
+            last = m.group(0);
+        }
+        return last;
+    }
+
+    /**
+     * 计算 aliasMap 中的唯一源表（排除目标表自身）
+     * 当 FROM/JOIN 仅涉及一张表时返回该表名，否则返回 null
+     */
+    private String computeSingleSourceTable(Map<String, String> aliasMap, String targetTableShort) {
+        if (aliasMap == null || aliasMap.isEmpty()) {
+            return null;
+        }
+        Set<String> uniqueTables = new HashSet<>();
+        for (String table : aliasMap.values()) {
+            if (targetTableShort != null && targetTableShort.equalsIgnoreCase(table)) {
+                continue; // 排除目标表自身
+            }
+            uniqueTables.add(table);
+        }
+        if (uniqueTables.size() == 1) {
+            return uniqueTables.iterator().next();
+        }
+        return null;
     }
 }

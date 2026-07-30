@@ -76,6 +76,16 @@ public class LineageExtractor {
             "\\b(?:FROM|JOIN)\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?",
             Pattern.CASE_INSENSITIVE);
 
+    /** 匹配子查询别名：\) alias 后跟 ON/WHERE/JOIN/逗号 等关键字或结尾 */
+    private static final Pattern SUBQUERY_ALIAS_PATTERN = Pattern.compile(
+            "\\)\\s*(?:AS\\s+)?(\\w+)\\s+(?:ON|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|FULL|CROSS|GROUP|ORDER|LIMIT|UNION|,)",
+            Pattern.CASE_INSENSITIVE);
+
+    /** 从子查询内部提取第一个 FROM 后的表名（用于子查询别名的表名溯源） */
+    private static final Pattern SUBQUERY_INNER_TABLE_PATTERN = Pattern.compile(
+            "\\bFROM\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)",
+            Pattern.CASE_INSENSITIVE);
+
     /** SQL 关键字集合，用于过滤别名误匹配 */
     private static final Set<String> SQL_KEYWORDS = new HashSet<>(Arrays.asList(
             "ON", "WHERE", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "FULL", "CROSS",
@@ -95,11 +105,13 @@ public class LineageExtractor {
                                        String updateTarget) {
         LineageParseResult result = new LineageParseResult();
         String updateTargetShort = extractShortName(updateTarget);
+        // 缓存 CREATE TEMP 语句中的 DDL 字段列表，供后续 INSERT INTO 同名临时表时使用
+        Map<String, List<String>> tempTableDdlFields = new HashMap<>();
 
         for (int seq = 0; seq < sqlBlocks.size(); seq++) {
             String block = sqlBlocks.get(seq);
             try {
-                parseBlock(block, seq + 1, schemaVarMap, updateTargetShort, result);
+                parseBlock(block, seq + 1, schemaVarMap, updateTargetShort, result, tempTableDdlFields);
             } catch (Exception e) {
                 log.warn("解析 SQL 块 {} 失败: {}", seq + 1, e.getMessage());
             }
@@ -108,7 +120,8 @@ public class LineageExtractor {
     }
 
     private void parseBlock(String block, int seq, Map<String, String> schemaVarMap,
-                            String updateTargetShort, LineageParseResult result) {
+                            String updateTargetShort, LineageParseResult result,
+                            Map<String, List<String>> tempTableDdlFields) {
         String trimmed = block.trim();
         if (trimmed.isEmpty() || trimmed.startsWith("--")) {
             return;
@@ -204,7 +217,20 @@ public class LineageExtractor {
         // 提取字段映射（仅 INSERT SELECT / CREATE TEMP）
         if ("INSERT SELECT".equals(operation) || "CREATE TEMP".equals(operation)) {
             try {
+                // CREATE TEMP 块：从内联 DDL 提取字段名并缓存，供后续 INSERT INTO 同名临时表使用
+                if ("CREATE TEMP".equals(operation) && targetIsTemp) {
+                    List<String> inlineFields = extractDdlFieldsFromCreateTemp(trimmed);
+                    if (!inlineFields.isEmpty()) {
+                        tempTableDdlFields.put(targetTable, inlineFields);
+                    }
+                }
+
                 List<String> ddlFields = ddlParser.parse(targetTable);
+                // DDL 文件不存在时，尝试使用 CREATE TEMP 缓存的内联 DDL 字段
+                if ((ddlFields == null || ddlFields.isEmpty())
+                        && tempTableDdlFields.containsKey(targetTable)) {
+                    ddlFields = tempTableDdlFields.get(targetTable);
+                }
                 List<FieldMapping> mappings = fieldMappingExtractor.extract(
                         trimmed, targetTable, aliasMap, ddlFields);
                 for (FieldMapping fm : mappings) {
@@ -216,6 +242,79 @@ public class LineageExtractor {
                 log.warn("SQL 块 {} 字段映射提取失败: {}", seq, e.getMessage());
             }
         }
+    }
+
+    /**
+     * 从 CREATE TEMPORARY TABLE 语句的内联 DDL 中提取字段名列表
+     *
+     * 示例输入：
+     *   CREATE TEMPORARY TABLE {PID}.VT_xxx ( col1 varchar(100), col2 DECIMAL(18,2) ) DISTRIBUTED BY(...)
+     *
+     * 提取结果：[col1, col2]（保留原始大小写，与 DDL 文件解析行为一致）
+     * 注意：DECIMAL(18,2) 内部的逗号不应导致拆分，需按括号深度处理
+     */
+    private List<String> extractDdlFieldsFromCreateTemp(String sql) {
+        List<String> fields = new ArrayList<>();
+        Matcher m = CREATE_TEMP_TARGET_PATTERN.matcher(sql);
+        if (!m.find()) return fields;
+
+        // 定位表名后的第一个 '('
+        int parenStart = sql.indexOf('(', m.end());
+        if (parenStart < 0) return fields;
+
+        // 找到匹配的 ')'
+        int depth = 0;
+        int parenEnd = -1;
+        for (int i = parenStart; i < sql.length(); i++) {
+            char c = sql.charAt(i);
+            if (c == '(') depth++;
+            else if (c == ')') {
+                depth--;
+                if (depth == 0) {
+                    parenEnd = i;
+                    break;
+                }
+            }
+        }
+        if (parenEnd < 0) return fields;
+
+        String fieldsText = sql.substring(parenStart + 1, parenEnd);
+
+        // 按括号深度 0 处的逗号拆分字段定义
+        List<String> fieldDefs = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        depth = 0;
+        for (int i = 0; i < fieldsText.length(); i++) {
+            char c = fieldsText.charAt(i);
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            if (c == ',' && depth == 0) {
+                fieldDefs.add(current.toString());
+                current = new StringBuilder();
+            } else {
+                current.append(c);
+            }
+        }
+        if (current.length() > 0) {
+            fieldDefs.add(current.toString());
+        }
+
+        // 从每个字段定义中提取首个单词作为字段名（跳过约束关键字）
+        Set<String> constraintKeywords = new HashSet<>(Arrays.asList(
+                "PRIMARY", "KEY", "CONSTRAINT", "FOREIGN", "UNIQUE", "INDEX", "CHECK"));
+        for (String def : fieldDefs) {
+            String trimmedDef = def.trim();
+            if (trimmedDef.isEmpty()) continue;
+            String[] parts = trimmedDef.split("\\s+");
+            if (parts.length > 0) {
+                String firstWord = parts[0].toUpperCase();
+                if (constraintKeywords.contains(firstWord)) continue;
+                // 去除可能的引号
+                String fieldName = parts[0].replace("\"", "");
+                fields.add(fieldName.toLowerCase());
+            }
+        }
+        return fields;
     }
 
     private List<String[]> extractSourceTables(String sql, int depth) {
@@ -240,6 +339,30 @@ public class LineageExtractor {
         }
 
         return sources;
+    }
+
+    /**
+     * 从指定 ')' 位置反向查找匹配的 '('，正确跳过嵌套的括号对。
+     * 用于子查询别名的内部文本提取，避免 lastIndexOf('(') 误匹配到函数调用内部的 '('。
+     *
+     * @param sql 原始 SQL 文本
+     * @param closeParenIndex ')' 的位置
+     * @return 匹配的 '(' 位置，未找到返回 -1
+     */
+    private int findMatchingOpenParen(String sql, int closeParenIndex) {
+        if (closeParenIndex < 0 || closeParenIndex >= sql.length() || sql.charAt(closeParenIndex) != ')') {
+            return -1;
+        }
+        int depth = 1;
+        for (int i = closeParenIndex - 1; i >= 0; i--) {
+            char c = sql.charAt(i);
+            if (c == ')') depth++;
+            else if (c == '(') {
+                depth--;
+                if (depth == 0) return i;
+            }
+        }
+        return -1;
     }
 
     private String extractParenContent(String sql, int openParenIndex) {
@@ -339,6 +462,35 @@ public class LineageExtractor {
             }
             aliasMap.putIfAbsent(tableShort.toUpperCase(), tableShort);
         }
+
+        // 补充子查询别名：\) alias ON/WHERE/JOIN/...
+        // 子查询的"表名"取子查询内部第一个 FROM 后的表名，使字段映射能关联到实际源表
+        Matcher subM = SUBQUERY_ALIAS_PATTERN.matcher(sql);
+        while (subM.find()) {
+            String alias = subM.group(1);
+            if (SQL_KEYWORDS.contains(alias.toUpperCase())) {
+                continue;
+            }
+            if (aliasMap.containsKey(alias.toUpperCase())) {
+                continue; // 已有映射，不覆盖
+            }
+            // 从子查询内部提取第一个 FROM 后的表名
+            int endIdx = subM.start(); // ')' 的位置
+            // 反向查找匹配的 '('，正确处理子查询内部的嵌套括号（如 sum(nvl(...))、SUBSTR(...) 等）
+            int matchingOpen = findMatchingOpenParen(sql, endIdx);
+            String innerText = matchingOpen >= 0
+                    ? sql.substring(matchingOpen + 1, endIdx)
+                    : sql.substring(0, endIdx);
+            Matcher innerM = SUBQUERY_INNER_TABLE_PATTERN.matcher(innerText);
+            if (innerM.find()) {
+                String innerTable = innerM.group(1);
+                // 排除子查询内部的子查询别名（以 T1/T2 等开头但不是实际表名）
+                if (!SQL_KEYWORDS.contains(innerTable.toUpperCase())) {
+                    aliasMap.put(alias.toUpperCase(), innerTable);
+                }
+            }
+        }
+
         return aliasMap;
     }
 

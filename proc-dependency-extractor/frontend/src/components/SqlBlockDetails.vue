@@ -26,7 +26,13 @@
                 </el-tag>
               </el-descriptions-item>
               <el-descriptions-item label="主表">
-                <el-tag :type="tagType(block.mainTableType)" size="small">
+                <el-button
+                  v-if="isTempTable(block.mainTable)"
+                  link
+                  type="warning"
+                  @click="jumpToBlock(block.mainTable)"
+                >{{ block.mainTable }}</el-button>
+                <el-tag v-else :type="tagType(block.mainTableType)" size="small">
                   {{ block.mainTable || '-' }}
                 </el-tag>
               </el-descriptions-item>
@@ -35,6 +41,28 @@
                 {{ block.startLine }} - {{ block.endLine }}
               </el-descriptions-item>
             </el-descriptions>
+
+            <!-- 建表语句（CREATE_TEMP 合并到 INSERT_SELECT 块时展示） -->
+            <template v-if="block.createDdl">
+              <el-divider content-position="left">建表语句（含字段定义）</el-divider>
+              <div class="sql-snippet-wrapper">
+                <pre v-if="!block.expandedDdl" class="sql-snippet collapsed">{{ truncateSql(block.createDdl) }}</pre>
+                <pre v-else class="sql-snippet">{{ block.createDdl }}</pre>
+                <el-button
+                  link
+                  type="primary"
+                  size="small"
+                  @click="block.expandedDdl = !block.expandedDdl"
+                >{{ block.expandedDdl ? '收起' : '展开全部' }}</el-button>
+                <el-button
+                  v-if="block.createBlockSeq"
+                  link
+                  type="primary"
+                  size="small"
+                  @click="$emit('view-script', block.createBlockSeq)"
+                >查看脚本位置</el-button>
+              </div>
+            </template>
 
             <!-- 关联表列表 -->
             <el-divider content-position="left">关联表</el-divider>
@@ -123,7 +151,9 @@ async function loadBlocks() {
   loading.value = true
   try {
     const res = await getSqlBlocks(props.procName)
-    blocks.value = (res.data || res || []).map((b) => ({ ...b, expandedSql: false }))
+    blocks.value = (res.data || res || [])
+      .filter((b) => b.blockType !== 'OTHER')
+      .map((b) => ({ ...b, expandedSql: false, expandedDdl: false }))
     if (blocks.value.length) {
       activeTab.value = String(blocks.value[0].blockSeq)
     }
@@ -153,7 +183,10 @@ watch(
 
 <style scoped>
 .sql-block-details {
+  height: 100%;
   padding: 12px;
+  box-sizing: border-box;
+  overflow: auto;
 }
 .block-content {
   padding: 8px;

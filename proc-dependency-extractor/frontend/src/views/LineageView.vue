@@ -522,8 +522,9 @@ onBeforeUnmount(() => {
   overflow: hidden;
   min-height: 0;
 }
-.main-tabs :deep(.el-tab-pane) {
+.main-tabs :deep(.el-tab-pane:not(.tab-graph)) {
   height: 100%;
+  overflow: auto;
 }
 .tab-graph {
   height: 100%;

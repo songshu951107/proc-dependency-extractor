@@ -29,6 +29,8 @@ public class FieldMappingVO {
         private String sourceTableType;
         private String sourceExpr;
         private String sourceAlias;
+        /** 该来源所属的 SQL 块序号 */
+        private Integer sqlBlockSeq;
     }
 
     @Data

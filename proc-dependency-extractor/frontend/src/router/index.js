@@ -30,6 +30,12 @@ const routes = [
     name: 'LineageList',
     component: () => import('../views/LineageView.vue'),
     meta: { title: '血缘列表' }
+  },
+  {
+    path: '/impact',
+    name: 'ImpactAnalysis',
+    component: () => import('../views/ImpactAnalysis.vue'),
+    meta: { title: '影响分析' }
   }
 ]
 

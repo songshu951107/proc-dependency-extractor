@@ -21,6 +21,10 @@
             <el-icon><List /></el-icon>
             <span>存储过程列表</span>
           </el-menu-item>
+          <el-menu-item index="/impact">
+            <el-icon><Aim /></el-icon>
+            <span>影响分析</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       <el-main>
@@ -31,7 +35,7 @@
 </template>
 
 <script setup>
-import { Upload, List, Connection } from '@element-plus/icons-vue'
+import { Upload, List, Connection, Aim } from '@element-plus/icons-vue'
 </script>
 
 <style>

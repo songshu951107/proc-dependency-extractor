@@ -11,6 +11,11 @@ spring:
     url: jdbc:mysql://localhost:3306/proc_extractor?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: root
+  neo4j:
+    uri: bolt://localhost:7687
+    authentication:
+      username: neo4j
+      password: neo4j
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
     time-zone: Asia/Shanghai
@@ -18,6 +23,9 @@ spring:
     multipart:
       max-file-size: 50MB
       max-request-size: 200MB
+  data:
+    neo4j:
+      database: neo4j
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
@@ -32,6 +40,20 @@ mybatis-plus:
 extractor:
   ddl:
     dir: d:/HB/work_zuoye/jiaoben
+
+impact:
+  analysis:
+    default-depth: 5
+    max-depth: 20
+    query-timeout: 10s
+  sync:
+    auto-retry: true
+    retry-interval: 300000
+    max-retry-count: 3
+
+scheduler:
+  neo4j-retry:
+    enabled: true
 
 logging:
   level:

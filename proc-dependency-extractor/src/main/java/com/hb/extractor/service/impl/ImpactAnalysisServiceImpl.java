@@ -97,6 +97,9 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         vo.setEdges(edges);
         vo.setStats(buildStats(nodes, edges, depth));
         vo.setTruncated(false);
+        vo.setSourceTable(tableFullName);
+        vo.setImpactedByDepth(buildImpactedByDepth(tableFullName, direction, depth, nodes, edges));
+        vo.setPropagationChains(buildPropagationChains(vo.getImpactedByDepth()));
         return vo;
     }
 
@@ -283,6 +286,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
 
             // 查边：DERIVES/MAPS_TO 关系本身始终是 source-[r]->target 方向
             // DOWNSTREAM: 找到指向 downstream 的边；UPSTREAM: 找到从 upstream 出发的边
+            // 同时返回 source 节点属性，确保 G6 渲染时边引用的节点都存在于 nodes 列表中
             String edgeCypher;
             if ("DOWNSTREAM".equals(dir)) {
                 edgeCypher = String.format(
@@ -290,7 +294,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                         "WITH DISTINCT downstream " +
                         "MATCH (src2)-[r:%s]->(downstream) " +
                         "WHERE src2.full_name IS NOT NULL AND downstream.full_name IS NOT NULL " +
-                        "RETURN src2.full_name AS source, downstream.full_name AS target, " +
+                        "RETURN src2.full_name AS source, src2.short_name AS sourceLabel, src2.type AS sourceType, " +
+                        "downstream.full_name AS target, " +
                         "r.operation AS operation, r.sql_block_seq AS seq, r.main_table AS mainTable, " +
                         "r.join_conditions AS joins, r.where_conditions AS wheres, " +
                         "r.source_expr AS sourceExpr, r.source_alias AS sourceAlias, " +
@@ -302,7 +307,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                         "WITH DISTINCT upstream " +
                         "MATCH (upstream)-[r:%s]->(dst) " +
                         "WHERE upstream.full_name IS NOT NULL AND dst.full_name IS NOT NULL " +
-                        "RETURN upstream.full_name AS source, dst.full_name AS target, " +
+                        "RETURN upstream.full_name AS source, upstream.short_name AS sourceLabel, upstream.type AS sourceType, " +
+                        "dst.full_name AS target, " +
                         "r.operation AS operation, r.sql_block_seq AS seq, r.main_table AS mainTable, " +
                         "r.join_conditions AS joins, r.where_conditions AS wheres, " +
                         "r.source_expr AS sourceExpr, r.source_alias AS sourceAlias, " +
@@ -317,9 +323,33 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                         .mappedBy((type, record) -> record)
                         .all()
                         .forEach(record -> {
+                            // 将 source 节点加入 nodes（如果尚未存在），保证 G6 边引用的节点都有对应节点
+                            String sourceId = record.get("source").asString();
+                            if (!nodeIds.contains(sourceId)) {
+                                nodeIds.add(sourceId);
+                                ImpactAnalysisVO.NodeVO srcNode = new ImpactAnalysisVO.NodeVO();
+                                srcNode.setId(sourceId);
+                                srcNode.setLabel(isFieldLevel
+                                        ? sourceId
+                                        : (record.get("sourceLabel").isNull() ? sourceId : record.get("sourceLabel").asString()));
+                                srcNode.setType(record.get("sourceType").isNull() ? null : record.get("sourceType").asString());
+                                srcNode.setNodeLevel(isFieldLevel ? "FIELD" : "TABLE");
+                                nodes.add(srcNode);
+                            }
+                            // 将 target 节点加入 nodes（如果尚未存在）
+                            String targetId = record.get("target").asString();
+                            if (!nodeIds.contains(targetId)) {
+                                nodeIds.add(targetId);
+                                ImpactAnalysisVO.NodeVO tgtNode = new ImpactAnalysisVO.NodeVO();
+                                tgtNode.setId(targetId);
+                                tgtNode.setLabel(targetId);
+                                tgtNode.setNodeLevel(isFieldLevel ? "FIELD" : "TABLE");
+                                nodes.add(tgtNode);
+                            }
+
                             ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
-                            edge.setSource(record.get("source").asString());
-                            edge.setTarget(record.get("target").asString());
+                            edge.setSource(sourceId);
+                            edge.setTarget(targetId);
                             edge.setOperation(record.get("operation").isNull() ? null : record.get("operation").asString());
                             edge.setSqlBlockSeq(record.get("seq").isNull() ? null : (int) record.get("seq").asLong());
                             edge.setMainTable(record.get("mainTable").isNull() ? null : record.get("mainTable").asString());
@@ -357,6 +387,94 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         } catch (Exception e) {
             return Collections.emptyList();
         }
+    }
+
+    private Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> buildImpactedByDepth(
+            String sourceTable, String direction, int maxDepth,
+            List<ImpactAnalysisVO.NodeVO> nodes, List<ImpactAnalysisVO.EdgeVO> edges) {
+
+        Map<String, List<String>> adjacency = buildAdjacency(edges, direction);
+
+        Map<String, Integer> depthMap = new HashMap<>();
+        Map<String, String> impactSourceMap = new HashMap<>();
+        Queue<String> queue = new LinkedList<>();
+        queue.offer(sourceTable);
+        depthMap.put(sourceTable, 0);
+
+        while (!queue.isEmpty()) {
+            String current = queue.poll();
+            int currentDepth = depthMap.get(current);
+            if (currentDepth >= maxDepth) continue;
+
+            List<String> neighbors = adjacency.getOrDefault(current, Collections.emptyList());
+            for (String neighbor : neighbors) {
+                if (!depthMap.containsKey(neighbor)) {
+                    depthMap.put(neighbor, currentDepth + 1);
+                    impactSourceMap.put(neighbor, current);
+                    queue.offer(neighbor);
+                }
+            }
+        }
+
+        Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Integer> entry : depthMap.entrySet()) {
+            if (entry.getValue() == 0) continue;
+            String table = entry.getKey();
+            int d = entry.getValue();
+
+            ImpactAnalysisVO.ImpactedTable t = new ImpactAnalysisVO.ImpactedTable();
+            t.setTable(table);
+            t.setDepth(d);
+            t.setImpactSource(impactSourceMap.get(table));
+
+            final String tableId = table;
+            nodes.stream().filter(n -> n.getId().equals(tableId)).findFirst()
+                .ifPresent(n -> t.setType(n.getType()));
+
+            edges.stream()
+                .filter(e -> e.getTarget().equals(tableId) || e.getSource().equals(tableId))
+                .map(ImpactAnalysisVO.EdgeVO::getProcName)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .ifPresent(t::setProcName);
+
+            result.computeIfAbsent(d, k -> new ArrayList<>()).add(t);
+        }
+        return result;
+    }
+
+    private Map<String, List<String>> buildAdjacency(
+            List<ImpactAnalysisVO.EdgeVO> edges, String direction) {
+        Map<String, List<String>> adj = new HashMap<>();
+        for (ImpactAnalysisVO.EdgeVO e : edges) {
+            String src = e.getSource();
+            String tgt = e.getTarget();
+            if (src.equals(tgt)) continue;
+
+            if ("UPSTREAM".equals(direction)) {
+                adj.computeIfAbsent(tgt, k -> new ArrayList<>()).add(src);
+            } else {
+                // DOWNSTREAM 和 BOTH 都加 source→target
+                adj.computeIfAbsent(src, k -> new ArrayList<>()).add(tgt);
+                if ("BOTH".equals(direction)) {
+                    adj.computeIfAbsent(tgt, k -> new ArrayList<>()).add(src);
+                }
+            }
+        }
+        return adj;
+    }
+
+    private List<String> buildPropagationChains(
+            Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> impactedByDepth) {
+        List<String> chains = new ArrayList<>();
+        for (Map.Entry<Integer, List<ImpactAnalysisVO.ImpactedTable>> entry : impactedByDepth.entrySet()) {
+            for (ImpactAnalysisVO.ImpactedTable t : entry.getValue()) {
+                if (t.getImpactSource() != null) {
+                    chains.add(t.getImpactSource() + " → " + t.getTable());
+                }
+            }
+        }
+        return chains;
     }
 
     private ImpactAnalysisVO.ImpactStats buildStats(List<ImpactAnalysisVO.NodeVO> nodes,

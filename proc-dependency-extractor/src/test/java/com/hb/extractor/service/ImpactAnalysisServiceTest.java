@@ -55,4 +55,55 @@ class ImpactAnalysisServiceTest {
         assertNotNull(result);
         assertTrue(result.isEmpty());
     }
+
+    @Test
+    void testAnalyze_ReturnsImpactedByDepthField() {
+        ImpactAnalysisRequest req = new ImpactAnalysisRequest();
+        req.setSchema("CDM");
+        req.setTableShortName("TEST_TABLE");
+        req.setDirection("DOWNSTREAM");
+        req.setMaxDepth(3);
+        when(neo4jClient.query(anyString())).thenThrow(new RuntimeException("Neo4j 不可用"));
+
+        ImpactAnalysisVO vo = impactService.analyze(req);
+
+        assertNotNull(vo.getImpactedByDepth());
+        // Neo4j 不可用时只有起点节点，无下游，impactedByDepth 应为空
+        assertTrue(vo.getImpactedByDepth().isEmpty());
+        assertNotNull(vo.getPropagationChains());
+        assertTrue(vo.getPropagationChains().isEmpty());
+        assertEquals("CDM.TEST_TABLE", vo.getSourceTable());
+    }
+
+    @Test
+    void testAnalyze_UpstreamDirection_PopulatesImpactedByDepth() {
+        ImpactAnalysisRequest req = new ImpactAnalysisRequest();
+        req.setSchema("CDM");
+        req.setTableShortName("TEST_TABLE");
+        req.setDirection("UPSTREAM");
+        req.setMaxDepth(3);
+        when(neo4jClient.query(anyString())).thenThrow(new RuntimeException("Neo4j 不可用"));
+
+        ImpactAnalysisVO vo = impactService.analyze(req);
+
+        // UPSTREAM 方向也应正确设置 sourceTable
+        assertEquals("CDM.TEST_TABLE", vo.getSourceTable());
+        assertNotNull(vo.getImpactedByDepth());
+    }
+
+    @Test
+    void testAnalyze_BothDirection_DoesNotCrash() {
+        ImpactAnalysisRequest req = new ImpactAnalysisRequest();
+        req.setSchema("CDM");
+        req.setTableShortName("TEST_TABLE");
+        req.setDirection("BOTH");
+        req.setMaxDepth(3);
+        when(neo4jClient.query(anyString())).thenThrow(new RuntimeException("Neo4j 不可用"));
+
+        ImpactAnalysisVO vo = impactService.analyze(req);
+
+        // BOTH 方向不应抛异常，sourceTable 应正确设置
+        assertEquals("CDM.TEST_TABLE", vo.getSourceTable());
+        assertNotNull(vo.getImpactedByDepth());
+    }
 }

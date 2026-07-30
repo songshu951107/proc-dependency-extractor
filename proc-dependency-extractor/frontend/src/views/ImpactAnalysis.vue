@@ -25,6 +25,23 @@
           @nodeClick="handleNodeClick"
           @edgeClick="handleEdgeClick"
         />
+
+        <div class="propagation-section" v-if="result?.impactedByDepth">
+          <div class="section-header">
+            <span class="section-title">影响传播树</span>
+            <el-switch
+              v-model="collapseTempTables"
+              active-text="折叠临时表"
+              size="small"
+            />
+          </div>
+          <ImpactPropagationTree
+            :sourceTable="result.sourceTable"
+            :impactedByDepth="result.impactedByDepth"
+            :collapsedTempTables="collapseTempTables"
+            @viewScript="handleViewScript"
+          />
+        </div>
       </el-col>
       <el-col :span="6">
         <el-card shadow="never">
@@ -43,6 +60,15 @@
         </el-card>
       </el-col>
     </el-row>
+
+    <ScriptSnippetModal
+      v-if="scriptModalVisible"
+      :visible="scriptModalVisible"
+      :procName="scriptModalData.procName"
+      :impactSource="scriptModalData.impactSource"
+      :targetTable="scriptModalData.table"
+      @close="scriptModalVisible = false"
+    />
   </div>
 </template>
 
@@ -53,6 +79,8 @@ import ImpactStats from '@/components/impact/ImpactStats.vue'
 import ImpactGraph from '@/components/impact/ImpactGraph.vue'
 import ImpactNodeDetail from '@/components/impact/ImpactNodeDetail.vue'
 import ImpactEdgeDetail from '@/components/impact/ImpactEdgeDetail.vue'
+import ImpactPropagationTree from '@/components/impact/ImpactPropagationTree.vue'
+import ScriptSnippetModal from '@/components/impact/ScriptSnippetModal.vue'
 import { analyze, expand } from '@/api/impact'
 import { ElMessage } from 'element-plus'
 
@@ -63,6 +91,9 @@ const lastRequest = ref(null)
 const graphRef = ref(null)
 const selectedNode = ref(null)
 const selectedEdge = ref(null)
+const collapseTempTables = ref(false)
+const scriptModalVisible = ref(false)
+const scriptModalData = ref({ table: '', procName: '', impactSource: '' })
 
 // 完整缓存（analyze 返回的全部节点/边）
 const allNodes = ref([])
@@ -78,6 +109,7 @@ const isFieldLevel = computed(() => {
 
 const handleAnalyze = async (request) => {
   loading.value = true
+  collapseTempTables.value = false
   neo4jError.value = ''
   lastRequest.value = request
   try {
@@ -180,10 +212,37 @@ const handleCollapse = (node) => {
     graphRef.value.removeDownstream(node.id)
   }
 }
+
+const handleViewScript = ({ table, procName, impactSource }) => {
+  if (!procName) {
+    ElMessage.warning('该表无关联存储过程')
+    return
+  }
+  scriptModalData.value = { table, procName, impactSource }
+  scriptModalVisible.value = true
+}
 </script>
 
 <style scoped>
 .impact-analysis {
   padding: 10px;
+}
+.propagation-section {
+  margin-top: 16px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  padding: 16px;
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f1f1f;
 }
 </style>

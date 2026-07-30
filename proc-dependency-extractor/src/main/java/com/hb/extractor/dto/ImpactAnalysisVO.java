@@ -34,6 +34,7 @@ public class ImpactAnalysisVO {
         private List<ConditionClause> whereConditions;
         private String sourceExpr;
         private String sourceAlias;
+        private String procName;
     }
 
     @Data

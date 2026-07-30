@@ -51,7 +51,26 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public SyncResult syncProc(String procName) {
-        Long logId = insertSyncLog(procName);
+        // 查找该 proc 最近一次失败记录，决定是复用还是新建
+        // 避免每次重试都新建 PENDING 记录导致 retryCount 永远为 1、syncLog 表无限膨胀
+        Neo4jSyncLog lastFailed = neo4jSyncLogMapper.selectOne(
+                new LambdaQueryWrapper<Neo4jSyncLog>()
+                        .eq(Neo4jSyncLog::getProcName, procName)
+                        .eq(Neo4jSyncLog::getSyncStatus, "FAILED")
+                        .orderByDesc(Neo4jSyncLog::getUpdateTime)
+                        .last("LIMIT 1"));
+        Long logId;
+        if (lastFailed != null && (lastFailed.getRetryCount() == null || lastFailed.getRetryCount() < 3)) {
+            // 复用旧记录，更新状态为 PENDING，使后续 updateSyncLog 能在 existing.retryCount 基础上累加
+            logId = lastFailed.getId();
+            Neo4jSyncLog updatePending = new Neo4jSyncLog();
+            updatePending.setId(logId);
+            updatePending.setSyncStatus("PENDING");
+            neo4jSyncLogMapper.updateById(updatePending);
+        } else {
+            // 无失败记录或已达重试上限，新建记录
+            logId = insertSyncLog(procName);
+        }
 
         try {
             deleteProcData(procName);

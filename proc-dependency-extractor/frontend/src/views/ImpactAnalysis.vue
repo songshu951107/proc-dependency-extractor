@@ -141,11 +141,16 @@ const handleEdgeClick = (edge) => {
 }
 
 const handleExpand = async (node) => {
-  // 先查缓存
-  const cachedEdges = allEdges.value.filter(e => e.source === node.id)
+  // 先查缓存（根据方向匹配边：UPSTREAM 匹配 target，DOWNSTREAM 匹配 source，BOTH 两者皆可）
+  const direction = lastRequest.value?.direction || 'DOWNSTREAM'
+  const cachedEdges = allEdges.value.filter(e =>
+    direction === 'UPSTREAM' ? e.target === node.id :
+    direction === 'DOWNSTREAM' ? e.source === node.id :
+    e.source === node.id || e.target === node.id
+  )
   if (cachedEdges.length > 0) {
     const newNodeIds = new Set(renderNodes.value.map(n => n.id))
-    cachedEdges.forEach(e => newNodeIds.add(e.target))
+    cachedEdges.forEach(e => { newNodeIds.add(e.source); newNodeIds.add(e.target) })
     renderNodes.value = allNodes.value.filter(n => newNodeIds.has(n.id))
     renderEdges.value = [...renderEdges.value, ...cachedEdges]
     return

@@ -35,7 +35,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
     public List<String> getSchemas() {
         Collection<String> schemas = neo4jClient.query(
                 "MATCH (t:Table) WHERE t.schema_prefix IS NOT NULL " +
-                "RETURN DISTINCT t.schema_prefix AS schema ORDER BY schema")
+                "RETURN DISTINCT toUpper(t.schema_prefix) AS schema ORDER BY schema")
                 .fetchAs(String.class)
                 .mappedBy((type, record) -> record.get("schema").asString())
                 .all();

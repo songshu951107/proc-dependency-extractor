@@ -51,8 +51,6 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public SyncResult syncProc(String procName) {
-        // 查找该 proc 最近一次失败记录，决定是复用还是新建
-        // 避免每次重试都新建 PENDING 记录导致 retryCount 永远为 1、syncLog 表无限膨胀
         Neo4jSyncLog lastFailed = neo4jSyncLogMapper.selectOne(
                 new LambdaQueryWrapper<Neo4jSyncLog>()
                         .eq(Neo4jSyncLog::getProcName, procName)
@@ -61,14 +59,12 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                         .last("LIMIT 1"));
         Long logId;
         if (lastFailed != null && (lastFailed.getRetryCount() == null || lastFailed.getRetryCount() < 3)) {
-            // 复用旧记录，更新状态为 PENDING，使后续 updateSyncLog 能在 existing.retryCount 基础上累加
             logId = lastFailed.getId();
             Neo4jSyncLog updatePending = new Neo4jSyncLog();
             updatePending.setId(logId);
             updatePending.setSyncStatus("PENDING");
             neo4jSyncLogMapper.updateById(updatePending);
         } else {
-            // 无失败记录或已达重试上限，新建记录
             logId = insertSyncLog(procName);
         }
 
@@ -88,8 +84,6 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
 
             Map<Long, List<TableLineageFilter>> filtersByLineageId = new HashMap<>();
             List<TableFieldMapping> mappings = new ArrayList<>();
-            List<SqlBlockInfo> blocks = sqlBlockInfoMapper.selectList(
-                    new LambdaQueryWrapper<SqlBlockInfo>().eq(SqlBlockInfo::getProcName, procName));
 
             if (!edgeIds.isEmpty()) {
                 List<TableLineageFilter> filters = tableLineageFilterMapper.selectList(
@@ -100,40 +94,42 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                         new LambdaQueryWrapper<TableFieldMapping>().in(TableFieldMapping::getLineageId, edgeIds));
             }
 
-            // 写入 Proc 节点
-            Map<String, Object> procParams = new HashMap<>();
-            procParams.put("name", procName);
-            procParams.put("updateTarget", procInfo.getUpdateTarget());
-            neo4jClient.query("MERGE (p:Proc {name: $name}) SET p.update_target = $updateTarget")
-                    .bindAll(procParams).run();
+            // 写入 Script 节点
+            String scriptFile = procName + ".py";
+            mergeScriptNode(scriptFile, procInfo);
 
-            // 写入 Table 节点 + DERIVES 关系 + PARSED_BY 关系
+            // 收集所有涉及的表（源表 + 目标表）
+            Set<String> involvedTables = new LinkedHashSet<>();
             for (TableLineage edge : edges) {
-                mergeTableNode(edge.getSourceTable(), edge.getSourceTableShort());
-                String targetType = edge.getTargetIsTemp() == 1 ? "TEMP" : "TARGET";
-                mergeTableNode(edge.getTargetTable(), edge.getTargetTableShort());
-                updateTableType(edge.getTargetTable(), targetType);
-
-                List<TableLineageFilter> edgeFilters = filtersByLineageId.getOrDefault(edge.getId(), Collections.emptyList());
-                createDerivesRelationship(edge, edgeFilters);
-
-                Map<String, Object> parsedByParams = new HashMap<>();
-                parsedByParams.put("procName", procName);
-                parsedByParams.put("targetTable", edge.getTargetTable());
-                parsedByParams.put("operation", edge.getOperation());
-                neo4jClient.query("MATCH (t:Table {full_name: $targetTable}), (p:Proc {name: $procName}) " +
-                        "MERGE (t)-[:PARSED_BY {proc_name: $procName, operation: $operation}]->(p)")
-                        .bindAll(parsedByParams).run();
+                involvedTables.add(edge.getSourceTable());
+                involvedTables.add(edge.getTargetTable());
             }
 
-            // 写入 Field 节点 + HAS_FIELD 关系 + MAPS_TO 关系
+            // 写入 Table 节点
+            for (String fullName : involvedTables) {
+                String shortName = extractShortName(fullName);
+                mergeTableNode(fullName, shortName, scriptFile);
+            }
+
+            // 写入 READS 关系 + PRODUCES + CONSUMES
+            for (TableLineage edge : edges) {
+                List<TableLineageFilter> edgeFilters = filtersByLineageId.getOrDefault(edge.getId(), Collections.emptyList());
+                createReadsRelationship(edge, edgeFilters);
+
+                // 目标表由 Script 产出
+                mergeProducesRelationship(scriptFile, edge.getTargetTable());
+                // 源表被 Script 消费
+                mergeConsumesRelationship(scriptFile, edge.getSourceTable());
+            }
+
+            // 写入 Column 节点 + BELONGS_TO 关系 + MAPS_TO 关系
             for (TableFieldMapping fm : mappings) {
                 TableLineage edge = findEdgeById(edges, fm.getLineageId());
                 if (edge == null) continue;
 
-                String targetFieldFullName = toFieldFullName(edge.getTargetTable(), fm.getTargetField());
-                mergeFieldNode(targetFieldFullName, fm.getTargetField(), edge.getTargetTable());
-                createHasFieldRelationship(edge.getTargetTable(), targetFieldFullName);
+                String targetColKey = toColKey(edge.getTargetTable(), fm.getTargetField());
+                mergeColumnNode(targetColKey, fm.getTargetField(), edge.getTargetTable());
+                mergeBelongsRelationship(targetColKey, edge.getTargetTable());
 
                 String sourceTableShort = fm.getSourceTableShort();
                 if (sourceTableShort == null || sourceTableShort.isEmpty()) continue;
@@ -141,23 +137,19 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                 if (sourceTableFull == null) continue;
                 String sourceFieldName = extractFieldName(fm.getSourceExpr());
                 if (sourceFieldName == null) continue;
-                String sourceFieldFullName = toFieldFullName(sourceTableFull, sourceFieldName);
-                mergeFieldNode(sourceFieldFullName, sourceFieldName, sourceTableFull);
-                createHasFieldRelationship(sourceTableFull, sourceFieldFullName);
+                String sourceColKey = toColKey(sourceTableFull, sourceFieldName);
+                mergeColumnNode(sourceColKey, sourceFieldName, sourceTableFull);
+                mergeBelongsRelationship(sourceColKey, sourceTableFull);
 
-                createMapsToRelationship(fm, edge, sourceFieldFullName, targetFieldFullName);
-            }
-
-            // 写入 SqlBlock 节点 + CONTAINS_BLOCK 关系
-            for (SqlBlockInfo block : blocks) {
-                createSqlBlockNode(block, procName);
+                String transType = classifyTransformation(fm.getSourceExpr());
+                createMapsToRelationship(fm, edge, sourceColKey, targetColKey, transType, scriptFile);
             }
 
             // 更新 SOURCE 类型
             updateSourceTableTypes();
 
             // 清理孤儿节点
-            neo4jClient.query("MATCH (n) WHERE (n:Table OR n:Field) AND NOT (n)--() DELETE n").run();
+            neo4jClient.query("MATCH (n) WHERE (n:Table OR n:Column) AND NOT (n)--() DELETE n").run();
 
             updateSyncLog(logId, "SUCCESS", null);
             log.info("Neo4j 同步成功 proc={}", procName);
@@ -183,21 +175,27 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
 
     @Override
     public void deleteProcData(String procName) {
+        String scriptFile = procName + ".py";
         try {
-            neo4jClient.query("MATCH (b:SqlBlock {proc_name: $procName}) DETACH DELETE b")
-                    .bind(procName).to("procName").run();
-            neo4jClient.query("MATCH ()-[r:DERIVES {proc_name: $procName}]->() DELETE r")
+            neo4jClient.query("MATCH ()-[r:READS {proc_name: $procName}]->() DELETE r")
                     .bind(procName).to("procName").run();
             neo4jClient.query("MATCH ()-[r:MAPS_TO {proc_name: $procName}]->() DELETE r")
                     .bind(procName).to("procName").run();
-            neo4jClient.query("MATCH ()-[r:PARSED_BY {proc_name: $procName}]->() DELETE r")
-                    .bind(procName).to("procName").run();
-            neo4jClient.query("MATCH (p:Proc {name: $procName}) DETACH DELETE p")
-                    .bind(procName).to("procName").run();
-            neo4jClient.query("MATCH (n) WHERE (n:Table OR n:Field) AND NOT (n)--() DELETE n").run();
+            neo4jClient.query("MATCH (s:Script {file: $scriptFile})-[r]->() DELETE r")
+                    .bind(scriptFile).to("scriptFile").run();
+            neo4jClient.query("MATCH (s:Script {file: $scriptFile}) DETACH DELETE s")
+                    .bind(scriptFile).to("scriptFile").run();
+            neo4jClient.query("MATCH (n) WHERE (n:Table OR n:Column) AND NOT (n)--() DELETE n").run();
         } catch (Exception e) {
             log.warn("删除 Neo4j 旧数据失败 proc={}: {}", procName, e.getMessage());
         }
+    }
+
+    @Override
+    public void clearAllData() {
+        neo4jClient.query("MATCH (n) DETACH DELETE n").run();
+        neo4jSyncLogMapper.delete(new LambdaQueryWrapper<>());
+        log.info("Neo4j 全部数据已清空");
     }
 
     private Long insertSyncLog(String procName) {
@@ -223,34 +221,43 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
         neo4jSyncLogMapper.updateById(logEntry);
     }
 
-    private void mergeTableNode(String fullName, String shortName) {
-        if (fullName == null || fullName.isEmpty()) return;
-        String schema = extractSchema(fullName);
+    private void mergeScriptNode(String scriptFile, ProcInfo procInfo) {
         Map<String, Object> params = new HashMap<>();
-        params.put("fullName", fullName);
-        params.put("shortName", shortName);
-        params.put("schema", schema);
-        neo4jClient.query("MERGE (t:Table {full_name: $fullName}) " +
-                "SET t.short_name = $shortName, t.schema = $schema")
+        params.put("file", scriptFile);
+        params.put("targetTable", procInfo.getUpdateTarget());
+        params.put("description", procInfo.getProcDesc());
+        neo4jClient.query("MERGE (s:Script {file: $file}) " +
+                "SET s.target_table = $targetTable, s.description = $description")
                 .bindAll(params).run();
     }
 
-    private void updateTableType(String fullName, String type) {
+    private void mergeTableNode(String fullName, String shortName, String scriptFile) {
+        if (fullName == null || fullName.isEmpty()) return;
+        String name = fullName.toLowerCase();
+        String schema = extractSchema(fullName);
+        String layer = schema != null ? schema.toUpperCase() : null;
+        boolean isTemp = fullName.toUpperCase().startsWith("VT_");
+
         Map<String, Object> params = new HashMap<>();
-        params.put("fullName", fullName);
-        params.put("type", type);
-        neo4jClient.query("MATCH (t:Table {full_name: $fullName}) SET t.type = $type")
+        params.put("name", name);
+        params.put("shortName", shortName);
+        params.put("schemaPrefix", schema);
+        params.put("layer", layer);
+        params.put("isTemp", isTemp);
+        params.put("scriptFile", scriptFile);
+        neo4jClient.query("MERGE (t:Table {name: $name}) " +
+                "SET t.short_name = $shortName, t.schema_prefix = $schemaPrefix, " +
+                "t.layer = $layer, t.is_temp = $isTemp, t.script_file = $scriptFile")
                 .bindAll(params).run();
     }
 
     private void updateSourceTableTypes() {
         neo4jClient.query("MATCH (t:Table) " +
-                "WHERE NOT (t)<-[:DERIVES]-() " +
-                "AND t.type IS NULL " +
-                "SET t.type = 'SOURCE'").run();
+                "WHERE NOT (t)<-[:READS]-() AND t.layer IS NOT NULL " +
+                "SET t.is_source = true").run();
     }
 
-    private void createDerivesRelationship(TableLineage edge, List<TableLineageFilter> filters) {
+    private void createReadsRelationship(TableLineage edge, List<TableLineageFilter> filters) {
         List<TableLineageFilter> joins = filters.stream()
                 .filter(f -> "JOIN".equals(f.getFilterType()))
                 .collect(Collectors.toList());
@@ -260,21 +267,39 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
 
         String joinJson = serializeConditions(joins);
         String whereJson = serializeConditions(wheres);
+        boolean viaTemp = edge.getTargetTable().toUpperCase().startsWith("VT_");
 
         Map<String, Object> params = new HashMap<>();
-        params.put("sourceTable", edge.getSourceTable());
-        params.put("targetTable", edge.getTargetTable());
+        params.put("sourceTable", edge.getSourceTable().toLowerCase());
+        params.put("targetTable", edge.getTargetTable().toLowerCase());
         params.put("procName", edge.getProcName());
         params.put("operation", edge.getOperation());
-        params.put("sqlBlockSeq", edge.getSqlBlockSeq());
-        params.put("mainTable", edge.getMainTable());
+        params.put("viaTemp", viaTemp);
         params.put("joinConditions", joinJson);
         params.put("whereConditions", whereJson);
 
-        neo4jClient.query("MATCH (s:Table {full_name: $sourceTable}), (t:Table {full_name: $targetTable}) " +
-                "CREATE (s)-[:DERIVES {proc_name: $procName, operation: $operation, " +
-                "sql_block_seq: $sqlBlockSeq, main_table: $mainTable, " +
-                "join_conditions: $joinConditions, where_conditions: $whereConditions}]->(t)")
+        neo4jClient.query("MATCH (src:Table {name: $sourceTable}), (tgt:Table {name: $targetTable}) " +
+                "MERGE (src)-[r:READS {proc_name: $procName}]->(tgt) " +
+                "SET r.operation = $operation, r.via_temp = $viaTemp, " +
+                "r.join_conditions = $joinConditions, r.where_conditions = $whereConditions")
+                .bindAll(params).run();
+    }
+
+    private void mergeProducesRelationship(String scriptFile, String targetTable) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("scriptFile", scriptFile);
+        params.put("tableName", targetTable.toLowerCase());
+        neo4jClient.query("MATCH (s:Script {file: $scriptFile}), (t:Table {name: $tableName}) " +
+                "MERGE (s)-[:PRODUCES]->(t)")
+                .bindAll(params).run();
+    }
+
+    private void mergeConsumesRelationship(String scriptFile, String sourceTable) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("scriptFile", scriptFile);
+        params.put("tableName", sourceTable.toLowerCase());
+        neo4jClient.query("MATCH (s:Script {file: $scriptFile}), (t:Table {name: $tableName}) " +
+                "MERGE (s)-[:CONSUMES]->(t)")
                 .bindAll(params).run();
     }
 
@@ -303,63 +328,71 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
         }
     }
 
-    private void mergeFieldNode(String fieldFullName, String fieldName, String tableFullName) {
+    private void mergeColumnNode(String colKey, String fieldName, String tableFullName) {
         Map<String, Object> params = new HashMap<>();
-        params.put("fieldFullName", fieldFullName);
-        params.put("fieldName", fieldName.toUpperCase());
-        params.put("tableFullName", tableFullName);
-        neo4jClient.query("MERGE (f:Field {full_name: $fieldFullName}) " +
-                "SET f.field = $fieldName, f.table_full_name = $tableFullName")
+        params.put("colKey", colKey.toLowerCase());
+        params.put("name", fieldName.toUpperCase());
+        params.put("tableFullName", tableFullName.toLowerCase());
+        neo4jClient.query("MERGE (c:Column {col_key: $colKey}) " +
+                "SET c.name = $name, c.table_full_name = $tableFullName")
                 .bindAll(params).run();
     }
 
-    private void createHasFieldRelationship(String tableFullName, String fieldFullName) {
+    private void mergeBelongsRelationship(String colKey, String tableFullName) {
         Map<String, Object> params = new HashMap<>();
-        params.put("tableFullName", tableFullName);
-        params.put("fieldFullName", fieldFullName);
-        neo4jClient.query("MATCH (t:Table {full_name: $tableFullName}), (f:Field {full_name: $fieldFullName}) " +
-                "MERGE (t)-[:HAS_FIELD]->(f)")
+        params.put("colKey", colKey.toLowerCase());
+        params.put("tableName", tableFullName.toLowerCase());
+        neo4jClient.query("MATCH (c:Column {col_key: $colKey}), (t:Table {name: $tableName}) " +
+                "MERGE (c)-[:BELONGS_TO]->(t)")
                 .bindAll(params).run();
     }
 
     private void createMapsToRelationship(TableFieldMapping fm, TableLineage edge,
-                                           String sourceFieldFullName, String targetFieldFullName) {
+                                           String sourceColKey, String targetColKey,
+                                           String transType, String scriptFile) {
         Map<String, Object> params = new HashMap<>();
-        params.put("sourceFieldFullName", sourceFieldFullName);
-        params.put("targetFieldFullName", targetFieldFullName);
+        params.put("sourceColKey", sourceColKey.toLowerCase());
+        params.put("targetColKey", targetColKey.toLowerCase());
         params.put("procName", fm.getProcName());
-        params.put("sqlBlockSeq", edge.getSqlBlockSeq());
-        params.put("fieldOrder", fm.getFieldOrder());
         params.put("sourceExpr", fm.getSourceExpr());
-        params.put("sourceAlias", fm.getSourceAlias());
+        params.put("transType", transType);
+        params.put("scriptFile", scriptFile);
 
-        neo4jClient.query("MATCH (s:Field {full_name: $sourceFieldFullName}), " +
-                "(t:Field {full_name: $targetFieldFullName}) " +
-                "CREATE (s)-[:MAPS_TO {proc_name: $procName, sql_block_seq: $sqlBlockSeq, " +
-                "field_order: $fieldOrder, source_expr: $sourceExpr, source_alias: $sourceAlias}]->(t)")
+        neo4jClient.query("MATCH (s:Column {col_key: $sourceColKey}), " +
+                "(t:Column {col_key: $targetColKey}) " +
+                "MERGE (s)-[r:MAPS_TO {proc_name: $procName, source_expr: $sourceExpr}]->(t) " +
+                "SET r.transformation_type = $transType, r.script_file = $scriptFile")
                 .bindAll(params).run();
     }
 
-    private void createSqlBlockNode(SqlBlockInfo block, String procName) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("procName", procName);
-        params.put("seq", block.getBlockSeq());
-        params.put("operation", block.getBlockType());
-        params.put("targetTable", block.getTargetTable());
-        params.put("mainTable", block.getMainTable());
+    public String classifyTransformation(String sourceExpr) {
+        if (sourceExpr == null || sourceExpr.isBlank()) return "direct";
+        String trimmed = sourceExpr.trim();
 
-        neo4jClient.query("CREATE (b:SqlBlock {proc_name: $procName, seq: $seq, " +
-                "operation: $operation, target_table: $targetTable, main_table: $mainTable})")
-                .bindAll(params).run();
-
-        neo4jClient.query("MATCH (p:Proc {name: $procName}), (b:SqlBlock {proc_name: $procName, seq: $seq}) " +
-                "MERGE (p)-[:CONTAINS_BLOCK]->(b)")
-                .bindAll(params).run();
+        // 字面量: 'N'、123、'2024-01-01'
+        if (trimmed.matches("^'[^']*'$") || trimmed.matches("^\\d+(\\.\\d+)?$")) {
+            return "literal";
+        }
+        // 聚合函数: SUM/COUNT/AVG/MAX/MIN(...)
+        if (trimmed.matches("^(?i)(SUM|COUNT|AVG|MAX|MIN|STDDEV|VARIANCE)\\s*\\(.*")) {
+            return "aggregation";
+        }
+        // 表达式派生: 含运算符或函数调用
+        if (trimmed.matches(".*[+\\-*/].*") || trimmed.matches("^(?i)\\w+\\s*\\(.*")) {
+            return "derived";
+        }
+        // 默认: 直接字段引用
+        return "direct";
     }
 
-    private String toFieldFullName(String tableFullName, String fieldName) {
+    private String toColKey(String tableFullName, String fieldName) {
         if (fieldName == null) return null;
-        return tableFullName + "." + fieldName.toUpperCase();
+        return (tableFullName + "." + fieldName).toLowerCase();
+    }
+
+    private String extractShortName(String fullName) {
+        int idx = fullName.indexOf('.');
+        return idx > 0 ? fullName.substring(idx + 1) : fullName;
     }
 
     private String extractFieldName(String expr) {

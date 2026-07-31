@@ -21,4 +21,9 @@ public interface Neo4jSyncService {
      * 删除 Neo4j 中该 proc 的全部数据
      */
     void deleteProcData(String procName);
+
+    /**
+     * 清空 Neo4j 全部数据（用于数据迁移）
+     */
+    void clearAllData();
 }

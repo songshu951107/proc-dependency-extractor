@@ -34,11 +34,11 @@
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
-import { getScript } from '@/api/script'
+import { getScriptByFile } from '@/api/script'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
-  procName: { type: String, default: '' },
+  scriptFile: { type: String, default: '' },
   impactSource: { type: String, default: '' },
   targetTable: { type: String, default: '' }
 })
@@ -53,10 +53,9 @@ const highlightLines = ref(new Set())
 const scriptViewer = ref(null)
 
 const dialogTitle = computed(() => {
-  return props.procName ? `${props.procName}.py` : '代码片段'
+  return props.scriptFile || '代码片段'
 })
 
-// 高亮逻辑：匹配 impactSource 的表名引用行
 function computeHighlightLines(content, impactSource) {
   if (!impactSource) return new Set()
   const lines = content.split('\n')
@@ -76,21 +75,20 @@ function computeHighlightLines(content, impactSource) {
 }
 
 async function loadScript() {
-  if (!props.procName) {
-    error.value = '存储过程名为空'
+  if (!props.scriptFile) {
+    error.value = '脚本文件名为空'
     return
   }
   loading.value = true
   error.value = ''
   scriptContent.value = ''
   try {
-    const res = await getScript(props.procName)
+    const res = await getScriptByFile(props.scriptFile)
     const data = res.data || {}
     scriptContent.value = data.scriptContent || ''
     scriptLines.value = scriptContent.value.split('\n')
     highlightLines.value = computeHighlightLines(scriptContent.value, props.impactSource)
 
-    // 自动滚动到第一个高亮行
     if (highlightLines.value.size > 0) {
       nextTick(() => {
         const firstLine = Math.min(...highlightLines.value)

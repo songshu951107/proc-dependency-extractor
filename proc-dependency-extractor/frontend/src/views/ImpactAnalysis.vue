@@ -17,11 +17,11 @@
 
     <el-row :gutter="10">
       <el-col :span="18">
-        <ImpactGraph
+        <ImpactFlowGraph
           ref="graphRef"
-          :nodes="renderNodes"
-          :edges="renderEdges"
-          :isFieldLevel="isFieldLevel"
+          :initialNodes="graphInitialNodes"
+          :initialEdges="graphInitialEdges"
+          :direction="lastRequest?.direction || 'DOWNSTREAM'"
           @nodeClick="handleNodeClick"
           @edgeClick="handleEdgeClick"
         />
@@ -37,6 +37,7 @@
           </div>
           <ImpactPropagationTree
             :sourceTable="result.sourceTable"
+            :sourceLayer="result.sourceLayer"
             :impactedByDepth="result.impactedByDepth"
             :collapsedTempTables="collapseTempTables"
             @viewScript="handleViewScript"
@@ -64,9 +65,9 @@
     <ScriptSnippetModal
       v-if="scriptModalVisible"
       :visible="scriptModalVisible"
-      :procName="scriptModalData.procName"
+      :scriptFile="scriptModalData.scriptFile"
       :impactSource="scriptModalData.impactSource"
-      :targetTable="scriptModalData.table"
+      :targetTable="scriptModalData.name"
       @close="scriptModalVisible = false"
     />
   </div>
@@ -76,12 +77,12 @@
 import { ref, computed } from 'vue'
 import ImpactFilter from '@/components/impact/ImpactFilter.vue'
 import ImpactStats from '@/components/impact/ImpactStats.vue'
-import ImpactGraph from '@/components/impact/ImpactGraph.vue'
+import ImpactFlowGraph from '@/components/impact/ImpactFlowGraph.vue'
 import ImpactNodeDetail from '@/components/impact/ImpactNodeDetail.vue'
 import ImpactEdgeDetail from '@/components/impact/ImpactEdgeDetail.vue'
 import ImpactPropagationTree from '@/components/impact/ImpactPropagationTree.vue'
 import ScriptSnippetModal from '@/components/impact/ScriptSnippetModal.vue'
-import { analyze, expand } from '@/api/impact'
+import { analyze } from '@/api/impact'
 import { ElMessage } from 'element-plus'
 
 const loading = ref(false)
@@ -93,15 +94,10 @@ const selectedNode = ref(null)
 const selectedEdge = ref(null)
 const collapseTempTables = ref(false)
 const scriptModalVisible = ref(false)
-const scriptModalData = ref({ table: '', procName: '', impactSource: '' })
+const scriptModalData = ref({ name: '', scriptFile: '', impactSource: '' })
 
-// 完整缓存（analyze 返回的全部节点/边）
-const allNodes = ref([])
-const allEdges = ref([])
-
-// 实际渲染的节点/边（默认仅第 1 层）
-const renderNodes = ref([])
-const renderEdges = ref([])
+const graphInitialNodes = ref([])
+const graphInitialEdges = ref([])
 
 const isFieldLevel = computed(() => {
   return lastRequest.value?.fieldName && lastRequest.value.fieldName !== ''
@@ -115,33 +111,49 @@ const handleAnalyze = async (request) => {
   try {
     const res = await analyze(request)
     result.value = res.data
-    allNodes.value = res.data?.nodes || []
-    allEdges.value = res.data?.edges || []
 
-    // 默认仅渲染第 1 层（起点 + 直接相邻节点）
-    const startNode = allNodes.value.find(n => n.depth === 0 || n.id === getStartId(request))
-    if (startNode) {
-      renderNodes.value = [startNode]
-      renderEdges.value = []
-      // 找直接相邻节点
-      const directEdges = allEdges.value.filter(e =>
-        e.source === startNode.id || e.target === startNode.id)
-      const directNodeIds = new Set([startNode.id])
-      directEdges.forEach(e => {
-        directNodeIds.add(e.source)
-        directNodeIds.add(e.target)
+    // 构建初始图数据：起点 + 第 1 跳下游
+    const sourceTable = res.data?.sourceTable
+    const sourceLayer = res.data?.sourceLayer
+    const impactedByDepth = res.data?.impactedByDepth || {}
+    const firstLevel = impactedByDepth[1] || []
+
+    const initialNodes = [{
+      id: sourceTable,
+      label: sourceTable,
+      layer: sourceLayer,
+      isTemp: false,
+      matchedColumns: []
+    }]
+    firstLevel.forEach(t => {
+      initialNodes.push({
+        id: t.name,
+        label: t.shortName || t.name,
+        layer: t.layer,
+        isTemp: t.temp,
+        matchedColumns: t.matchedColumns || []
       })
-      renderNodes.value = allNodes.value.filter(n => directNodeIds.has(n.id))
-      renderEdges.value = directEdges
-    } else {
-      renderNodes.value = allNodes.value
-      renderEdges.value = allEdges.value
-    }
+    })
+
+    const initialEdges = []
+    firstLevel.forEach(t => {
+      if (t.impactSource) {
+        initialEdges.push({
+          source: t.impactSource,
+          target: t.name
+        })
+      }
+    })
+
+    graphInitialNodes.value = initialNodes
+    graphInitialEdges.value = initialEdges
 
     // 节点超过 50 个时提示折叠临时表
-    if (allNodes.value.length > 50) {
+    const totalNodes = Object.values(impactedByDepth)
+      .reduce((sum, list) => sum + list.length, 0) + 1
+    if (totalNodes > 50) {
       ElMessage.warning(
-        `当前影响链路包含 ${allNodes.value.length} 个节点，建议折叠临时表以提升可读性`
+        `当前影响链路包含 ${totalNodes} 个节点，建议折叠临时表以提升可读性`
       )
     }
   } catch (e) {
@@ -150,16 +162,6 @@ const handleAnalyze = async (request) => {
   } finally {
     loading.value = false
   }
-}
-
-const getStartId = (request) => {
-  const schema = request.schema || ''
-  const table = request.tableShortName || ''
-  const base = schema ? `${schema}.${table}` : table
-  if (request.fieldName) {
-    return `${base}.${request.fieldName.toUpperCase()}`
-  }
-  return base.toUpperCase()
 }
 
 const handleNodeClick = (node) => {
@@ -173,52 +175,22 @@ const handleEdgeClick = (edge) => {
 }
 
 const handleExpand = async (node) => {
-  // 先查缓存（根据方向匹配边：UPSTREAM 匹配 target，DOWNSTREAM 匹配 source，BOTH 两者皆可）
-  const direction = lastRequest.value?.direction || 'DOWNSTREAM'
-  const cachedEdges = allEdges.value.filter(e =>
-    direction === 'UPSTREAM' ? e.target === node.id :
-    direction === 'DOWNSTREAM' ? e.source === node.id :
-    e.source === node.id || e.target === node.id
-  )
-  if (cachedEdges.length > 0) {
-    const newNodeIds = new Set(renderNodes.value.map(n => n.id))
-    cachedEdges.forEach(e => { newNodeIds.add(e.source); newNodeIds.add(e.target) })
-    renderNodes.value = allNodes.value.filter(n => newNodeIds.has(n.id))
-    renderEdges.value = [...renderEdges.value, ...cachedEdges]
-    return
-  }
-
-  // 缓存未命中，调 expand
-  try {
-    const res = await expand({
-      nodeId: node.id,
-      direction: lastRequest.value?.direction || 'DOWNSTREAM',
-      depth: 1
-    })
-    const newNodes = res.data?.nodes || []
-    const newEdges = res.data?.edges || []
-    allNodes.value = [...allNodes.value, ...newNodes]
-    allEdges.value = [...allEdges.value, ...newEdges]
-    renderNodes.value = [...renderNodes.value, ...newNodes]
-    renderEdges.value = [...renderEdges.value, ...newEdges]
-  } catch (e) {
-    ElMessage.error('展开失败')
+  if (graphRef.value) {
+    await graphRef.value.expandNode(node.id || node.data?.id)
   }
 }
 
 const handleCollapse = (node) => {
-  // 前端本地移除下游节点
-  if (graphRef.value) {
-    graphRef.value.removeDownstream(node.id)
-  }
+  // Vue Flow 的折叠逻辑较复杂，暂用重新渲染实现
+  ElMessage.info('折叠功能待实现，可重新分析查看')
 }
 
-const handleViewScript = ({ table, procName, impactSource }) => {
-  if (!procName) {
-    ElMessage.warning('该表无关联存储过程')
+const handleViewScript = ({ name, scriptFile, impactSource }) => {
+  if (!scriptFile) {
+    ElMessage.warning('该表无关联脚本')
     return
   }
-  scriptModalData.value = { table, procName, impactSource }
+  scriptModalData.value = { name, scriptFile, impactSource }
   scriptModalVisible.value = true
 }
 </script>

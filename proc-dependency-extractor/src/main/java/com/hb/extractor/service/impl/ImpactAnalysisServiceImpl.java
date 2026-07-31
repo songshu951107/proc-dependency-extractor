@@ -34,8 +34,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
     @Override
     public List<String> getSchemas() {
         Collection<String> schemas = neo4jClient.query(
-                "MATCH (t:Table) WHERE t.schema IS NOT NULL " +
-                "RETURN DISTINCT t.schema AS schema ORDER BY schema")
+                "MATCH (t:Table) WHERE t.schema_prefix IS NOT NULL " +
+                "RETURN DISTINCT t.schema_prefix AS schema ORDER BY schema")
                 .fetchAs(String.class)
                 .mappedBy((type, record) -> record.get("schema").asString())
                 .all();
@@ -44,8 +44,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
 
     @Override
     public List<TableOption> getTables(String schema) {
-        String cypher = "MATCH (t:Table) WHERE t.schema = $schema " +
-                "RETURN t.full_name AS fullName, t.short_name AS shortName, t.type AS type " +
+        String cypher = "MATCH (t:Table) WHERE t.schema_prefix = $schema " +
+                "RETURN t.name AS fullName, t.short_name AS shortName, t.layer AS type " +
                 "ORDER BY t.short_name";
         Collection<TableOption> tables = neo4jClient.query(cypher)
                 .bind(schema).to("schema")
@@ -63,10 +63,11 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
 
     @Override
     public List<String> getFields(String tableFullName) {
+        String tableName = tableFullName.toLowerCase();
         Collection<String> fields = neo4jClient.query(
-                "MATCH (t:Table {full_name: $tableFullName})-[:HAS_FIELD]->(f:Field) " +
-                "RETURN f.field AS field ORDER BY f.field")
-                .bind(tableFullName).to("tableFullName")
+                "MATCH (t:Table {name: $tableName})<-[:BELONGS_TO]-(c:Column) " +
+                "RETURN c.name AS field ORDER BY c.name")
+                .bind(tableName).to("tableName")
                 .fetchAs(String.class)
                 .mappedBy((type, record) -> record.get("field").asString())
                 .all();
@@ -82,25 +83,348 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         String direction = request.getDirection() == null ? "DOWNSTREAM" : request.getDirection().toUpperCase();
 
         ImpactAnalysisVO vo = new ImpactAnalysisVO();
+        vo.setSourceTable(tableFullName);
+
+        // 查询源表 layer（用于前端着色）
+        String sourceLayer = queryTableLayer(tableFullName);
+        vo.setSourceLayer(sourceLayer);
+
         List<ImpactAnalysisVO.NodeVO> nodes = new ArrayList<>();
         List<ImpactAnalysisVO.EdgeVO> edges = new ArrayList<>();
-        Set<String> nodeIds = new LinkedHashSet<>();
 
         if (isFieldLevel) {
-            String fieldFullName = tableFullName + "." + request.getFieldName().toUpperCase();
-            analyzeFieldLevel(fieldFullName, direction, depth, request, nodes, edges, nodeIds);
+            String fieldFullName = tableFullName + "." + request.getFieldName().toLowerCase();
+            analyzeFieldLevel(fieldFullName, direction, depth, nodes, edges);
         } else {
-            analyzeTableLevel(tableFullName, direction, depth, request, nodes, edges, nodeIds);
+            analyzeTableLevel(tableFullName, direction, depth, nodes, edges);
         }
 
         vo.setNodes(nodes);
         vo.setEdges(edges);
         vo.setStats(buildStats(nodes, edges, depth));
         vo.setTruncated(false);
-        vo.setSourceTable(tableFullName);
-        vo.setImpactedByDepth(buildImpactedByDepth(tableFullName, direction, depth, nodes, edges));
-        vo.setPropagationChains(buildPropagationChains(vo.getImpactedByDepth()));
+
+        if (!isFieldLevel) {
+            Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> impactedByDepth =
+                    buildImpactedByDepthFromCypher(tableFullName, direction, depth);
+            vo.setImpactedByDepth(impactedByDepth);
+            vo.setPropagationChains(buildPropagationChains(impactedByDepth));
+        } else {
+            vo.setImpactedByDepth(new LinkedHashMap<>());
+            vo.setPropagationChains(new ArrayList<>());
+        }
         return vo;
+    }
+
+    private String queryTableLayer(String tableName) {
+        try {
+            Collection<String> layers = neo4jClient.query(
+                    "MATCH (t:Table {name: $name}) RETURN t.layer AS layer LIMIT 1")
+                    .bind(tableName).to("name")
+                    .fetchAs(String.class)
+                    .mappedBy((type, record) -> record.get("layer").isNull() ? null : record.get("layer").asString())
+                    .all();
+            return layers.isEmpty() ? null : layers.iterator().next();
+        } catch (Exception e) {
+            log.warn("查询表 layer 失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private void analyzeTableLevel(String tableFullName, String direction, int depth,
+                                    List<ImpactAnalysisVO.NodeVO> nodes,
+                                    List<ImpactAnalysisVO.EdgeVO> edges) {
+        String arrow = buildArrow(direction, "READS", depth);
+        String cypher = "MATCH path = (src:Table {name: $name})" + arrow + "(downstream:Table) " +
+                "WHERE src <> downstream " +
+                "RETURN DISTINCT downstream.name AS id, downstream.short_name AS label, " +
+                "downstream.layer AS layer, downstream.is_temp AS isTemp, " +
+                "min(length(path)) AS depth " +
+                "ORDER BY depth, downstream.name";
+
+        try {
+            Collection<ImpactAnalysisVO.NodeVO> result = neo4jClient.query(cypher)
+                    .bind(tableFullName).to("name")
+                    .fetchAs(ImpactAnalysisVO.NodeVO.class)
+                    .mappedBy((type, record) -> {
+                        ImpactAnalysisVO.NodeVO node = new ImpactAnalysisVO.NodeVO();
+                        node.setId(record.get("id").asString());
+                        node.setLabel(record.get("label").isNull() ? record.get("id").asString() : record.get("label").asString());
+                        node.setNodeLevel("TABLE");
+                        node.setDepth((int) record.get("depth").asLong());
+                        return node;
+                    })
+                    .all();
+
+            // 添加起点节点
+            ImpactAnalysisVO.NodeVO startNode = new ImpactAnalysisVO.NodeVO();
+            startNode.setId(tableFullName);
+            startNode.setLabel(extractShortName(tableFullName));
+            startNode.setNodeLevel("TABLE");
+            startNode.setDepth(0);
+            nodes.add(startNode);
+            nodes.addAll(result);
+
+            // 查询边
+            collectEdges(tableFullName, direction, depth, "READS", "Table", edges, nodes);
+        } catch (Exception e) {
+            log.error("表级影响查询失败: {}", e.getMessage());
+            // 降级：仅返回起点节点
+            ImpactAnalysisVO.NodeVO startNode = new ImpactAnalysisVO.NodeVO();
+            startNode.setId(tableFullName);
+            startNode.setLabel(extractShortName(tableFullName));
+            startNode.setNodeLevel("TABLE");
+            startNode.setDepth(0);
+            nodes.add(startNode);
+        }
+    }
+
+    private String buildArrow(String direction, String relType, int depth) {
+        String rel = "[:" + relType + "*1.." + depth + "]";
+        if ("UPSTREAM".equals(direction)) return "<" + rel + "-";
+        if ("BOTH".equals(direction)) return rel + "-";
+        return "-" + rel + "->";
+    }
+
+    private String extractShortName(String fullName) {
+        int idx = fullName.indexOf('.');
+        return idx > 0 ? fullName.substring(idx + 1) : fullName;
+    }
+
+    private void analyzeFieldLevel(String fieldFullName, String direction, int depth,
+                                    List<ImpactAnalysisVO.NodeVO> nodes,
+                                    List<ImpactAnalysisVO.EdgeVO> edges) {
+        String arrow = buildArrow(direction, "MAPS_TO", depth);
+        String cypher = "MATCH path = (src:Column {col_key: $key})" + arrow + "(tgt:Column) " +
+                "WITH path, relationships(path) AS rels, nodes(path) AS cols " +
+                "UNWIND range(0, size(rels)-1) AS i " +
+                "WITH cols[i] AS srcCol, rels[i] AS r, cols[i+1] AS tgtCol, i+1 AS depth " +
+                "RETURN srcCol.col_key AS sourceId, srcCol.name AS sourceLabel, " +
+                "tgtCol.col_key AS targetId, tgtCol.name AS targetLabel, " +
+                "depth, r.transformation_type AS transType, r.proc_name AS procName, " +
+                "r.source_expr AS sourceExpr, r.script_file AS scriptFile " +
+                "ORDER BY depth, targetId";
+
+        try {
+            Collection<Object[]> result = neo4jClient.query(cypher)
+                    .bind(fieldFullName).to("key")
+                    .fetchAs(Object[].class)
+                    .mappedBy((type, record) -> new Object[]{
+                            record.get("sourceId").asString(),
+                            record.get("sourceLabel").asString(),
+                            record.get("targetId").asString(),
+                            record.get("targetLabel").asString(),
+                            (int) record.get("depth").asLong(),
+                            record.get("transType").isNull() ? null : record.get("transType").asString(),
+                            record.get("procName").isNull() ? null : record.get("procName").asString(),
+                            record.get("sourceExpr").isNull() ? null : record.get("sourceExpr").asString(),
+                            record.get("scriptFile").isNull() ? null : record.get("scriptFile").asString()
+                    })
+                    .all();
+
+            Set<String> nodeIds = new LinkedHashSet<>();
+            nodeIds.add(fieldFullName);
+
+            // 添加起点节点
+            ImpactAnalysisVO.NodeVO startNode = new ImpactAnalysisVO.NodeVO();
+            startNode.setId(fieldFullName);
+            startNode.setLabel(fieldFullName.split("\\.")[2]);
+            startNode.setNodeLevel("FIELD");
+            startNode.setDepth(0);
+            nodes.add(startNode);
+
+            for (Object[] row : result) {
+                String sourceId = (String) row[0];
+                String sourceLabel = (String) row[1];
+                String targetId = (String) row[2];
+                String targetLabel = (String) row[3];
+                int d = (int) row[4];
+                String transType = (String) row[5];
+                String procName = (String) row[6];
+                String sourceExpr = (String) row[7];
+
+                if (!nodeIds.contains(sourceId)) {
+                    nodeIds.add(sourceId);
+                    ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
+                    n.setId(sourceId);
+                    n.setLabel(sourceLabel);
+                    n.setNodeLevel("FIELD");
+                    n.setDepth(d - 1);
+                    nodes.add(n);
+                }
+                if (!nodeIds.contains(targetId)) {
+                    nodeIds.add(targetId);
+                    ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
+                    n.setId(targetId);
+                    n.setLabel(targetLabel);
+                    n.setNodeLevel("FIELD");
+                    n.setDepth(d);
+                    nodes.add(n);
+                }
+
+                ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
+                edge.setSource(sourceId);
+                edge.setTarget(targetId);
+                edge.setProcName(procName);
+                edge.setSourceExpr(sourceExpr);
+                edges.add(edge);
+            }
+        } catch (Exception e) {
+            log.error("字段级影响查询失败: {}", e.getMessage());
+            ImpactAnalysisVO.NodeVO startNode = new ImpactAnalysisVO.NodeVO();
+            startNode.setId(fieldFullName);
+            startNode.setLabel(fieldFullName.split("\\.")[2]);
+            startNode.setNodeLevel("FIELD");
+            startNode.setDepth(0);
+            nodes.add(startNode);
+        }
+    }
+
+    private void collectEdges(String startId, String direction, int depth, String relType,
+                               String nodeLabel, List<ImpactAnalysisVO.EdgeVO> edges,
+                               List<ImpactAnalysisVO.NodeVO> nodes) {
+        List<String> dirs = new ArrayList<>();
+        if ("BOTH".equals(direction)) {
+            dirs.add("DOWNSTREAM");
+            dirs.add("UPSTREAM");
+        } else {
+            dirs.add(direction);
+        }
+
+        Set<String> nodeIds = new HashSet<>();
+        for (ImpactAnalysisVO.NodeVO n : nodes) nodeIds.add(n.getId());
+
+        for (String dir : dirs) {
+            String edgeCypher;
+            if ("DOWNSTREAM".equals(dir)) {
+                edgeCypher = String.format(
+                        "MATCH (src:%s {name: $startId})-[:%s*1..%d]->(downstream:%s) " +
+                        "WITH DISTINCT downstream " +
+                        "MATCH (src2)-[r:%s]->(downstream) " +
+                        "RETURN src2.name AS source, downstream.name AS target, " +
+                        "r.operation AS operation, r.proc_name AS procName, " +
+                        "r.join_conditions AS joins, r.where_conditions AS wheres",
+                        nodeLabel, relType, depth, nodeLabel, relType);
+            } else {
+                edgeCypher = String.format(
+                        "MATCH (src:%s {name: $startId})<-[:%s*1..%d]-(upstream:%s) " +
+                        "WITH DISTINCT upstream " +
+                        "MATCH (upstream)-[r:%s]->(dst) " +
+                        "RETURN upstream.name AS source, dst.name AS target, " +
+                        "r.operation AS operation, r.proc_name AS procName, " +
+                        "r.join_conditions AS joins, r.where_conditions AS wheres",
+                        nodeLabel, relType, depth, nodeLabel, relType);
+            }
+
+            try {
+                neo4jClient.query(edgeCypher)
+                        .bind(startId).to("startId")
+                        .fetchAs(org.neo4j.driver.Record.class)
+                        .mappedBy((type, record) -> record)
+                        .all()
+                        .forEach(record -> {
+                            String sourceId = record.get("source").asString();
+                            String targetId = record.get("target").asString();
+
+                            // 确保边引用的节点都存在
+                            if (!nodeIds.contains(sourceId)) {
+                                nodeIds.add(sourceId);
+                                ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
+                                n.setId(sourceId);
+                                n.setLabel(extractShortName(sourceId));
+                                n.setNodeLevel("TABLE");
+                                nodes.add(n);
+                            }
+                            if (!nodeIds.contains(targetId)) {
+                                nodeIds.add(targetId);
+                                ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
+                                n.setId(targetId);
+                                n.setLabel(extractShortName(targetId));
+                                n.setNodeLevel("TABLE");
+                                nodes.add(n);
+                            }
+
+                            ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
+                            edge.setSource(sourceId);
+                            edge.setTarget(targetId);
+                            edge.setOperation(record.get("operation").isNull() ? null : record.get("operation").asString());
+                            edge.setProcName(record.get("procName").isNull() ? null : record.get("procName").asString());
+                            edges.add(edge);
+                        });
+            } catch (Exception e) {
+                log.error("查询边失败: {}", e.getMessage());
+            }
+        }
+    }
+
+    private Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> buildImpactedByDepthFromCypher(
+            String sourceTable, String direction, int maxDepth) {
+
+        String arrow = buildArrow(direction, "READS", maxDepth);
+        String cypher = "MATCH path = (src:Table {name: $name})" + arrow + "(downstream:Table) " +
+                "WHERE src <> downstream " +
+                "RETURN downstream.name AS name, downstream.short_name AS shortName, " +
+                "downstream.layer AS layer, downstream.is_temp AS isTemp, " +
+                "downstream.script_file AS scriptFile, " +
+                "min(length(path)) AS depth " +
+                "ORDER BY depth, downstream.name";
+
+        Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> result = new LinkedHashMap<>();
+        try {
+            neo4jClient.query(cypher)
+                    .bind(sourceTable).to("name")
+                    .fetchAs(ImpactAnalysisVO.ImpactedTable.class)
+                    .mappedBy((type, record) -> {
+                        ImpactAnalysisVO.ImpactedTable t = new ImpactAnalysisVO.ImpactedTable();
+                        t.setName(record.get("name").asString());
+                        t.setShortName(record.get("shortName").isNull() ? record.get("name").asString() : record.get("shortName").asString());
+                        t.setLayer(record.get("layer").isNull() ? null : record.get("layer").asString());
+                        t.setTemp(record.get("isTemp").isNull() ? false : record.get("isTemp").asBoolean());
+                        t.setDepth((int) record.get("depth").asLong());
+                        t.setScriptFile(record.get("scriptFile").isNull() ? null : record.get("scriptFile").asString());
+                        return t;
+                    })
+                    .all()
+                    .forEach(t -> {
+                        // 查询 impactSource（单跳）
+                        t.setImpactSource(findImpactSource(t.getName(), direction));
+                        // 查询表的字段
+                        t.setColumns(getFields(t.getName()));
+                        result.computeIfAbsent(t.getDepth(), k -> new ArrayList<>()).add(t);
+                    });
+        } catch (Exception e) {
+            log.error("构建 impactedByDepth 失败: {}", e.getMessage());
+        }
+        return result;
+    }
+
+    private String findImpactSource(String tableName, String direction) {
+        try {
+            String cypher = "UPSTREAM".equals(direction)
+                    ? "MATCH (src:Table)-[:READS]->(tgt:Table {name: $name}) RETURN src.name AS source LIMIT 1"
+                    : "MATCH (src:Table)-[:READS]->(tgt:Table {name: $name}) RETURN src.name AS source LIMIT 1";
+            Collection<String> sources = neo4jClient.query(cypher)
+                    .bind(tableName).to("name")
+                    .fetchAs(String.class)
+                    .mappedBy((type, record) -> record.get("source").asString())
+                    .all();
+            return sources.isEmpty() ? null : sources.iterator().next();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private List<String> buildPropagationChains(
+            Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> impactedByDepth) {
+        List<String> chains = new ArrayList<>();
+        for (Map.Entry<Integer, List<ImpactAnalysisVO.ImpactedTable>> entry : impactedByDepth.entrySet()) {
+            for (ImpactAnalysisVO.ImpactedTable t : entry.getValue()) {
+                if (t.getImpactSource() != null) {
+                    chains.add(t.getImpactSource() + " → " + t.getName());
+                }
+            }
+        }
+        return chains;
     }
 
     @Override
@@ -111,19 +435,58 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         ImpactAnalysisVO vo = new ImpactAnalysisVO();
         List<ImpactAnalysisVO.NodeVO> nodes = new ArrayList<>();
         List<ImpactAnalysisVO.EdgeVO> edges = new ArrayList<>();
-        Set<String> nodeIds = new LinkedHashSet<>();
 
-        // 判断 nodeId 是 Table 还是 Field（Field 的 full_name 含 2 个点：schema.table.FIELD）
         boolean isFieldLevel = request.getNodeId().chars().filter(c -> c == '.').count() >= 2;
 
-        String relType = isFieldLevel ? "MAPS_TO" : "DERIVES";
-        String nodeLabel = isFieldLevel ? "Field" : "Table";
-        String arrow = "UPSTREAM".equals(direction)
-                ? "<-[:" + relType + "*1.." + depth + "]-"
-                : "-[:" + relType + "*1.." + depth + "]->";
-        String cypher = "MATCH path = (src:" + nodeLabel + " {full_name: $nodeId})" + arrow + "(downstream:" + nodeLabel + ") " +
-                "RETURN path";
-        executeAndCollect(cypher, request.getNodeId(), "nodeId", direction, depth, nodes, edges, nodeIds, isFieldLevel);
+        if (isFieldLevel) {
+            String arrow = buildArrow(direction, "MAPS_TO", depth);
+            String cypher = "MATCH path = (src:Column {col_key: $key})" + arrow + "(tgt:Column) " +
+                    "RETURN DISTINCT tgt.col_key AS id, tgt.name AS label, " +
+                    "min(length(path)) AS depth ORDER BY depth, tgt.col_key";
+            try {
+                Collection<ImpactAnalysisVO.NodeVO> result = neo4jClient.query(cypher)
+                        .bind(request.getNodeId()).to("key")
+                        .fetchAs(ImpactAnalysisVO.NodeVO.class)
+                        .mappedBy((type, record) -> {
+                            ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
+                            n.setId(record.get("id").asString());
+                            n.setLabel(record.get("label").asString());
+                            n.setNodeLevel("FIELD");
+                            n.setDepth((int) record.get("depth").asLong());
+                            return n;
+                        })
+                        .all();
+                nodes.addAll(result);
+            } catch (Exception e) {
+                log.error("字段展开失败: {}", e.getMessage());
+            }
+        } else {
+            String arrow = buildArrow(direction, "READS", depth);
+            String cypher = "MATCH path = (src:Table {name: $name})" + arrow + "(downstream:Table) " +
+                    "RETURN DISTINCT downstream.name AS id, downstream.short_name AS label, " +
+                    "downstream.layer AS layer, downstream.is_temp AS isTemp, " +
+                    "min(length(path)) AS depth ORDER BY depth, downstream.name";
+            try {
+                Collection<ImpactAnalysisVO.NodeVO> result = neo4jClient.query(cypher)
+                        .bind(request.getNodeId()).to("name")
+                        .fetchAs(ImpactAnalysisVO.NodeVO.class)
+                        .mappedBy((type, record) -> {
+                            ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
+                            n.setId(record.get("id").asString());
+                            n.setLabel(record.get("label").isNull() ? record.get("id").asString() : record.get("label").asString());
+                            n.setNodeLevel("TABLE");
+                            n.setDepth((int) record.get("depth").asLong());
+                            return n;
+                        })
+                        .all();
+                nodes.addAll(result);
+
+                // 同时查询边
+                collectEdges(request.getNodeId(), direction, depth, "READS", "Table", edges, nodes);
+            } catch (Exception e) {
+                log.error("表展开失败: {}", e.getMessage());
+            }
+        }
 
         vo.setNodes(nodes);
         vo.setEdges(edges);
@@ -132,26 +495,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
 
     @Override
     public List<ImpactAnalysisVO.PathVO> getPaths(String source, String target, Integer maxDepth) {
-        int depth = maxDepth == null ? 10 : Math.min(maxDepth, maxAllowedDepth);
-        String cypher = "MATCH path = (src:Table {full_name: $source})-[:DERIVES*1.." + depth + "]->(dst:Table {full_name: $target}) " +
-                "RETURN path ORDER BY length(path) LIMIT 10";
-
-        List<ImpactAnalysisVO.PathVO> paths = new ArrayList<>();
-        try {
-            neo4jClient.query(cypher)
-                    .bind(source).to("source")
-                    .bind(target).to("target")
-                    .fetchAs(org.neo4j.driver.Record.class)
-                    .mappedBy((type, record) -> record)
-                    .all()
-                    .forEach(record -> {
-                        // 简化处理：实际 path 解析需要 org.neo4j.driver.types.Path
-                        // 此方法为预留，当前返回空列表
-                    });
-        } catch (Exception e) {
-            log.error("查询路径失败: {}", e.getMessage());
-        }
-        return paths;
+        // 预留方法，当前返回空列表
+        return new ArrayList<>();
     }
 
     @Override
@@ -173,308 +518,6 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         return vo;
     }
 
-    private void analyzeTableLevel(String tableFullName, String direction, int depth,
-                                    ImpactAnalysisRequest request,
-                                    List<ImpactAnalysisVO.NodeVO> nodes,
-                                    List<ImpactAnalysisVO.EdgeVO> edges,
-                                    Set<String> nodeIds) {
-        // path 查询 cypher（forEach 为空实现，备用方案 collectNodesAndEdges 为主逻辑）
-        String arrow = "UPSTREAM".equals(direction)
-                ? "<-[:DERIVES*1.." + depth + "]-"
-                : "-[:DERIVES*1.." + depth + "]->";
-        String cypher = "MATCH path = (src:Table {full_name: $tableFullName})" + arrow + "(downstream:Table) " +
-                "RETURN path";
-        executeAndCollect(cypher, tableFullName, "tableFullName", direction, depth, nodes, edges, nodeIds, false);
-    }
-
-    private void analyzeFieldLevel(String fieldFullName, String direction, int depth,
-                                    ImpactAnalysisRequest request,
-                                    List<ImpactAnalysisVO.NodeVO> nodes,
-                                    List<ImpactAnalysisVO.EdgeVO> edges,
-                                    Set<String> nodeIds) {
-        String arrow = "UPSTREAM".equals(direction)
-                ? "<-[:MAPS_TO*1.." + depth + "]-"
-                : "-[:MAPS_TO*1.." + depth + "]->";
-        String cypher = "MATCH path = (src:Field {full_name: $fieldFullName})" + arrow + "(downstream:Field) " +
-                "RETURN path";
-        executeAndCollect(cypher, fieldFullName, "fieldFullName", direction, depth, nodes, edges, nodeIds, true);
-    }
-
-    private void executeAndCollect(String cypher, String bindValue, String bindKey,
-                                    String direction, int depth,
-                                    List<ImpactAnalysisVO.NodeVO> nodes,
-                                    List<ImpactAnalysisVO.EdgeVO> edges,
-                                    Set<String> nodeIds, boolean isFieldLevel) {
-        try {
-            neo4jClient.query(cypher)
-                    .bind(bindValue).to(bindKey)
-                    .fetchAs(org.neo4j.driver.Record.class)
-                    .mappedBy((type, record) -> record)
-                    .all()
-                    .forEach(record -> {
-                        // path 查询结果解析较复杂，使用备用方案
-                    });
-        } catch (Exception e) {
-            log.error("Cypher 查询失败: {}", e.getMessage());
-        }
-
-        // 备用方案：分两步查（先查节点，再查边）
-        if (nodes.isEmpty()) {
-            collectNodesAndEdges(bindValue, bindKey, isFieldLevel, direction, depth, nodes, edges, nodeIds);
-        }
-    }
-
-    /**
-     * 备用方案：分步查询节点和边（根据 direction 构造箭头方向，depth 控制深度）
-     */
-    private void collectNodesAndEdges(String startId, String startKey, boolean isFieldLevel,
-                                       String direction, int depth,
-                                       List<ImpactAnalysisVO.NodeVO> nodes,
-                                       List<ImpactAnalysisVO.EdgeVO> edges,
-                                       Set<String> nodeIds) {
-        String nodeLabel = isFieldLevel ? "Field" : "Table";
-        String relType = isFieldLevel ? "MAPS_TO" : "DERIVES";
-
-        // 根据方向决定要查询的方向列表：BOTH 时先下游再上游，合并去重
-        List<String> dirs = new ArrayList<>();
-        if ("BOTH".equals(direction)) {
-            dirs.add("DOWNSTREAM");
-            dirs.add("UPSTREAM");
-        } else {
-            dirs.add(direction);
-        }
-
-        for (String dir : dirs) {
-            // DOWNSTREAM: -[:REL*1..depth]-> ; UPSTREAM: <-[:REL*1..depth]-
-            String pathArrow = "DOWNSTREAM".equals(dir)
-                    ? String.format("-[:%s*1..%d]->", relType, depth)
-                    : String.format("<-[:%s*1..%d]-", relType, depth);
-
-            // 查节点
-            String cypher = String.format(
-                    "MATCH (src:%s {full_name: $startId})%s(downstream:%s) " +
-                    "RETURN DISTINCT downstream.full_name AS id, downstream.short_name AS label, " +
-                    "downstream.type AS type, downstream.field AS field, downstream.table_full_name AS tableFullName",
-                    nodeLabel, pathArrow, nodeLabel);
-
-            try {
-                neo4jClient.query(cypher)
-                        .bind(startId).to("startId")
-                        .fetchAs(org.neo4j.driver.Record.class)
-                        .mappedBy((type, record) -> record)
-                        .all()
-                        .forEach(record -> {
-                            String id = record.get("id").asString();
-                            if (!nodeIds.contains(id)) {
-                                nodeIds.add(id);
-                                ImpactAnalysisVO.NodeVO node = new ImpactAnalysisVO.NodeVO();
-                                node.setId(id);
-                                node.setLabel(isFieldLevel ?
-                                        (record.get("field").isNull() ? id : record.get("field").asString()) :
-                                        (record.get("label").isNull() ? id : record.get("label").asString()));
-                                node.setType(record.get("type").isNull() ? null : record.get("type").asString());
-                                node.setNodeLevel(isFieldLevel ? "FIELD" : "TABLE");
-                                if (isFieldLevel && !record.get("tableFullName").isNull()) {
-                                    node.setTableFullName(record.get("tableFullName").asString());
-                                }
-                                nodes.add(node);
-                            }
-                        });
-            } catch (Exception e) {
-                log.error("查询节点失败: {}", e.getMessage());
-            }
-
-            // 查边：DERIVES/MAPS_TO 关系本身始终是 source-[r]->target 方向
-            // DOWNSTREAM: 找到指向 downstream 的边；UPSTREAM: 找到从 upstream 出发的边
-            // 同时返回 source 节点属性，确保 G6 渲染时边引用的节点都存在于 nodes 列表中
-            String edgeCypher;
-            if ("DOWNSTREAM".equals(dir)) {
-                edgeCypher = String.format(
-                        "MATCH (src:%s {full_name: $startId})%s(downstream:%s) " +
-                        "WITH DISTINCT downstream " +
-                        "MATCH (src2)-[r:%s]->(downstream) " +
-                        "WHERE src2.full_name IS NOT NULL AND downstream.full_name IS NOT NULL " +
-                        "RETURN src2.full_name AS source, src2.short_name AS sourceLabel, src2.type AS sourceType, " +
-                        "downstream.full_name AS target, " +
-                        "r.operation AS operation, r.sql_block_seq AS seq, r.main_table AS mainTable, " +
-                        "r.join_conditions AS joins, r.where_conditions AS wheres, " +
-                        "r.source_expr AS sourceExpr, r.source_alias AS sourceAlias, " +
-                        "r.proc_name AS procName",
-                        nodeLabel, pathArrow, nodeLabel, relType);
-            } else {
-                edgeCypher = String.format(
-                        "MATCH (src:%s {full_name: $startId})%s(upstream:%s) " +
-                        "WITH DISTINCT upstream " +
-                        "MATCH (upstream)-[r:%s]->(dst) " +
-                        "WHERE upstream.full_name IS NOT NULL AND dst.full_name IS NOT NULL " +
-                        "RETURN upstream.full_name AS source, upstream.short_name AS sourceLabel, upstream.type AS sourceType, " +
-                        "dst.full_name AS target, " +
-                        "r.operation AS operation, r.sql_block_seq AS seq, r.main_table AS mainTable, " +
-                        "r.join_conditions AS joins, r.where_conditions AS wheres, " +
-                        "r.source_expr AS sourceExpr, r.source_alias AS sourceAlias, " +
-                        "r.proc_name AS procName",
-                        nodeLabel, pathArrow, nodeLabel, relType);
-            }
-
-            try {
-                neo4jClient.query(edgeCypher)
-                        .bind(startId).to("startId")
-                        .fetchAs(org.neo4j.driver.Record.class)
-                        .mappedBy((type, record) -> record)
-                        .all()
-                        .forEach(record -> {
-                            // 将 source 节点加入 nodes（如果尚未存在），保证 G6 边引用的节点都有对应节点
-                            String sourceId = record.get("source").asString();
-                            if (!nodeIds.contains(sourceId)) {
-                                nodeIds.add(sourceId);
-                                ImpactAnalysisVO.NodeVO srcNode = new ImpactAnalysisVO.NodeVO();
-                                srcNode.setId(sourceId);
-                                srcNode.setLabel(isFieldLevel
-                                        ? sourceId
-                                        : (record.get("sourceLabel").isNull() ? sourceId : record.get("sourceLabel").asString()));
-                                srcNode.setType(record.get("sourceType").isNull() ? null : record.get("sourceType").asString());
-                                srcNode.setNodeLevel(isFieldLevel ? "FIELD" : "TABLE");
-                                nodes.add(srcNode);
-                            }
-                            // 将 target 节点加入 nodes（如果尚未存在）
-                            String targetId = record.get("target").asString();
-                            if (!nodeIds.contains(targetId)) {
-                                nodeIds.add(targetId);
-                                ImpactAnalysisVO.NodeVO tgtNode = new ImpactAnalysisVO.NodeVO();
-                                tgtNode.setId(targetId);
-                                tgtNode.setLabel(targetId);
-                                tgtNode.setNodeLevel(isFieldLevel ? "FIELD" : "TABLE");
-                                nodes.add(tgtNode);
-                            }
-
-                            ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
-                            edge.setSource(sourceId);
-                            edge.setTarget(targetId);
-                            edge.setOperation(record.get("operation").isNull() ? null : record.get("operation").asString());
-                            edge.setSqlBlockSeq(record.get("seq").isNull() ? null : (int) record.get("seq").asLong());
-                            edge.setMainTable(record.get("mainTable").isNull() ? null : record.get("mainTable").asString());
-                            edge.setJoinConditions(parseConditions(record.get("joins")));
-                            edge.setWhereConditions(parseConditions(record.get("wheres")));
-                            edge.setProcName(record.get("procName").isNull() ? null : record.get("procName").asString());
-                            if (isFieldLevel) {
-                                edge.setSourceExpr(record.get("sourceExpr").isNull() ? null : record.get("sourceExpr").asString());
-                                edge.setSourceAlias(record.get("sourceAlias").isNull() ? null : record.get("sourceAlias").asString());
-                            }
-                            edges.add(edge);
-                        });
-            } catch (Exception e) {
-                log.error("查询边失败: {}", e.getMessage());
-            }
-        }
-
-        // 添加起点节点
-        if (!nodeIds.contains(startId)) {
-            nodeIds.add(startId);
-            ImpactAnalysisVO.NodeVO startNode = new ImpactAnalysisVO.NodeVO();
-            startNode.setId(startId);
-            startNode.setLabel(startId);
-            startNode.setNodeLevel(isFieldLevel ? "FIELD" : "TABLE");
-            startNode.setDepth(0);
-            nodes.add(0, startNode);
-        }
-    }
-
-    private List<ImpactAnalysisVO.ConditionClause> parseConditions(org.neo4j.driver.Value value) {
-        if (value == null || value.isNull()) return Collections.emptyList();
-        try {
-            return objectMapper.readValue(value.asString(),
-                    new TypeReference<List<ImpactAnalysisVO.ConditionClause>>() {});
-        } catch (Exception e) {
-            return Collections.emptyList();
-        }
-    }
-
-    private Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> buildImpactedByDepth(
-            String sourceTable, String direction, int maxDepth,
-            List<ImpactAnalysisVO.NodeVO> nodes, List<ImpactAnalysisVO.EdgeVO> edges) {
-
-        Map<String, List<String>> adjacency = buildAdjacency(edges, direction);
-
-        Map<String, Integer> depthMap = new HashMap<>();
-        Map<String, String> impactSourceMap = new HashMap<>();
-        Queue<String> queue = new LinkedList<>();
-        queue.offer(sourceTable);
-        depthMap.put(sourceTable, 0);
-
-        while (!queue.isEmpty()) {
-            String current = queue.poll();
-            int currentDepth = depthMap.get(current);
-            if (currentDepth >= maxDepth) continue;
-
-            List<String> neighbors = adjacency.getOrDefault(current, Collections.emptyList());
-            for (String neighbor : neighbors) {
-                if (!depthMap.containsKey(neighbor)) {
-                    depthMap.put(neighbor, currentDepth + 1);
-                    impactSourceMap.put(neighbor, current);
-                    queue.offer(neighbor);
-                }
-            }
-        }
-
-        Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> result = new LinkedHashMap<>();
-        for (Map.Entry<String, Integer> entry : depthMap.entrySet()) {
-            if (entry.getValue() == 0) continue;
-            String table = entry.getKey();
-            int d = entry.getValue();
-
-            ImpactAnalysisVO.ImpactedTable t = new ImpactAnalysisVO.ImpactedTable();
-            t.setName(table);
-            t.setDepth(d);
-            t.setImpactSource(impactSourceMap.get(table));
-
-            final String tableId = table;
-
-            edges.stream()
-                .filter(e -> e.getTarget().equals(tableId) || e.getSource().equals(tableId))
-                .map(ImpactAnalysisVO.EdgeVO::getProcName)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .ifPresent(t::setScriptFile);
-
-            result.computeIfAbsent(d, k -> new ArrayList<>()).add(t);
-        }
-        return result;
-    }
-
-    private Map<String, List<String>> buildAdjacency(
-            List<ImpactAnalysisVO.EdgeVO> edges, String direction) {
-        Map<String, List<String>> adj = new HashMap<>();
-        for (ImpactAnalysisVO.EdgeVO e : edges) {
-            String src = e.getSource();
-            String tgt = e.getTarget();
-            if (src.equals(tgt)) continue;
-
-            if ("UPSTREAM".equals(direction)) {
-                adj.computeIfAbsent(tgt, k -> new ArrayList<>()).add(src);
-            } else {
-                // DOWNSTREAM 和 BOTH 都加 source→target
-                adj.computeIfAbsent(src, k -> new ArrayList<>()).add(tgt);
-                if ("BOTH".equals(direction)) {
-                    adj.computeIfAbsent(tgt, k -> new ArrayList<>()).add(src);
-                }
-            }
-        }
-        return adj;
-    }
-
-    private List<String> buildPropagationChains(
-            Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> impactedByDepth) {
-        List<String> chains = new ArrayList<>();
-        for (Map.Entry<Integer, List<ImpactAnalysisVO.ImpactedTable>> entry : impactedByDepth.entrySet()) {
-            for (ImpactAnalysisVO.ImpactedTable t : entry.getValue()) {
-                if (t.getImpactSource() != null) {
-                    chains.add(t.getImpactSource() + " → " + t.getName());
-                }
-            }
-        }
-        return chains;
-    }
-
     private ImpactAnalysisVO.ImpactStats buildStats(List<ImpactAnalysisVO.NodeVO> nodes,
                                                      List<ImpactAnalysisVO.EdgeVO> edges,
                                                      int maxDepth) {
@@ -494,20 +537,20 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
 
     private String buildTableFullName(String schema, String shortName) {
         if (schema != null && !schema.isEmpty()) {
-            return schema.toUpperCase() + "." + shortName.toUpperCase();
+            return (schema + "." + shortName).toLowerCase();
         }
         // 无 schema 时查 Neo4j
         try {
             Collection<String> fullNames = neo4jClient.query(
-                    "MATCH (t:Table {short_name: $shortName}) RETURN t.full_name AS fullName LIMIT 1")
+                    "MATCH (t:Table {short_name: $shortName}) RETURN t.name AS name LIMIT 1")
                     .bind(shortName.toUpperCase()).to("shortName")
                     .fetchAs(String.class)
-                    .mappedBy((type, record) -> record.get("fullName").asString())
+                    .mappedBy((type, record) -> record.get("name").asString())
                     .all();
             if (!fullNames.isEmpty()) return fullNames.iterator().next();
         } catch (Exception e) {
-            log.warn("查询表 full_name 失败: {}", e.getMessage());
+            log.warn("查询表 name 失败: {}", e.getMessage());
         }
-        return shortName.toUpperCase();
+        return shortName.toLowerCase();
     }
 }

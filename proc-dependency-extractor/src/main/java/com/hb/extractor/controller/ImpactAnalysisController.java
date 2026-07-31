@@ -63,6 +63,12 @@ public class ImpactAnalysisController {
         return Result.success(neo4jSyncService.syncAll());
     }
 
+    @PostMapping("/clear-neo4j")
+    public Result<Void> clearNeo4j() {
+        neo4jSyncService.clearAllData();
+        return Result.success(null);
+    }
+
     @GetMapping("/sync-status")
     public Result<List<Neo4jSyncLogVO>> getSyncStatus() {
         return Result.success(impactAnalysisService.getSyncStatus());

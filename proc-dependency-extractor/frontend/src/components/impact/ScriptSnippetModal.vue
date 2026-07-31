@@ -85,7 +85,7 @@ async function loadScript() {
   try {
     const res = await getScriptByFile(props.scriptFile)
     const data = res.data || {}
-    scriptContent.value = data.scriptContent || ''
+    scriptContent.value = data.content || ''
     scriptLines.value = scriptContent.value.split('\n')
     highlightLines.value = computeHighlightLines(scriptContent.value, props.impactSource)
 

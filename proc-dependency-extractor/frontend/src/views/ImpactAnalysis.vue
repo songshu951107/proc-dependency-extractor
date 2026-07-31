@@ -99,6 +99,14 @@ const scriptModalData = ref({ name: '', scriptFile: '', impactSource: '' })
 const graphInitialNodes = ref([])
 const graphInitialEdges = ref([])
 
+// 全量非临时表节点（含 depth）和边，用于前端逐级展开
+const allNodesByDepth = ref([])
+const allEdgesList = ref([])
+// 当前已展开可见的节点 id 列表
+const visibleNodeIds = ref([])
+
+const DEFAULT_VISIBLE_DEPTH = 3
+
 const isFieldLevel = computed(() => {
   return lastRequest.value?.fieldName && lastRequest.value.fieldName !== ''
 })
@@ -112,48 +120,25 @@ const handleAnalyze = async (request) => {
     const res = await analyze(request)
     result.value = res.data
 
-    // 构建初始图数据：起点 + 第 1 跳下游
     const sourceTable = res.data?.sourceTable
     const sourceLayer = res.data?.sourceLayer
     const impactedByDepth = res.data?.impactedByDepth || {}
-    const firstLevel = impactedByDepth[1] || []
 
-    const initialNodes = [{
-      id: sourceTable,
-      label: sourceTable,
-      layer: sourceLayer,
-      isTemp: false,
-      matchedColumns: []
-    }]
-    firstLevel.forEach(t => {
-      initialNodes.push({
-        id: t.name,
-        label: t.shortName || t.name,
-        layer: t.layer,
-        isTemp: t.temp,
-        matchedColumns: t.matchedColumns || []
-      })
-    })
+    // 构建不含临时表的节点和边（穿透临时表）
+    const { nodes, edges } = buildWithoutTemp(sourceTable, sourceLayer, impactedByDepth)
+    allNodesByDepth.value = nodes
+    allEdgesList.value = edges
 
-    const initialEdges = []
-    firstLevel.forEach(t => {
-      if (t.impactSource) {
-        initialEdges.push({
-          source: t.impactSource,
-          target: t.name
-        })
-      }
-    })
+    // 默认展示 depth <= 3 的节点
+    visibleNodeIds.value = nodes
+      .filter(n => n.depth <= DEFAULT_VISIBLE_DEPTH)
+      .map(n => n.id)
+    updateVisibleGraph()
 
-    graphInitialNodes.value = initialNodes
-    graphInitialEdges.value = initialEdges
-
-    // 节点超过 50 个时提示折叠临时表
-    const totalNodes = Object.values(impactedByDepth)
-      .reduce((sum, list) => sum + list.length, 0) + 1
-    if (totalNodes > 50) {
+    // 节点超过 50 个时提示
+    if (nodes.length > 50) {
       ElMessage.warning(
-        `当前影响链路包含 ${totalNodes} 个节点，建议折叠临时表以提升可读性`
+        `当前影响链路包含 ${nodes.length} 个非临时表节点，可点击节点逐级展开`
       )
     }
   } catch (e) {
@@ -162,6 +147,104 @@ const handleAnalyze = async (request) => {
   } finally {
     loading.value = false
   }
+}
+
+// 构建不含临时表的节点和边，临时表被穿透（其上下游非临时表直接连接）
+function buildWithoutTemp(sourceTable, sourceLayer, impactedByDepth) {
+  // 邻接表（含临时表）
+  const adjacency = {}
+  for (const tables of Object.values(impactedByDepth)) {
+    for (const t of tables) {
+      if (t.impactSource) {
+        if (!adjacency[t.impactSource]) adjacency[t.impactSource] = []
+        adjacency[t.impactSource].push({ name: t.name, temp: t.temp })
+      }
+    }
+  }
+
+  // 表信息映射
+  const tableInfoMap = {}
+  for (const tables of Object.values(impactedByDepth)) {
+    for (const t of tables) {
+      tableInfoMap[t.name] = {
+        layer: t.layer,
+        temp: t.temp,
+        scriptFile: t.scriptFile,
+        shortName: t.shortName,
+        columns: t.columns,
+        matchedColumns: t.matchedColumns
+      }
+    }
+  }
+
+  // BFS 遍历，跳过临时表，计算非临时表 depth 和 impactSource
+  const depthMap = { [sourceTable]: 0 }
+  const impactSourceMap = {}
+  const queue = [sourceTable]
+
+  while (queue.length) {
+    const current = queue.shift()
+    const currentDepth = depthMap[current]
+    const neighbors = adjacency[current] || []
+
+    for (const neighbor of neighbors) {
+      if (!neighbor.temp && !(neighbor.name in depthMap)) {
+        depthMap[neighbor.name] = currentDepth + 1
+        impactSourceMap[neighbor.name] = current
+        queue.push(neighbor.name)
+      } else if (neighbor.temp) {
+        // 临时表：穿透到它的下游非临时表
+        const tempQueue = [neighbor.name]
+        const visited = new Set([neighbor.name])
+        while (tempQueue.length) {
+          const tempNode = tempQueue.shift()
+          const tempNeighbors = adjacency[tempNode] || []
+          for (const tn of tempNeighbors) {
+            if (visited.has(tn.name)) continue
+            visited.add(tn.name)
+            if (!tn.temp && !(tn.name in depthMap)) {
+              depthMap[tn.name] = currentDepth + 1
+              impactSourceMap[tn.name] = current
+              queue.push(tn.name)
+            } else if (tn.temp) {
+              tempQueue.push(tn.name)
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const nodes = []
+  for (const [table, depth] of Object.entries(depthMap)) {
+    const info = tableInfoMap[table] || {}
+    nodes.push({
+      id: table,
+      label: depth === 0 ? table : (info.shortName || table),
+      layer: depth === 0 ? sourceLayer : (info.layer || 'UNKNOWN'),
+      isTemp: false,
+      depth,
+      impactSource: impactSourceMap[table],
+      scriptFile: info.scriptFile,
+      matchedColumns: info.matchedColumns || []
+    })
+  }
+
+  const edges = []
+  for (const [table, src] of Object.entries(impactSourceMap)) {
+    edges.push({ source: src, target: table })
+  }
+
+  return { nodes, edges }
+}
+
+function updateVisibleGraph() {
+  const visibleSet = new Set(visibleNodeIds.value)
+  const visibleNodes = allNodesByDepth.value.filter(n => visibleSet.has(n.id))
+  const visibleEdges = allEdgesList.value.filter(e =>
+    visibleSet.has(e.source) && visibleSet.has(e.target))
+  graphInitialNodes.value = visibleNodes
+  graphInitialEdges.value = visibleEdges
 }
 
 const handleNodeClick = (node) => {
@@ -175,13 +258,34 @@ const handleEdgeClick = (edge) => {
 }
 
 const handleExpand = async (node) => {
-  if (graphRef.value) {
-    await graphRef.value.expandNode(node.id || node.data?.id)
+  const nodeId = node.id || node.data?.id
+  if (!nodeId) return
+
+  // 找到该节点的直接下游非临时表节点
+  const downstreamNodes = allNodesByDepth.value.filter(n => n.impactSource === nodeId)
+  if (downstreamNodes.length === 0) {
+    ElMessage.info(`表 "${nodeId}" 没有更多下游依赖`)
+    return
+  }
+
+  const currentVisible = new Set(visibleNodeIds.value)
+  let added = false
+  downstreamNodes.forEach(n => {
+    if (!currentVisible.has(n.id)) {
+      currentVisible.add(n.id)
+      added = true
+    }
+  })
+
+  if (added) {
+    visibleNodeIds.value = Array.from(currentVisible)
+    updateVisibleGraph()
+  } else {
+    ElMessage.info('该节点下游已全部展示')
   }
 }
 
 const handleCollapse = (node) => {
-  // Vue Flow 的折叠逻辑较复杂，暂用重新渲染实现
   ElMessage.info('折叠功能待实现，可重新分析查看')
 }
 

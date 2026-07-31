@@ -423,20 +423,18 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             int d = entry.getValue();
 
             ImpactAnalysisVO.ImpactedTable t = new ImpactAnalysisVO.ImpactedTable();
-            t.setTable(table);
+            t.setName(table);
             t.setDepth(d);
             t.setImpactSource(impactSourceMap.get(table));
 
             final String tableId = table;
-            nodes.stream().filter(n -> n.getId().equals(tableId)).findFirst()
-                .ifPresent(n -> t.setType(n.getType()));
 
             edges.stream()
                 .filter(e -> e.getTarget().equals(tableId) || e.getSource().equals(tableId))
                 .map(ImpactAnalysisVO.EdgeVO::getProcName)
                 .filter(Objects::nonNull)
                 .findFirst()
-                .ifPresent(t::setProcName);
+                .ifPresent(t::setScriptFile);
 
             result.computeIfAbsent(d, k -> new ArrayList<>()).add(t);
         }
@@ -470,7 +468,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         for (Map.Entry<Integer, List<ImpactAnalysisVO.ImpactedTable>> entry : impactedByDepth.entrySet()) {
             for (ImpactAnalysisVO.ImpactedTable t : entry.getValue()) {
                 if (t.getImpactSource() != null) {
-                    chains.add(t.getImpactSource() + " → " + t.getTable());
+                    chains.add(t.getImpactSource() + " → " + t.getName());
                 }
             }
         }

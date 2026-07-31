@@ -20,10 +20,9 @@ public class Neo4jConstraintInitializer {
     @PostConstruct
     public void init() {
         String[] constraints = {
-            "CREATE CONSTRAINT table_full_name_unique IF NOT EXISTS FOR (t:Table) REQUIRE t.full_name IS UNIQUE",
-            "CREATE CONSTRAINT field_full_name_unique IF NOT EXISTS FOR (f:Field) REQUIRE f.full_name IS UNIQUE",
-            "CREATE CONSTRAINT proc_name_unique IF NOT EXISTS FOR (p:Proc) REQUIRE p.name IS UNIQUE",
-            "CREATE CONSTRAINT sqlblock_unique IF NOT EXISTS FOR (b:SqlBlock) REQUIRE (b.proc_name, b.seq) IS UNIQUE"
+            "CREATE CONSTRAINT table_name_unique IF NOT EXISTS FOR (t:Table) REQUIRE t.name IS UNIQUE",
+            "CREATE CONSTRAINT column_key_unique IF NOT EXISTS FOR (c:Column) REQUIRE c.col_key IS UNIQUE",
+            "CREATE CONSTRAINT script_file_unique IF NOT EXISTS FOR (s:Script) REQUIRE s.file IS UNIQUE"
         };
 
         for (String cypher : constraints) {

@@ -44,7 +44,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
 
     @Override
     public List<TableOption> getTables(String schema) {
-        String cypher = "MATCH (t:Table) WHERE t.schema_prefix = $schema " +
+        String cypher = "MATCH (t:Table) WHERE toUpper(t.schema_prefix) = toUpper($schema) " +
                 "RETURN t.name AS fullName, t.short_name AS shortName, t.layer AS type " +
                 "ORDER BY t.short_name";
         Collection<TableOption> tables = neo4jClient.query(cypher)
@@ -387,7 +387,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                     .all()
                     .forEach(t -> {
                         // 查询 impactSource（单跳）
-                        t.setImpactSource(findImpactSource(t.getName(), direction));
+                        t.setImpactSource(findImpactSource(sourceTable, t.getName(), direction));
                         // 查询表的字段
                         t.setColumns(getFields(t.getName()));
                         result.computeIfAbsent(t.getDepth(), k -> new ArrayList<>()).add(t);
@@ -398,18 +398,22 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         return result;
     }
 
-    private String findImpactSource(String tableName, String direction) {
+    private String findImpactSource(String sourceTable, String tableName, String direction) {
         try {
-            String cypher = "UPSTREAM".equals(direction)
-                    ? "MATCH (src:Table)-[:READS]->(tgt:Table {name: $name}) RETURN src.name AS source LIMIT 1"
-                    : "MATCH (src:Table)-[:READS]->(tgt:Table {name: $name}) RETURN src.name AS source LIMIT 1";
+            // 从源表出发，找到路径上该表的直接前驱
+            String cypher = "MATCH path = (src:Table {name: $sourceTable})-[:READS*1..10]->(tgt:Table {name: $targetName}) " +
+                    "WITH path, nodes(path) AS ns " +
+                    "WITH ns[size(ns)-2] AS predecessor " +
+                    "RETURN predecessor.name AS source LIMIT 1";
             Collection<String> sources = neo4jClient.query(cypher)
-                    .bind(tableName).to("name")
+                    .bind(sourceTable).to("sourceTable")
+                    .bind(tableName).to("targetName")
                     .fetchAs(String.class)
                     .mappedBy((type, record) -> record.get("source").asString())
                     .all();
             return sources.isEmpty() ? null : sources.iterator().next();
         } catch (Exception e) {
+            log.warn("查询 impactSource 失败 table={}: {}", tableName, e.getMessage());
             return null;
         }
     }

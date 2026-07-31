@@ -236,7 +236,7 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
         String name = fullName.toLowerCase();
         String schema = extractSchema(fullName);
         String layer = schema != null ? schema.toUpperCase() : null;
-        boolean isTemp = fullName.toUpperCase().startsWith("VT_");
+        boolean isTemp = shortName.toUpperCase().startsWith("VT_");
 
         Map<String, Object> params = new HashMap<>();
         params.put("name", name);
@@ -267,7 +267,8 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
 
         String joinJson = serializeConditions(joins);
         String whereJson = serializeConditions(wheres);
-        boolean viaTemp = edge.getTargetTable().toUpperCase().startsWith("VT_");
+        String targetUpper = edge.getTargetTable().toUpperCase();
+        boolean viaTemp = targetUpper.startsWith("VT_") || targetUpper.contains(".VT_");
 
         Map<String, Object> params = new HashMap<>();
         params.put("sourceTable", edge.getSourceTable().toLowerCase());

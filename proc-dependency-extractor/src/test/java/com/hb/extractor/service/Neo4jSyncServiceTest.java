@@ -90,4 +90,36 @@ class Neo4jSyncServiceTest {
 
         assertDoesNotThrow(() -> syncService.deleteProcData("test_proc"));
     }
+
+    @Test
+    void testClassifyTransformation_Direct() {
+        assertEquals("direct", syncService.classifyTransformation("T01.acct_id"));
+        assertEquals("direct", syncService.classifyTransformation(null));
+        assertEquals("direct", syncService.classifyTransformation(""));
+        assertEquals("direct", syncService.classifyTransformation("   "));
+    }
+
+    @Test
+    void testClassifyTransformation_Literal() {
+        assertEquals("literal", syncService.classifyTransformation("'N'"));
+        assertEquals("literal", syncService.classifyTransformation("123"));
+        assertEquals("literal", syncService.classifyTransformation("2024"));
+        assertEquals("literal", syncService.classifyTransformation("'2024-01-01'"));
+    }
+
+    @Test
+    void testClassifyTransformation_Aggregation() {
+        assertEquals("aggregation", syncService.classifyTransformation("SUM(T01.amt)"));
+        assertEquals("aggregation", syncService.classifyTransformation("COUNT(*)"));
+        assertEquals("aggregation", syncService.classifyTransformation("AVG(T01.amt)"));
+        assertEquals("aggregation", syncService.classifyTransformation("MAX(T01.amt)"));
+        assertEquals("aggregation", syncService.classifyTransformation("MIN(T01.amt)"));
+    }
+
+    @Test
+    void testClassifyTransformation_Derived() {
+        assertEquals("derived", syncService.classifyTransformation("T01.amt + T02.fee"));
+        assertEquals("derived", syncService.classifyTransformation("COALESCE(T01.amt, 0)"));
+        assertEquals("derived", syncService.classifyTransformation("CASE WHEN T01.flag = '1' THEN 'A' ELSE 'B' END"));
+    }
 }

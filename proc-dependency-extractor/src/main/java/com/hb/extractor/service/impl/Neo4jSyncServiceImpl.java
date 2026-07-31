@@ -377,8 +377,10 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
         if (trimmed.matches("^(?i)(SUM|COUNT|AVG|MAX|MIN|STDDEV|VARIANCE)\\s*\\(.*")) {
             return "aggregation";
         }
-        // 表达式派生: 含运算符或函数调用
-        if (trimmed.matches(".*[+\\-*/].*") || trimmed.matches("^(?i)\\w+\\s*\\(.*")) {
+        // 表达式派生: 含运算符或函数调用，或 CASE WHEN 表达式
+        if (trimmed.matches(".*[+\\-*/].*")
+                || trimmed.matches("^(?i)\\w+\\s*\\(.*")
+                || trimmed.matches("(?i)^CASE\\b.*")) {
             return "derived";
         }
         // 默认: 直接字段引用

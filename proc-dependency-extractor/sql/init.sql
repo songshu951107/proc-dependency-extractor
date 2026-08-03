@@ -125,3 +125,6 @@ CREATE TABLE `sql_block_info` (
     UNIQUE KEY `uk_proc_block` (`proc_name`, `block_seq`),
     KEY `idx_proc_target` (`proc_name`, `target_table`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='SQL 块信息';
+
+-- 报表影响分析相关表（详见 report_tables.sql）
+SOURCE report_tables.sql;

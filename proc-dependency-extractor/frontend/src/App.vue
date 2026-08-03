@@ -35,7 +35,7 @@
 </template>
 
 <script setup>
-import { Upload, List, Connection, Aim } from '@element-plus/icons-vue'
+import { Upload, List, Connection, Aim, Document } from '@element-plus/icons-vue'
 </script>
 
 <style>

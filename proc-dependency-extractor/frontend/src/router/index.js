@@ -36,6 +36,12 @@ const routes = [
     name: 'ImpactAnalysis',
     component: () => import('../views/ImpactAnalysis.vue'),
     meta: { title: '影响分析' }
+  },
+  {
+    path: '/report-impact',
+    name: 'ReportImpact',
+    component: () => import('../views/ReportImpactView.vue'),
+    meta: { title: '报表影响分析' }
   }
 ]
 

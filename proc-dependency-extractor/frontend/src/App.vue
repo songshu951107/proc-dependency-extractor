@@ -25,6 +25,10 @@
             <el-icon><Aim /></el-icon>
             <span>影响分析</span>
           </el-menu-item>
+          <el-menu-item index="/report-impact">
+            <el-icon><Document /></el-icon>
+            <span>报表影响分析</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       <el-main>

@@ -195,6 +195,7 @@ public class ReportParseServiceImpl implements ReportParseService {
             }
 
             // REFERENCES 关系 + cell_refs
+            // 覆盖所有 SELECT 字段（含无单元格绑定的），确保影响分析可查全部使用字段
             List<ReportCellBinding> dsBindings = bindingsByDs.getOrDefault(ds.getName(), Collections.emptyList());
             // 按 selectAlias 聚合单元格位置
             Map<String, List<String>> cellsByAlias = new LinkedHashMap<>();
@@ -203,15 +204,17 @@ public class ReportParseServiceImpl implements ReportParseService {
                 cellsByAlias.computeIfAbsent(aliasKey, k -> new ArrayList<>()).add(rcb.getCellPos());
             }
 
-            for (ReportCellBinding rcb : dsBindings) {
-                if (rcb.getSourceTable() == null || rcb.getSourceField() == null) continue;
-                String colKey = (rcb.getSourceTable() + "." + rcb.getSourceField()).toLowerCase();
+            List<ColumnMapping> columnMappings = reportSqlParser.extractColumns(ds.getSql());
+            for (ColumnMapping cm : columnMappings) {
+                if (cm.getSourceTable() == null || cm.getSourceField() == null) continue;
+                String colKey = (cm.getSourceTable() + "." + cm.getSourceField()).toLowerCase();
+                String aliasKey = cm.getSelectAlias();
 
                 // MERGE Column 节点（复用现有）
                 Map<String, Object> colParams = new HashMap<>();
                 colParams.put("colKey", colKey);
-                colParams.put("name", rcb.getSourceField());
-                colParams.put("tableFullName", rcb.getSourceTable());
+                colParams.put("name", cm.getSourceField());
+                colParams.put("tableFullName", cm.getSourceTable());
                 neo4jClient.query("MERGE (c:Column {col_key: $colKey}) " +
                         "SET c.name = $name, c.table_full_name = $tableFullName")
                         .bindAll(colParams).run();
@@ -219,12 +222,11 @@ public class ReportParseServiceImpl implements ReportParseService {
                 // BELONGS_TO（复用现有）
                 Map<String, Object> belongParams = new HashMap<>();
                 belongParams.put("colKey", colKey);
-                belongParams.put("tableName", rcb.getSourceTable());
+                belongParams.put("tableName", cm.getSourceTable());
                 neo4jClient.query("MATCH (c:Column {col_key: $colKey}), (t:Table {name: $tableName}) " +
                         "MERGE (c)-[:BELONGS_TO]->(t)").bindAll(belongParams).run();
 
-                // REFERENCES 关系
-                String aliasKey = rcb.getSelectAlias() != null ? rcb.getSelectAlias() : rcb.getColumnName();
+                // REFERENCES 关系（cell_refs 从单元格绑定聚合，无绑定时为空数组）
                 String cellRefsJson;
                 try {
                     cellRefsJson = objectMapper.writeValueAsString(cellsByAlias.getOrDefault(aliasKey, Collections.emptyList()));
@@ -236,7 +238,7 @@ public class ReportParseServiceImpl implements ReportParseService {
                 refParams.put("key", datasetKey);
                 refParams.put("colKey", colKey);
                 refParams.put("selectAlias", aliasKey);
-                refParams.put("sourceExpr", rcb.getSourceExpr());
+                refParams.put("sourceExpr", cm.getSourceExpr());
                 refParams.put("cellRefs", cellRefsJson);
                 neo4jClient.query("MATCH (d:Dataset {key: $key}), (c:Column {col_key: $colKey}) " +
                         "MERGE (d)-[r:REFERENCES {select_alias: $selectAlias}]->(c) " +

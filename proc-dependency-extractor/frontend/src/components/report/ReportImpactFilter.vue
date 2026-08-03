@@ -12,13 +12,15 @@
 
       <template v-if="form.queryType !== 'trace'">
         <el-form-item label="Schema">
-          <el-select v-model="form.schema" placeholder="选择" style="width: 120px"
+          <el-select v-model="form.schema" placeholder="选择/输入" style="width: 120px"
+                     filterable allow-create default-first-option
                      @change="loadTables">
             <el-option v-for="s in schemas" :key="s" :label="s" :value="s" />
           </el-select>
         </el-form-item>
         <el-form-item label="表名">
-          <el-select v-model="form.table" filterable placeholder="选择" style="width: 280px">
+          <el-select v-model="form.table" filterable allow-create default-first-option
+                     placeholder="选择/输入" style="width: 280px">
             <el-option v-for="t in tables" :key="t.fullName" :label="t.shortName" :value="t.shortName" />
           </el-select>
         </el-form-item>

@@ -1,25 +1,21 @@
-# Maven
-target/
-*.jar
-*.war
+# 业务脚本与测试样本（不入库）
+jiaoben/
+reports/
 
-# Node
+# 构建产物
+target/
 node_modules/
 dist/
-npm-debug.log*
 
 # IDE
 .idea/
-*.iml
-*.iws
 .vscode/
-
-# OS
-Thumbs.db
-.DS_Store
-
-# Superpowers 临时文件
-.superpowers/
+*.iml
 
 # 日志
 *.log
+logs/
+
+# 系统文件
+.DS_Store
+Thumbs.db

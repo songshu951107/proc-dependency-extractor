@@ -85,4 +85,40 @@ class ReportSqlParserTest {
         assertEquals("STAT_DT", mappings.get(0).getSelectAlias());
         assertEquals("CUST_ID", mappings.get(1).getSelectAlias());
     }
+
+    @Test
+    void testTableWithoutSchema() {
+        // 无 schema 前缀、无别名：from A_CUST_SORT_BL
+        String sql = "select CORE_CUST_NUM, CUST_NM, SORT from A_CUST_SORT_BL";
+        List<TableRef> tables = reportSqlParser.extractTables(sql);
+
+        assertEquals(1, tables.size());
+        assertNull(tables.get(0).getSchema());
+        assertEquals("A_CUST_SORT_BL", tables.get(0).getTable());
+        assertNull(tables.get(0).getAlias());
+        assertEquals("a_cust_sort_bl", tables.get(0).getFullName());
+    }
+
+    @Test
+    void testColumnWithoutAliasFieldSingleTable() {
+        // 单表无 schema、字段无 alias.field：应兜底归属到唯一表
+        String sql = "select CORE_CUST_NUM, CUST_NM, SORT from A_CUST_SORT_BL";
+        List<ColumnMapping> mappings = reportSqlParser.extractColumns(sql);
+
+        assertEquals(3, mappings.size());
+        assertEquals("CORE_CUST_NUM", mappings.get(0).getSelectAlias());
+        assertEquals("CORE_CUST_NUM", mappings.get(0).getSourceField());
+        assertEquals("a_cust_sort_bl", mappings.get(0).getSourceTable());
+        assertEquals("SORT", mappings.get(2).getSelectAlias());
+        assertEquals("a_cust_sort_bl", mappings.get(2).getSourceTable());
+    }
+
+    @Test
+    void testTableWithoutSchemaFollowedByKeyword() {
+        // from t where 不应把 where 误识别为别名
+        String sql = "select a from T where a = 1";
+        List<TableRef> tables = reportSqlParser.extractTables(sql);
+        assertEquals(1, tables.size());
+        assertNull(tables.get(0).getAlias());
+    }
 }

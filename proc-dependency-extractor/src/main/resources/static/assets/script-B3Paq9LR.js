@@ -1,0 +1,1 @@
+import{r as t}from"./request-D8W9XaeE.js";function o(r){return t({url:`/proc/${r}/script`,method:"get"})}function p(r){const e=r.replace(/\.py$/i,"");return t({url:`/proc/${e}/script`,method:"get"})}export{p as a,o as g};

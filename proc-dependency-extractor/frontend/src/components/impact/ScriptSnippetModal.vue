@@ -63,12 +63,37 @@ function computeHighlightLines(content, impactSource) {
   const tableName = impactSource.split('.').pop().toUpperCase()
   const shortName = tableName.replace(/^VT_/, '')
 
+  // 检查一行是否引用了该表
+  function referencesTable(upperLine) {
+    return upperLine.includes(tableName)
+      || (shortName && shortName !== tableName && upperLine.includes(shortName))
+  }
+
   lines.forEach((line, idx) => {
     const upperLine = line.toUpperCase()
     const isComment = line.trim().startsWith('--') || line.trim().startsWith('#')
     if (isComment) return
-    if (upperLine.includes(tableName) || (shortName && upperLine.includes(shortName))) {
-      highlightSet.add(idx + 1)
+    if (!referencesTable(upperLine)) return
+
+    // 排除该表作为目标表的操作行（建表/插入/更新/删除/合并）
+    // 只保留该表作为来源表（FROM/JOIN）被引用的行
+    if (/\b(CREATE\s+TEMP(ORARY)?\s+TABLE|INSERT\s+INTO|MERGE\s+INTO|UPDATE\s+|DELETE\s+FROM)\b/.test(upperLine)) {
+      return
+    }
+
+    highlightSet.add(idx + 1)
+
+    // FROM/JOIN 行：继续高亮紧随的 ON/AND 条件行
+    if (/\b(FROM|JOIN)\b/.test(upperLine)) {
+      for (let i = idx + 1; i < lines.length; i++) {
+        const nextTrimmed = lines[i].trim().toUpperCase()
+        if (nextTrimmed.startsWith('--') || nextTrimmed.startsWith('#')) continue
+        if (nextTrimmed.startsWith('ON ') || nextTrimmed.startsWith('AND ')) {
+          highlightSet.add(i + 1)
+        } else {
+          break
+        }
+      }
     }
   })
   return highlightSet

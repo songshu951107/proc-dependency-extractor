@@ -20,6 +20,30 @@ public class ImpactAnalysisVO {
     private java.util.Map<Integer, List<ImpactedTable>> impactedByDepth;
     /** 传播链路描述：["SOURCE → TABLE_A", "TABLE_A → TABLE_C"] */
     private List<String> propagationChains;
+    /** 报表影响（勾选"分析报表影响"后返回）：链路上各表被哪些报表引用 */
+    private List<ReportImpact> reportImpacts;
+
+    @Data
+    public static class ReportImpact {
+        /** 被引用的表全名（小写 schema.table） */
+        private String table;
+        /** 该表在血缘链路上的深度（源表为 0） */
+        private Integer depth;
+        /** 引用该表的报表列表 */
+        private List<ReportRef> reports;
+    }
+
+    @Data
+    public static class ReportRef {
+        /** 报表文件名 */
+        private String file;
+        /** 报表名称 */
+        private String name;
+        /** 数据集名 */
+        private String datasetName;
+        /** 数据库连接 */
+        private String connection;
+    }
 
     @Data
     public static class NodeVO {
@@ -29,6 +53,7 @@ public class ImpactAnalysisVO {
         private String nodeLevel;      // TABLE / FIELD
         private String tableFullName;
         private Integer depth;
+        private Boolean isTemp;        // 是否临时表（用于统计时排除）
     }
 
     @Data
@@ -52,6 +77,8 @@ public class ImpactAnalysisVO {
         private Integer affectedFieldCount;
         private Integer maxDepthReached;
         private List<String> affectedProcNames;
+        /** 影响报表数量（勾选"分析报表影响"后返回，按报表文件去重） */
+        private Integer affectedReportCount;
     }
 
     @Data

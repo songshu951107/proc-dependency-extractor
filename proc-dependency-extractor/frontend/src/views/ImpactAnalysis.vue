@@ -16,12 +16,60 @@
     <ImpactStats :stats="result?.stats" />
 
     <el-row :gutter="10">
-      <el-col :span="18">
+      <el-col :span="showDetail ? 18 : 24">
+        <!-- 图谱筛选工具栏 -->
+        <div class="graph-filter-bar" v-if="allNodesByDepth.length">
+          <el-select
+            v-model="filterSchemas"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="筛选 Schema"
+            clearable
+            size="small"
+            style="width: 200px"
+          >
+            <el-option
+              v-for="s in availableSchemas"
+              :key="s"
+              :label="s"
+              :value="s"
+            />
+          </el-select>
+          <el-select
+            v-model="filterTableKw"
+            filterable
+            clearable
+            placeholder="输入或选择表名"
+            size="small"
+            style="width: 260px"
+          >
+            <el-option
+              v-for="n in allNodesByDepth"
+              :key="n.id"
+              :label="n.label || n.id"
+              :value="n.id"
+            />
+          </el-select>
+          <el-switch
+            v-model="hideUnmatched"
+            active-text="隐藏未命中"
+            size="small"
+          />
+          <el-button size="small" @click="clearFilter">清空</el-button>
+          <span class="filter-tip" v-if="matchedNodeIds.size > 0">
+            命中 {{ matchedNodeIds.size }} / 共 {{ allNodesByDepth.length }} 节点
+          </span>
+        </div>
+
         <ImpactFlowGraph
           ref="graphRef"
           :initialNodes="graphInitialNodes"
           :initialEdges="graphInitialEdges"
           :direction="lastRequest?.direction || 'DOWNSTREAM'"
+          :matchedNodeIds="matchedNodeIds"
+          :preservedNodeIds="preservedNodeIds"
+          :hideUnmatched="hideUnmatched"
           @nodeClick="handleNodeClick"
           @edgeClick="handleEdgeClick"
         />
@@ -43,10 +91,30 @@
             @viewScript="handleViewScript"
           />
         </div>
+
+        <div class="propagation-section" v-if="result?.reportImpacts?.length">
+          <div class="section-header">
+            <span class="section-title">报表影响（跨链分析）</span>
+            <span class="report-tip">沿 READS 血缘追溯上下游表，查这些表被哪些报表引用</span>
+          </div>
+          <el-table :data="reportImpactRows" border size="small" style="width: 100%">
+            <el-table-column prop="depth" label="深度" width="70" align="center" />
+            <el-table-column prop="table" label="血缘链路上的表" min-width="220" show-overflow-tooltip />
+            <el-table-column prop="reportFile" label="报表文件" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="reportName" label="报表名称" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="datasetName" label="数据集" width="90" />
+            <el-table-column prop="connection" label="数据库" width="100" />
+          </el-table>
+        </div>
       </el-col>
-      <el-col :span="6">
+      <el-col v-if="showDetail" :span="6">
         <el-card shadow="never">
-          <template #header>详情</template>
+          <template #header>
+            <div class="detail-header">
+              <span>详情</span>
+              <el-button type="text" size="small" @click="closeDetail">关闭</el-button>
+            </div>
+          </template>
           <ImpactNodeDetail
             v-if="selectedNode"
             :node="selectedNode"
@@ -92,9 +160,15 @@ const lastRequest = ref(null)
 const graphRef = ref(null)
 const selectedNode = ref(null)
 const selectedEdge = ref(null)
+const showDetail = ref(false)
 const collapseTempTables = ref(false)
 const scriptModalVisible = ref(false)
 const scriptModalData = ref({ name: '', scriptFile: '', impactSource: '' })
+
+// 图谱筛选状态
+const filterSchemas = ref([])
+const filterTableKw = ref('')
+const hideUnmatched = ref(false)
 
 const graphInitialNodes = ref([])
 const graphInitialEdges = ref([])
@@ -111,11 +185,117 @@ const isFieldLevel = computed(() => {
   return lastRequest.value?.fieldName && lastRequest.value.fieldName !== ''
 })
 
+// 从节点列表提取去重的 schema（layer）
+const availableSchemas = computed(() => {
+  const set = new Set()
+  allNodesByDepth.value.forEach(n => {
+    if (n.layer && n.layer !== 'UNKNOWN') set.add(n.layer)
+  })
+  return Array.from(set)
+})
+
+// 命中节点集合：根据 Schema 和表名筛选，源表始终保留
+const matchedNodeIds = computed(() => {
+  // 无任何筛选条件时返回空 Set（ImpactFlowGraph 据此判断无筛选）
+  if (!filterSchemas.value.length && !filterTableKw.value) {
+    return new Set()
+  }
+
+  const sourceTable = result.value?.sourceTable
+  const schemaSet = new Set(filterSchemas.value)
+  // 表名关键词：支持选择具体表（n.id）或输入文本模糊匹配
+  const kw = filterTableKw.value ? filterTableKw.value.toUpperCase() : ''
+
+  const matched = new Set()
+  allNodesByDepth.value.forEach(n => {
+    // 源表始终保留
+    if (n.id === sourceTable) {
+      matched.add(n.id)
+      return
+    }
+    let schemaOk = true
+    if (schemaSet.size > 0) {
+      schemaOk = schemaSet.has(n.layer)
+    }
+    let tableOk = true
+    if (kw) {
+      const label = (n.label || n.id || '').toUpperCase()
+      const id = (n.id || '').toUpperCase()
+      tableOk = label.includes(kw) || id.includes(kw)
+    }
+    if (schemaOk && tableOk) matched.add(n.id)
+  })
+  return matched
+})
+
+function clearFilter() {
+  filterSchemas.value = []
+  filterTableKw.value = ''
+  hideUnmatched.value = false
+}
+
+// 隐藏模式下需要保留的节点集合（命中节点 + 从源表到命中节点路径上的所有祖先节点）
+// 非隐藏模式或无筛选时返回 null，ImpactFlowGraph 据此判断不做保留过滤
+const preservedNodeIds = computed(() => {
+  if (!hideUnmatched.value) return null
+  const matched = matchedNodeIds.value
+  if (matched.size === 0) return null
+
+  // 构建前驱映射：target -> [sources]，用于从命中节点回溯到源表
+  const parentMap = new Map()
+  allEdgesList.value.forEach(e => {
+    if (!parentMap.has(e.target)) parentMap.set(e.target, [])
+    parentMap.get(e.target).push(e.source)
+  })
+
+  // BFS 回溯：从命中节点出发，沿前驱边回溯，标记路径上所有节点为保留
+  const preserved = new Set(matched)
+  const queue = Array.from(matched)
+  while (queue.length) {
+    const node = queue.shift()
+    const parents = parentMap.get(node) || []
+    for (const p of parents) {
+      if (!preserved.has(p)) {
+        preserved.add(p)
+        queue.push(p)
+      }
+    }
+  }
+  return preserved
+})
+
+// 报表影响行：将 reportImpacts 嵌套结构展平为表格行（每个报表一行）
+const reportImpactRows = computed(() => {
+  const list = result.value?.reportImpacts || []
+  const rows = []
+  for (const ri of list) {
+    for (const ref of ri.reports || []) {
+      rows.push({
+        depth: ri.depth,
+        table: ri.table,
+        reportFile: ref.file,
+        reportName: ref.name,
+        datasetName: ref.datasetName,
+        connection: ref.connection
+      })
+    }
+  }
+  return rows
+})
+
 const handleAnalyze = async (request) => {
   loading.value = true
   collapseTempTables.value = false
   neo4jError.value = ''
   lastRequest.value = request
+  // 重置详情面板：新一轮分析时隐藏右侧详情
+  showDetail.value = false
+  selectedNode.value = null
+  selectedEdge.value = null
+  // 重置筛选状态
+  filterSchemas.value = []
+  filterTableKw.value = ''
+  hideUnmatched.value = false
   try {
     const res = await analyze(request)
     result.value = res.data
@@ -250,11 +430,19 @@ function updateVisibleGraph() {
 const handleNodeClick = (node) => {
   selectedNode.value = node
   selectedEdge.value = null
+  showDetail.value = true
 }
 
 const handleEdgeClick = (edge) => {
   selectedEdge.value = edge
   selectedNode.value = null
+  showDetail.value = true
+}
+
+const closeDetail = () => {
+  showDetail.value = false
+  selectedNode.value = null
+  selectedEdge.value = null
 }
 
 const handleExpand = async (node) => {
@@ -303,6 +491,21 @@ const handleViewScript = ({ name, scriptFile, impactSource }) => {
 .impact-analysis {
   padding: 10px;
 }
+.graph-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.filter-tip {
+  font-size: 12px;
+  color: #1890ff;
+}
 .propagation-section {
   margin-top: 16px;
   background: #fff;
@@ -320,5 +523,15 @@ const handleViewScript = ({ name, scriptFile, impactSource }) => {
   font-size: 14px;
   font-weight: 600;
   color: #1f1f1f;
+}
+.report-tip {
+  font-size: 12px;
+  color: #909399;
+  font-weight: normal;
+}
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 </style>

@@ -29,6 +29,9 @@ public class ReportCellBinding {
     /** 数据集列名(STAT_DT) */
     private String columnName;
 
+    /** 报表表头文本(商户号) */
+    private String headerText;
+
     /** SQL select别名 */
     private String selectAlias;
 

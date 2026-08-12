@@ -102,6 +102,25 @@ public class CptXmlParser {
     }
 
     private void parseCellBindings(Document doc, ReportMetadata metadata) {
+        // 先构建 (col,row) → 文本内容 映射，用于查找表头
+        java.util.Map<String, String> headerMap = new java.util.HashMap<>();
+        NodeList allCells = doc.getElementsByTagName("C");
+        for (int i = 0; i < allCells.getLength(); i++) {
+            Element cell = (Element) allCells.item(i);
+            String cAttr = cell.getAttribute("c");
+            String rAttr = cell.getAttribute("r");
+            if (cAttr.isEmpty() || rAttr.isEmpty()) continue;
+            // 只记录普通文本单元格（O 元素无 t 属性或 t="Text"）
+            Element o = findChildElement(cell, "O");
+            if (o == null) continue;
+            String t = o.getAttribute("t");
+            if (t != null && !t.isEmpty() && !"Text".equals(t)) continue;
+            String text = o.getTextContent();
+            if (text != null && !text.trim().isEmpty()) {
+                headerMap.put(cAttr + "," + rAttr, text.trim());
+            }
+        }
+
         NodeList cellList = doc.getElementsByTagName("C");
         for (int i = 0; i < cellList.getLength(); i++) {
             Element cell = (Element) cellList.item(i);
@@ -120,6 +139,15 @@ public class CptXmlParser {
             binding.setCellPos(toCellPos(Integer.parseInt(cAttr), Integer.parseInt(rAttr)));
             binding.setDsName(attributes.getAttribute("dsName"));
             binding.setColumnName(attributes.getAttribute("columnName"));
+            // 向上查找同列最近的文本单元格作为表头
+            int row = Integer.parseInt(rAttr);
+            for (int rr = row - 1; rr >= 0; rr--) {
+                String text = headerMap.get(cAttr + "," + rr);
+                if (text != null) {
+                    binding.setHeaderText(text);
+                    break;
+                }
+            }
 
             if (binding.getDsName() != null && !binding.getDsName().isEmpty()
                     && binding.getColumnName() != null && !binding.getColumnName().isEmpty()) {

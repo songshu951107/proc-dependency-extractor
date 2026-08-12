@@ -49,14 +49,8 @@
           <el-option :value="20" label="全部" />
         </el-select>
       </el-form-item>
-      <el-form-item label="操作类型">
-        <el-checkbox-group v-model="form.operations" style="display: inline-block">
-          <el-checkbox label="INSERT SELECT">INSERT</el-checkbox>
-          <el-checkbox label="CREATE TEMP">CREATE TEMP</el-checkbox>
-          <el-checkbox label="MERGE">MERGE</el-checkbox>
-          <el-checkbox label="UPDATE FROM">UPDATE</el-checkbox>
-          <el-checkbox label="DELETE FROM">DELETE</el-checkbox>
-        </el-checkbox-group>
+      <el-form-item label="分析报表影响">
+        <el-switch v-model="form.analyzeReportImpact" />
       </el-form-item>
       <el-form-item>
         <el-button type="primary" @click="onAnalyze" :loading="loading">分析</el-button>
@@ -85,7 +79,7 @@ const form = reactive({
   fieldName: '',
   direction: 'DOWNSTREAM',
   maxDepth: 5,
-  operations: []
+  analyzeReportImpact: false
 })
 
 onMounted(async () => {
@@ -133,7 +127,7 @@ const onReset = () => {
   form.fieldName = ''
   form.direction = 'DOWNSTREAM'
   form.maxDepth = 5
-  form.operations = []
+  form.analyzeReportImpact = false
   tables.value = []
   fields.value = []
 }

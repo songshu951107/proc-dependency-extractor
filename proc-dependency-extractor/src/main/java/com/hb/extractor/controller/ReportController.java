@@ -12,7 +12,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +41,32 @@ public class ReportController {
             return Result.success(reportParseService.parseAndSave(body.get("path")));
         } catch (Exception e) {
             log.error("报表解析失败", e);
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 上传报表文件并解析。文件会保存到 reports 目录后复用 parseAndSave 逻辑。
+     * 若同名文件已存在会被覆盖，保证重复上传重解析时数据一致。
+     */
+    @PostMapping("/parse/upload")
+    public Result<ReportInfo> parseUpload(@RequestParam("file") MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return Result.error("上传文件为空");
+        }
+        String originalName = file.getOriginalFilename();
+        if (originalName == null || originalName.isBlank()) {
+            return Result.error("文件名为空");
+        }
+        try {
+            Path reportsDir = Paths.get("d:/HB/work_zuoye/reports");
+            Files.createDirectories(reportsDir);
+            Path target = reportsDir.resolve(originalName);
+            // 覆盖同名文件
+            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+            return Result.success(reportParseService.parseAndSave(target.toString()));
+        } catch (Exception e) {
+            log.error("上传解析失败: {}", originalName, e);
             return Result.error(e.getMessage());
         }
     }

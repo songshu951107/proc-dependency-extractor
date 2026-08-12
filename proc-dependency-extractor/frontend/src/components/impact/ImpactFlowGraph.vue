@@ -30,7 +30,13 @@ import { expand } from '@/api/impact'
 const props = defineProps({
   initialNodes: { type: Array, default: () => [] },
   initialEdges: { type: Array, default: () => [] },
-  direction: { type: String, default: 'DOWNSTREAM' }
+  direction: { type: String, default: 'DOWNSTREAM' },
+  // 命中节点 id 集合（null/空 = 无筛选，全部高亮）
+  matchedNodeIds: { type: Set, default: null },
+  // 隐藏模式下需要保留的节点集合（命中节点 + 其链路祖先）；null=不做保留过滤
+  preservedNodeIds: { type: Set, default: null },
+  // 是否隐藏未命中节点（true=移出画布；false=变淡保留）
+  hideUnmatched: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['nodeClick', 'edgeClick'])
@@ -51,6 +57,16 @@ function handleEdgeClick(evt) {
   emit('edgeClick', evt.edge)
 }
 
+// 判断当前是否有筛选生效
+function hasFilter() {
+  return props.matchedNodeIds && props.matchedNodeIds.size > 0
+}
+
+function isMatched(id) {
+  if (!hasFilter()) return true
+  return props.matchedNodeIds.has(id)
+}
+
 function rebuildGraph() {
   if (graphStore.nodeMap.size === 0) {
     nodes.value = []
@@ -58,14 +74,27 @@ function rebuildGraph() {
     return
   }
 
+  const filtering = hasFilter()
+
+  // 隐藏模式下：只保留链路上的节点（命中节点 + 其祖先）；变淡模式下：全部参与布局
+  // preservedNodeIds 为 null 时表示不需要保留过滤（非隐藏模式或无筛选）
+  const preserved = props.preservedNodeIds
+  const visibleNodeIds = new Set()
+  graphStore.nodeMap.forEach((n, id) => {
+    if (filtering && props.hideUnmatched && preserved && !preserved.has(id)) return
+    visibleNodeIds.add(id)
+  })
+
   const g = new dagre.graphlib.Graph()
   g.setGraph({ rankdir: 'LR', nodesep: 30, ranksep: 80 })
   g.setDefaultEdgeLabel(() => ({}))
 
-  graphStore.nodeMap.forEach((n, id) => {
+  visibleNodeIds.forEach(id => {
     g.setNode(id, { width: 220, height: 60 })
   })
   graphStore.edgeMap.forEach((e, key) => {
+    // 两端必须都可见才画边
+    if (!visibleNodeIds.has(e.source) || !visibleNodeIds.has(e.target)) return
     g.setEdge(e.source, e.target)
   })
 
@@ -74,22 +103,33 @@ function rebuildGraph() {
   nodes.value = g.nodes().map(id => {
     const node = graphStore.nodeMap.get(id)
     const dagreNode = g.node(id)
+    const matched = isMatched(id)
     return {
       id,
       position: { x: dagreNode.x - 110, y: dagreNode.y - 30 },
       data: node,
-      type: 'impactNode'
+      type: 'impactNode',
+      // 筛选时：命中=高亮，未命中（链路祖先）=变淡；无筛选=正常
+      classed: filtering ? (matched ? 'node-highlight' : 'node-dim') : ''
     }
   })
 
-  edges.value = g.edges().map(e => ({
-    id: `${e.v}-${e.w}`,
-    source: e.v,
-    target: e.w,
-    type: 'smoothstep',
-    animated: true,
-    style: { stroke: '#64748b', strokeWidth: 1.5 }
-  }))
+  edges.value = g.edges().map(e => {
+    const bothMatched = isMatched(e.v) && isMatched(e.w)
+    return {
+      id: `${e.v}-${e.w}`,
+      source: e.v,
+      target: e.w,
+      type: 'smoothstep',
+      animated: filtering ? bothMatched : true,
+      classed: filtering ? (bothMatched ? 'edge-highlight' : 'edge-dim') : '',
+      style: {
+        stroke: filtering ? (bothMatched ? '#1890ff' : '#64748b') : '#64748b',
+        strokeWidth: filtering && bothMatched ? 2 : 1.5,
+        opacity: filtering ? (bothMatched ? 1 : 0.15) : 1
+      }
+    }
+  })
 }
 
 async function expandNode(nodeId) {
@@ -159,13 +199,36 @@ watch(() => [props.initialNodes, props.initialEdges], () => {
   loadInitial(props.initialNodes, props.initialEdges)
 }, { immediate: true, deep: true })
 
+// 筛选条件变化时重新构建（不会重新加载 initialNodes，只重排已有节点）
+watch(() => [props.matchedNodeIds, props.preservedNodeIds, props.hideUnmatched], () => {
+  rebuildGraph()
+})
+
 defineExpose({ expandNode })
 </script>
 
-<style scoped>
+<style>
 @import '@vue-flow/core/dist/style.css';
 @import '@vue-flow/core/dist/theme-default.css';
 
+/* 筛选状态样式（非 scoped，VueFlow 内部渲染需要全局 class） */
+.vue-flow__node.node-highlight {
+  outline: 2px solid #1890ff;
+  outline-offset: 2px;
+}
+.vue-flow__node.node-dim {
+  opacity: 0.15;
+}
+.vue-flow__edge.edge-dim .vue-flow__edge-path {
+  opacity: 0.15;
+}
+.vue-flow__edge.edge-highlight .vue-flow__edge-path {
+  stroke: #1890ff !important;
+  stroke-width: 2;
+}
+</style>
+
+<style scoped>
 .flow-graph-container {
   position: relative;
   width: 100%;

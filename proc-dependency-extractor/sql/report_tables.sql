@@ -48,6 +48,7 @@ CREATE TABLE `report_cell_binding` (
     `dataset_name` VARCHAR(100) NOT NULL COMMENT '数据集名',
     `cell_pos`     VARCHAR(20)  NOT NULL COMMENT '单元格位置(A3)',
     `column_name`  VARCHAR(100) NOT NULL COMMENT '数据集列名(STAT_DT)',
+    `header_text`  VARCHAR(255)          DEFAULT NULL COMMENT '报表表头文本',
     `select_alias` VARCHAR(100)          DEFAULT NULL COMMENT 'SQL select别名',
     `source_table` VARCHAR(255)          DEFAULT NULL COMMENT '源表全名(小写)',
     `source_field` VARCHAR(100)          DEFAULT NULL COMMENT '源字段名',

@@ -29,9 +29,9 @@ public class ReportSqlParser {
     /** 块注释 (C 风格 star-slash) */
     private static final Pattern BLOCK_COMMENT_PATTERN = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
 
-    /** FROM/JOIN 后的表引用: schema.table alias */
+    /** FROM/JOIN 后的表引用: [schema.]table [alias] */
     private static final Pattern FROM_JOIN_PATTERN = Pattern.compile(
-            "(?i)\\b(FROM|JOIN)\\s+(\\w+)\\.(\\w+)\\s+(?:AS\\s+)?(\\w+)?");
+            "(?i)\\b(FROM|JOIN)\\s+(?:(\\w+)\\.)?(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?");
 
     /** AS 别名: expr AS alias */
     private static final Pattern AS_ALIAS_PATTERN = Pattern.compile(
@@ -57,7 +57,7 @@ public class ReportSqlParser {
     }
 
     /**
-     * 提取 SQL 中的表引用（FROM/JOIN schema.table alias）
+     * 提取 SQL 中的表引用（FROM/JOIN [schema.]table [alias]）
      */
     public List<TableRef> extractTables(String rawSql) {
         List<TableRef> tables = new ArrayList<>();
@@ -65,13 +65,31 @@ public class ReportSqlParser {
 
         Matcher m = FROM_JOIN_PATTERN.matcher(sql);
         while (m.find()) {
+            String schema = m.group(2);
+            String table = m.group(3);
+            String alias = m.group(4);
+            // alias 误匹配关键字（如 from t where）时置空
+            if (alias != null && isTableAliasKeyword(alias)) {
+                alias = null;
+            }
             TableRef ref = new TableRef();
-            ref.setSchema(m.group(2).toUpperCase());
-            ref.setTable(m.group(3).toUpperCase());
-            ref.setAlias(m.group(4) != null ? m.group(4).toLowerCase() : null);
+            ref.setSchema(schema != null ? schema.toUpperCase() : null);
+            ref.setTable(table.toUpperCase());
+            ref.setAlias(alias != null ? alias.toLowerCase() : null);
             tables.add(ref);
         }
         return tables;
+    }
+
+    /** FROM/JOIN 后可能紧跟的关键字，不应被误识别为表别名 */
+    private boolean isTableAliasKeyword(String word) {
+        String upper = word.toUpperCase();
+        return upper.equals("WHERE") || upper.equals("ON") || upper.equals("AND") || upper.equals("OR")
+                || upper.equals("GROUP") || upper.equals("ORDER") || upper.equals("HAVING")
+                || upper.equals("JOIN") || upper.equals("LEFT") || upper.equals("RIGHT")
+                || upper.equals("INNER") || upper.equals("OUTER") || upper.equals("FULL")
+                || upper.equals("UNION") || upper.equals("LIMIT") || upper.equals("AS")
+                || upper.equals("WITH") || upper.equals("SET");
     }
 
     /**
@@ -90,12 +108,15 @@ public class ReportSqlParser {
         String selectClause = sql.substring(selectIdx + 6, fromIdx).trim();
 
         // 构建别名映射
+        List<TableRef> tableRefs = extractTables(rawSql);
         Map<String, String> aliasToTable = new LinkedHashMap<>();
-        for (TableRef ref : extractTables(rawSql)) {
+        for (TableRef ref : tableRefs) {
             if (ref.getAlias() != null) {
                 aliasToTable.put(ref.getAlias(), ref.getFullName());
             }
         }
+        // 单表（无论是否有别名）时作为无 alias.field 字段的兜底源表
+        String defaultTable = tableRefs.size() == 1 ? tableRefs.get(0).getFullName() : null;
 
         // 按括号深度拆分列
         List<String> columns = splitSelectColumns(selectClause);
@@ -103,7 +124,7 @@ public class ReportSqlParser {
         for (int i = 0; i < columns.size(); i++) {
             String raw = columns.get(i).trim();
             if (raw.isEmpty()) continue;
-            ColumnMapping mapping = parseColumn(raw, i, aliasToTable);
+            ColumnMapping mapping = parseColumn(raw, i, aliasToTable, defaultTable);
             mappings.add(mapping);
         }
 
@@ -152,7 +173,7 @@ public class ReportSqlParser {
         return columns;
     }
 
-    private ColumnMapping parseColumn(String raw, int index, Map<String, String> aliasToTable) {
+    private ColumnMapping parseColumn(String raw, int index, Map<String, String> aliasToTable, String defaultTable) {
         ColumnMapping mapping = new ColumnMapping();
         String expr = raw.trim();
 
@@ -176,11 +197,14 @@ public class ReportSqlParser {
             }
         }
 
-        // 无别名时，从 alias.field 推断
+        // 无别名时，从 alias.field 推断；若为纯标识符则别名取自身
         if (alias == null) {
             Matcher afMatcher = ALIAS_FIELD_PATTERN.matcher(expr);
             if (afMatcher.find()) {
                 alias = afMatcher.group(2);
+                sourceExpr = expr;
+            } else if (expr.matches("\\w+")) {
+                alias = expr;
                 sourceExpr = expr;
             } else {
                 alias = "expr_" + (index + 1);
@@ -201,6 +225,10 @@ public class ReportSqlParser {
             if (table != null) {
                 mapping.setSourceTable(table);
             }
+        } else if (defaultTable != null) {
+            // 无 alias.field 且仅单表，归属到该表
+            mapping.setSourceField(alias.toUpperCase());
+            mapping.setSourceTable(defaultTable);
         }
 
         return mapping;

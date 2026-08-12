@@ -25,6 +25,9 @@ public class ImpactAnalysisRequest {
     /** 操作类型筛选 */
     private List<String> operations;
 
+    /** 是否分析报表影响：沿 READS 血缘追溯上下游表后，查这些表被哪些报表引用 */
+    private Boolean analyzeReportImpact = false;
+
     /** 是否返回 JOIN/WHERE 条件，默认 true */
     private Boolean includeConditions = true;
 

@@ -13,4 +13,6 @@ public class CellBinding {
     private String dsName;
     /** 列名(STAT_DT) */
     private String columnName;
+    /** 报表表头文本(商户号) - 同列上方最近的文本单元格 */
+    private String headerText;
 }

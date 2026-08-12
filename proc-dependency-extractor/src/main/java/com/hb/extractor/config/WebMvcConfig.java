@@ -28,5 +28,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
         // SPA 前端路由: 非api请求统一转发到 index.html,避免刷新 404
         registry.addViewController("/procs").setViewName("forward:/index.html");
         registry.addViewController("/procs/**").setViewName("forward:/index.html");
+        registry.addViewController("/impact").setViewName("forward:/index.html");
+        registry.addViewController("/report-impact").setViewName("forward:/index.html");
     }
 }

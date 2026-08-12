@@ -4,6 +4,18 @@ export function parseReport(path) {
   return request({ url: '/report/parse', method: 'post', data: { path } })
 }
 
+export function parseReportUpload(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request({
+    url: '/report/parse/upload',
+    method: 'post',
+    data: formData,
+    // 让浏览器自动设置 multipart/form-data boundary，不能手动设
+    headers: { 'Content-Type': undefined }
+  })
+}
+
 export function parseReportBatch(path) {
   return request({ url: '/report/parse/batch', method: 'post', data: { path } })
 }
@@ -32,12 +44,24 @@ export function findReportsByField(schema, table, field) {
   return request({ url: '/report-impact/by-field', method: 'get', params: { schema, table, field } })
 }
 
-export function traceFieldSource(reportFile, datasetName, columnName) {
-  return request({ url: '/report-impact/field-source', method: 'get',
-    params: { reportFile, datasetName, columnName } })
+export function findByHeaderText(headerText) {
+  return request({ url: '/report-impact/by-header', method: 'get',
+    params: { headerText } })
 }
 
-export function analyzeCrossImpact(schema, table, field) {
-  return request({ url: '/report-impact/cross-impact', method: 'get',
-    params: { schema, table, field } })
+export function getReportFields(schema, table) {
+  return request({ url: '/report-impact/fields', method: 'get',
+    params: { schema, table } })
+}
+
+/** 场景4：报表列溯源 - 获取指定报表的全部表头列汉字 */
+export function getReportHeaders(reportFile) {
+  return request({ url: '/report-impact/report-headers', method: 'get',
+    params: { reportFile } })
+}
+
+/** 场景4：报表列溯源 - 根据报表+表头列追溯上游字段级链路 */
+export function traceReportLineage(reportFile, headerText) {
+  return request({ url: '/report-impact/trace-lineage', method: 'get',
+    params: { reportFile, headerText } })
 }

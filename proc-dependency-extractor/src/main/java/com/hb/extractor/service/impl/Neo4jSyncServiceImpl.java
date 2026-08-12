@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hb.extractor.dto.SyncResult;
 import com.hb.extractor.entity.*;
 import com.hb.extractor.mapper.*;
+import com.hb.extractor.parser.DdlParser;
 import com.hb.extractor.service.Neo4jSyncService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +44,9 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
 
     @Autowired
     private Neo4jSyncLogMapper neo4jSyncLogMapper;
+
+    @Autowired
+    private DdlParser ddlParser;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -98,17 +102,34 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
             String scriptFile = procName + ".py";
             mergeScriptNode(scriptFile, procInfo);
 
-            // 收集所有涉及的表（源表 + 目标表）
+            // 收集目标表（该 script 产出的表）和源表
+            Set<String> targetTables = new LinkedHashSet<>();
+            Set<String> sourceTables = new LinkedHashSet<>();
             Set<String> involvedTables = new LinkedHashSet<>();
+            // 收集通过 CREATE TEMPORARY TABLE 创建的表（targetIsTemp=1）
+            Set<String> tempTableNames = new LinkedHashSet<>();
             for (TableLineage edge : edges) {
                 involvedTables.add(edge.getSourceTable());
                 involvedTables.add(edge.getTargetTable());
+                targetTables.add(edge.getTargetTable());
+                sourceTables.add(edge.getSourceTable());
+                if (Integer.valueOf(1).equals(edge.getTargetIsTemp())) {
+                    tempTableNames.add(edge.getTargetTable());
+                }
             }
 
-            // 写入 Table 节点
+            // 写入 Table 节点：
+            // - 目标表：写入 script_file（生成它的存储过程）
+            // - 仅作源表的表：不覆盖 script_file（避免被其他 proc 读取时覆盖）
+            // - 临时表：is_temp 优先取 targetIsTemp 标记，其次按表名规则判断
             for (String fullName : involvedTables) {
                 String shortName = extractShortName(fullName);
-                mergeTableNode(fullName, shortName, scriptFile);
+                boolean isTemp = tempTableNames.contains(fullName) || isTempTableName(shortName);
+                if (targetTables.contains(fullName)) {
+                    mergeTableNode(fullName, shortName, scriptFile, isTemp);
+                } else {
+                    mergeTableNode(fullName, shortName, null, isTemp);
+                }
             }
 
             // 写入 READS 关系 + PRODUCES + CONSUMES
@@ -143,6 +164,22 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
 
                 String transType = classifyTransformation(fm.getSourceExpr());
                 createMapsToRelationship(fm, edge, sourceColKey, targetColKey, transType, scriptFile);
+            }
+
+            // DDL 补全字段：对所有涉及的表（源表+目标表，排除临时表），
+            // 从 DDL 文件读取全部字段创建 Column 节点，保证字段元数据完整
+            // （INSERT SELECT 只覆盖实际引用的列，DDL 中定义但未引用的列不会被字段映射覆盖）
+            for (String fullName : involvedTables) {
+                String shortName = extractShortName(fullName);
+                // 临时表跳过（无 DDL 文件）
+                if (isTempTableName(shortName)) continue;
+                List<String> ddlFields = ddlParser.parse(shortName);
+                if (ddlFields == null || ddlFields.isEmpty()) continue;
+                for (String field : ddlFields) {
+                    String colKey = toColKey(fullName, field);
+                    mergeColumnNode(colKey, field, fullName);
+                    mergeBelongsRelationship(colKey, fullName);
+                }
             }
 
             // 更新 SOURCE 类型
@@ -231,12 +268,11 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                 .bindAll(params).run();
     }
 
-    private void mergeTableNode(String fullName, String shortName, String scriptFile) {
+    private void mergeTableNode(String fullName, String shortName, String scriptFile, boolean isTemp) {
         if (fullName == null || fullName.isEmpty()) return;
         String name = fullName.toLowerCase();
         String schema = extractSchema(fullName);
         String layer = schema != null ? schema.toUpperCase() : null;
-        boolean isTemp = shortName.toUpperCase().startsWith("VT_");
 
         Map<String, Object> params = new HashMap<>();
         params.put("name", name);
@@ -245,16 +281,39 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
         params.put("layer", layer);
         params.put("isTemp", isTemp);
         params.put("scriptFile", scriptFile);
-        neo4jClient.query("MERGE (t:Table {name: $name}) " +
-                "SET t.short_name = $shortName, t.schema_prefix = $schemaPrefix, " +
-                "t.layer = $layer, t.is_temp = $isTemp, t.script_file = $scriptFile")
-                .bindAll(params).run();
+        // script_file 仅在非 null 时写入（目标表）；
+        // 仅作源表时不覆盖已有 script_file（避免被其他 proc 读取时覆盖成错误的脚本）
+        String cypher;
+        if (scriptFile != null) {
+            cypher = "MERGE (t:Table {name: $name}) " +
+                    "SET t.short_name = $shortName, t.schema_prefix = $schemaPrefix, " +
+                    "t.layer = $layer, t.is_temp = $isTemp, t.script_file = $scriptFile";
+        } else {
+            cypher = "MERGE (t:Table {name: $name}) " +
+                    "SET t.short_name = $shortName, t.schema_prefix = $schemaPrefix, " +
+                    "t.layer = $layer, t.is_temp = $isTemp";
+        }
+        neo4jClient.query(cypher).bindAll(params).run();
     }
 
     private void updateSourceTableTypes() {
         neo4jClient.query("MATCH (t:Table) " +
                 "WHERE NOT (t)<-[:READS]-() AND t.layer IS NOT NULL " +
                 "SET t.is_source = true").run();
+    }
+
+    /**
+     * 统一临时表判断规则（不区分大小写）：
+     * - VT_ 前缀
+     * - TMP_ 前缀
+     * - _TMP 后缀（含 _TMP1, _TMP2 等数字后缀）
+     */
+    private static boolean isTempTableName(String shortName) {
+        if (shortName == null || shortName.isEmpty()) return false;
+        String upper = shortName.toUpperCase();
+        return upper.startsWith("VT_")
+                || upper.startsWith("TMP_")
+                || upper.matches(".*_TMP\\d*");
     }
 
     private void createReadsRelationship(TableLineage edge, List<TableLineageFilter> filters) {
@@ -268,7 +327,8 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
         String joinJson = serializeConditions(joins);
         String whereJson = serializeConditions(wheres);
         String targetUpper = edge.getTargetTable().toUpperCase();
-        boolean viaTemp = targetUpper.startsWith("VT_") || targetUpper.contains(".VT_");
+        String targetShort = targetUpper.contains(".") ? targetUpper.substring(targetUpper.lastIndexOf('.') + 1) : targetUpper;
+        boolean viaTemp = isTempTableName(targetShort);
 
         Map<String, Object> params = new HashMap<>();
         params.put("sourceTable", edge.getSourceTable().toLowerCase());

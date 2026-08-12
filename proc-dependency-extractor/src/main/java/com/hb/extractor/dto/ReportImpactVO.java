@@ -19,6 +19,8 @@ public class ReportImpactVO {
     private List<ReportRef> reports = new ArrayList<>();
     /** 字段口径来源（场景3） */
     private List<FieldSource> fieldSources = new ArrayList<>();
+    /** 字段映射绑定明细（口径按列头查询时返回） */
+    private List<BindingDetail> bindings = new ArrayList<>();
 
     @Data
     public static class ReportRef {
@@ -38,5 +40,18 @@ public class ReportImpactVO {
         private String sourceExpr;
         private String connection;
         private String datasetName;
+    }
+
+    @Data
+    public static class BindingDetail {
+        private String reportFile;
+        private String datasetName;
+        private String cellPos;
+        private String columnName;
+        private String headerText;
+        private String selectAlias;
+        private String sourceTable;
+        private String sourceField;
+        private String sourceExpr;
     }
 }

@@ -14,8 +14,11 @@ public class TableRef {
     /** SQL中的别名(如 a) */
     private String alias;
 
-    /** 完整表名 schema.table（小写） */
+    /** 完整表名 schema.table（小写）；无 schema 时仅返回 table（小写） */
     public String getFullName() {
+        if (schema == null || schema.isEmpty()) {
+            return table.toLowerCase();
+        }
         return (schema + "." + table).toLowerCase();
     }
 }

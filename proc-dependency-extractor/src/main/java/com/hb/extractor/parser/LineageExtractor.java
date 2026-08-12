@@ -173,7 +173,7 @@ public class LineageExtractor {
         }
 
         String targetFull = buildFullName(targetSchema, targetTable, schemaVarMap);
-        boolean targetIsTemp = targetTable.startsWith(TEMP_PREFIX);
+        boolean targetIsTemp = isTempTableName(targetTable);
 
         // 提取 source 表及其 schema 变量，构建完整名
         Map<String, String> sourceSchemaMap = new LinkedHashMap<>();
@@ -577,5 +577,19 @@ public class LineageExtractor {
 
     public SqlBlockExtractor getSqlBlockExtractor() {
         return sqlBlockExtractor;
+    }
+
+    /**
+     * 统一临时表判断规则（不区分大小写）：
+     * - VT_ 前缀
+     * - TMP_ 前缀
+     * - _TMP 后缀（含 _TMP1, _TMP2 等数字后缀）
+     */
+    private static boolean isTempTableName(String shortName) {
+        if (shortName == null || shortName.isEmpty()) return false;
+        String upper = shortName.toUpperCase();
+        return upper.startsWith("VT_")
+                || upper.startsWith("TMP_")
+                || upper.matches(".*_TMP\\d*");
     }
 }

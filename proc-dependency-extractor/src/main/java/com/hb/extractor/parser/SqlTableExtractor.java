@@ -22,11 +22,12 @@ import java.util.regex.Pattern;
 @Component
 public class SqlTableExtractor {
 
-    /** 临时表识别: CREATE TEMPORARY TABLE [schema.]VT_xxx */
+    /** 临时表识别: CREATE TEMPORARY TABLE [schema.]任意表名
+     *  只要通过 CREATE TEMPORARY TABLE 方式建表即视为临时表，不限命名规则 */
     private static final Pattern TEMP_TABLE_PATTERN = Pattern.compile(
             "(?i)CREATE\\s+TEMPORARY\\s+TABLE\\s+" +
             "(\\{?(\\w+)\\}?\\.)?" +       // group1=完整schema段, group2=schema变量名
-            "(VT_\\w+)"                     // group3=表名
+            "(\\w+)"                        // group3=表名(任意合法表名)
     );
 
     /**
@@ -135,8 +136,8 @@ public class SqlTableExtractor {
             ProcMetadata.TableRef ref = new ProcMetadata.TableRef(schema, table, opType);
             ref.setSchemaVarSrc(src);
 
-            // 判断是否临时表(VT_前缀 或 已在临时表集合中)
-            if (table.startsWith("VT_") || containsTable(metadata.getTempTables(), ref)) {
+            // 判断是否临时表(VT_/TMP_前缀、_TMP后缀 或 已在临时表集合中)
+            if (isTempTableName(table) || containsTable(metadata.getTempTables(), ref)) {
                 ref.setTempTable(true);
                 metadata.getTempTables().add(ref);
                 continue;
@@ -170,5 +171,19 @@ public class SqlTableExtractor {
      */
     private boolean containsTable(Set<ProcMetadata.TableRef> set, ProcMetadata.TableRef ref) {
         return set.stream().anyMatch(t -> t.equals(ref));
+    }
+
+    /**
+     * 统一临时表判断规则（不区分大小写）：
+     * - VT_ 前缀
+     * - TMP_ 前缀
+     * - _TMP 后缀（含 _TMP1, _TMP2 等数字后缀）
+     */
+    private static boolean isTempTableName(String shortName) {
+        if (shortName == null || shortName.isEmpty()) return false;
+        String upper = shortName.toUpperCase();
+        return upper.startsWith("VT_")
+                || upper.startsWith("TMP_")
+                || upper.matches(".*_TMP\\d*");
     }
 }

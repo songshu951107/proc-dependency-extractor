@@ -185,7 +185,7 @@ public class LineageServiceImpl implements LineageService {
             // 注意：传入临时表后应用 sourceExpr 中提取的字段名（如 DECODE(T7.M_AVG,...) → m_avg），
             // 而非目标字段名（如 kh_mavg），因为临时表中存储的是 sourceExpr 引用的字段名
             if (recursive && fm.getSourceTableShort() != null
-                    && fm.getSourceTableShort().startsWith("VT_")
+                    && isTempTableName(fm.getSourceTableShort())
                     && item.getUltimateSource() == null) {
                 String traceField = extractFieldFromExpr(fm.getSourceExpr());
                 if (traceField == null) {
@@ -205,7 +205,7 @@ public class LineageServiceImpl implements LineageService {
      */
     private String determineTableType(String procName, String tableShort) {
         if (tableShort == null) return null;
-        if (tableShort.startsWith("VT_")) return "TEMP";
+        if (isTempTableName(tableShort)) return "TEMP";
         List<SqlBlockInfo> blocks = sqlBlockInfoMapper.selectList(
                 new LambdaQueryWrapper<SqlBlockInfo>()
                         .eq(SqlBlockInfo::getProcName, procName)
@@ -261,7 +261,7 @@ public class LineageServiceImpl implements LineageService {
         n1.setField(tempField);
         path.add(n1);
 
-        if (sourceTable.startsWith("VT_")) {
+        if (isTempTableName(sourceTable)) {
             FieldMappingVO.UltimateSource deeper = traceUltimateSource(procName, sourceTable,
                     extractFieldFromExpr(fm.getSourceExpr()), visited);
             if (deeper != null) {
@@ -518,13 +518,13 @@ public class LineageServiceImpl implements LineageService {
 
             // 节点类型判定优先级：
             // 1. 匹配 updateTarget → TARGET
-            // 2. 以 VT_ 开头 → TEMP
+            // 2. 以 VT_/TMP_ 开头或 _TMP 后缀 → TEMP
             // 3. 作为边的 target 且 targetIsTemp=1 → TEMP
             // 4. 不在任何边的 target 中 → SOURCE（纯源表）
             // 5. 作为边的 target 且 targetIsTemp=0 → TARGET（真正的目标表）
             if (shortName.equals(updateTargetShort)) {
                 node.setNodeType("TARGET");
-            } else if (shortName.startsWith("VT_") || isTempInEdges(shortName, edges)) {
+            } else if (isTempTableName(shortName) || isTempInEdges(shortName, edges)) {
                 node.setNodeType("TEMP");
             } else if (!targetShorts.contains(shortName)) {
                 node.setNodeType("SOURCE");
@@ -596,6 +596,20 @@ public class LineageServiceImpl implements LineageService {
     private boolean isTempInEdges(String shortName, List<TableLineage> edges) {
         return edges.stream().anyMatch(e ->
                 shortName.equals(e.getTargetTableShort()) && Integer.valueOf(1).equals(e.getTargetIsTemp()));
+    }
+
+    /**
+     * 统一临时表判断规则（不区分大小写）：
+     * - VT_ 前缀
+     * - TMP_ 前缀
+     * - _TMP 后缀（含 _TMP1, _TMP2 等数字后缀）
+     */
+    private static boolean isTempTableName(String shortName) {
+        if (shortName == null || shortName.isEmpty()) return false;
+        String upper = shortName.toUpperCase();
+        return upper.startsWith("VT_")
+                || upper.startsWith("TMP_")
+                || upper.matches(".*_TMP\\d*");
     }
 
     /**

@@ -113,6 +113,7 @@ public class ReportParseServiceImpl implements ReportParseService {
                     rcb.setDatasetName(ds.getName());
                     rcb.setCellPos(cb.getCellPos());
                     rcb.setColumnName(cb.getColumnName());
+                    rcb.setHeaderText(cb.getHeaderText());
                     if (cm != null) {
                         rcb.setSelectAlias(cm.getSelectAlias());
                         rcb.setSourceTable(cm.getSourceTable());

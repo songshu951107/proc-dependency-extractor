@@ -38,6 +38,9 @@ public class TableFieldMapping {
     /** 推断的来源表短名 */
     private String sourceTableShort;
 
+    /** Transform logic_type(解析期填充,同步期写入 Transform 节点) */
+    private String logicType;
+
     /** 提取时间 */
     private LocalDateTime extractTime;
 }

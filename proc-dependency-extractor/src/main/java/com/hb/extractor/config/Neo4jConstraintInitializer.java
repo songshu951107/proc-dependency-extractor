@@ -24,7 +24,8 @@ public class Neo4jConstraintInitializer {
             "CREATE CONSTRAINT column_key_unique IF NOT EXISTS FOR (c:Column) REQUIRE c.col_key IS UNIQUE",
             "CREATE CONSTRAINT script_file_unique IF NOT EXISTS FOR (s:Script) REQUIRE s.file IS UNIQUE",
             "CREATE CONSTRAINT report_file_unique IF NOT EXISTS FOR (r:Report) REQUIRE r.file IS UNIQUE",
-            "CREATE CONSTRAINT dataset_key_unique IF NOT EXISTS FOR (d:Dataset) REQUIRE d.key IS UNIQUE"
+            "CREATE CONSTRAINT dataset_key_unique IF NOT EXISTS FOR (d:Dataset) REQUIRE d.key IS UNIQUE",
+            "CREATE CONSTRAINT transform_id_unique IF NOT EXISTS FOR (t:Transform) REQUIRE t.id IS UNIQUE"
         };
 
         for (String cypher : constraints) {

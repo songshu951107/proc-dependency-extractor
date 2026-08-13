@@ -118,6 +118,7 @@
           <ImpactNodeDetail
             v-if="selectedNode"
             :node="selectedNode"
+            :edges="allEdgesList"
             @expand="handleExpand"
             @collapse="handleCollapse"
           />
@@ -189,6 +190,7 @@ const isFieldLevel = computed(() => {
 const availableSchemas = computed(() => {
   const set = new Set()
   allNodesByDepth.value.forEach(n => {
+    if (n.nodeLevel === 'TRANSFORM') return
     if (n.layer && n.layer !== 'UNKNOWN') set.add(n.layer)
   })
   return Array.from(set)
@@ -207,7 +209,9 @@ const matchedNodeIds = computed(() => {
   const kw = filterTableKw.value ? filterTableKw.value.toUpperCase() : ''
 
   const matched = new Set()
+  // 第一遍：匹配非 TRANSFORM 节点（表/字段）
   allNodesByDepth.value.forEach(n => {
+    if (n.nodeLevel === 'TRANSFORM') return
     // 源表始终保留
     if (n.id === sourceTable) {
       matched.add(n.id)
@@ -224,6 +228,16 @@ const matchedNodeIds = computed(() => {
       tableOk = label.includes(kw) || id.includes(kw)
     }
     if (schemaOk && tableOk) matched.add(n.id)
+  })
+  // 第二遍：TRANSFORM 节点——其任一 INPUT_TO 源字段或 OUTPUT_TO 目标字段命中则保留
+  allNodesByDepth.value.forEach(n => {
+    if (n.nodeLevel !== 'TRANSFORM') return
+    const related = allEdgesList.value.some(e => {
+      if (e.source !== n.id && e.target !== n.id) return false
+      const otherEnd = e.source === n.id ? e.target : e.source
+      return matched.has(otherEnd)
+    })
+    if (related) matched.add(n.id)
   })
   return matched
 })
@@ -304,21 +318,35 @@ const handleAnalyze = async (request) => {
     const sourceLayer = res.data?.sourceLayer
     const impactedByDepth = res.data?.impactedByDepth || {}
 
-    // 构建不含临时表的节点和边（穿透临时表）
-    const { nodes, edges } = buildWithoutTemp(sourceTable, sourceLayer, impactedByDepth)
-    allNodesByDepth.value = nodes
-    allEdgesList.value = edges
+    // 字段级：直接使用后端返回的 nodes/edges（含 Transform），跳过 buildWithoutTemp
+    const fieldLevel = !!(request.fieldName && request.fieldName !== '')
 
-    // 默认展示 depth <= 3 的节点
-    visibleNodeIds.value = nodes
-      .filter(n => n.depth <= DEFAULT_VISIBLE_DEPTH)
-      .map(n => n.id)
+    let nodes, edges
+    if (fieldLevel) {
+      nodes = res.data?.nodes || []
+      edges = res.data?.edges || []
+      allNodesByDepth.value = nodes
+      allEdgesList.value = edges
+      // 字段级默认全部可见
+      visibleNodeIds.value = nodes.map(n => n.id)
+    } else {
+      // 表级：构建不含临时表的节点和边（穿透临时表）
+      const built = buildWithoutTemp(sourceTable, sourceLayer, impactedByDepth)
+      nodes = built.nodes
+      edges = built.edges
+      allNodesByDepth.value = nodes
+      allEdgesList.value = edges
+      // 默认展示 depth <= 3 的节点
+      visibleNodeIds.value = nodes
+        .filter(n => n.depth <= DEFAULT_VISIBLE_DEPTH)
+        .map(n => n.id)
+    }
     updateVisibleGraph()
 
     // 节点超过 50 个时提示
     if (nodes.length > 50) {
       ElMessage.warning(
-        `当前影响链路包含 ${nodes.length} 个非临时表节点，可点击节点逐级展开`
+        `当前影响链路包含 ${nodes.length} 个节点，可点击节点逐级展开`
       )
     }
   } catch (e) {
@@ -428,13 +456,18 @@ function updateVisibleGraph() {
 }
 
 const handleNodeClick = (node) => {
-  selectedNode.value = node
+  // VueFlow 节点字段在 node.data 下，展开为扁平对象供详情面板使用
+  selectedNode.value = { ...(node.data || {}), id: node.id }
   selectedEdge.value = null
   showDetail.value = true
 }
 
 const handleEdgeClick = (edge) => {
-  selectedEdge.value = edge
+  // VueFlow 边仅带 id/source/target，从全量边列表补全 edgeType/role/expression 等
+  const full = allEdgesList.value.find(
+    e => e.source === edge.source && e.target === edge.target
+  ) || { source: edge.source, target: edge.target }
+  selectedEdge.value = full
   selectedNode.value = null
   showDetail.value = true
 }

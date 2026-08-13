@@ -40,6 +40,9 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
     private TableFieldMappingMapper tableFieldMappingMapper;
 
     @Autowired
+    private TableTransformInputMapper tableTransformInputMapper;
+
+    @Autowired
     private SqlBlockInfoMapper sqlBlockInfoMapper;
 
     @Autowired
@@ -98,6 +101,16 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                         new LambdaQueryWrapper<TableFieldMapping>().in(TableFieldMapping::getLineageId, edgeIds));
             }
 
+            // 加载 Transform 输入字段,按 field_mapping_id 分组
+            Map<Long, List<TableTransformInput>> inputsByMappingId = new HashMap<>();
+            if (!mappings.isEmpty()) {
+                List<Long> mappingIds = mappings.stream().map(TableFieldMapping::getId).collect(Collectors.toList());
+                List<TableTransformInput> transformInputs = tableTransformInputMapper.selectList(
+                        new LambdaQueryWrapper<TableTransformInput>().in(TableTransformInput::getFieldMappingId, mappingIds));
+                inputsByMappingId = transformInputs.stream()
+                        .collect(Collectors.groupingBy(TableTransformInput::getFieldMappingId));
+            }
+
             // 写入 Script 节点
             String scriptFile = procName + ".py";
             mergeScriptNode(scriptFile, procInfo);
@@ -143,27 +156,62 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                 mergeConsumesRelationship(scriptFile, edge.getSourceTable());
             }
 
-            // 写入 Column 节点 + BELONGS_TO 关系 + MAPS_TO 关系
+            // 写入 Column 节点 + BELONGS_TO + Transform 节点 + INPUT_TO/OUTPUT_TO 关系
             for (TableFieldMapping fm : mappings) {
                 TableLineage edge = findEdgeById(edges, fm.getLineageId());
                 if (edge == null) continue;
 
+                // 1. 目标 Column 节点 + BELONGS_TO（逻辑不变）
                 String targetColKey = toColKey(edge.getTargetTable(), fm.getTargetField());
                 mergeColumnNode(targetColKey, fm.getTargetField(), edge.getTargetTable());
                 mergeBelongsRelationship(targetColKey, edge.getTargetTable());
 
-                String sourceTableShort = fm.getSourceTableShort();
-                if (sourceTableShort == null || sourceTableShort.isEmpty()) continue;
-                String sourceTableFull = findTableFullName(edges, sourceTableShort);
-                if (sourceTableFull == null) continue;
-                String sourceFieldName = extractFieldName(fm.getSourceExpr());
-                if (sourceFieldName == null) continue;
-                String sourceColKey = toColKey(sourceTableFull, sourceFieldName);
-                mergeColumnNode(sourceColKey, sourceFieldName, sourceTableFull);
-                mergeBelongsRelationship(sourceColKey, sourceTableFull);
+                // 2. Transform 节点
+                String transformId = generateTransformId(procName, targetColKey);
+                String logicType = fm.getLogicType();
+                if (logicType == null) {
+                    logicType = inferLogicTypeFromExpr(fm.getSourceExpr());
+                }
+                String sqlHint = generateSqlHint(edge, edges);
+                mergeTransformNode(transformId, fm.getSourceExpr(), logicType, sqlHint,
+                                   procName, targetColKey, scriptFile);
 
-                String transType = classifyTransformation(fm.getSourceExpr());
-                createMapsToRelationship(fm, edge, sourceColKey, targetColKey, transType, scriptFile);
+                // 3. INPUT_TO 关系
+                List<TableTransformInput> fmInputs = inputsByMappingId.getOrDefault(fm.getId(), Collections.emptyList());
+                if (fmInputs.isEmpty()) {
+                    // 降级:旧数据无 inputs 但有 source_alias,构造 1 条 INPUT_TO
+                    if (fm.getSourceAlias() != null && fm.getSourceTableShort() != null) {
+                        String sourceTableFull = findTableFullName(edges, fm.getSourceTableShort());
+                        if (sourceTableFull != null) {
+                            String sourceFieldName = extractFieldName(fm.getSourceExpr());
+                            if (sourceFieldName != null) {
+                                String sourceColKey = toColKey(sourceTableFull, sourceFieldName);
+                                mergeColumnNode(sourceColKey, sourceFieldName, sourceTableFull);
+                                mergeBelongsRelationship(sourceColKey, sourceTableFull);
+                                createInputToRelationship(sourceColKey, transformId, "value", fm.getSourceAlias());
+                                log.warn("降级:proc={} target={} 无 inputs,用 source_alias 降级为单源 DIRECT", procName, fm.getTargetField());
+                            }
+                        }
+                    } else {
+                        // 字面量场景:创建虚拟 __literal__ Column 节点
+                        String literalColKey = "__literal__." + transformId;
+                        mergeLiteralColumn(literalColKey, fm.getSourceExpr());
+                        createInputToRelationship(literalColKey, transformId, "value", null);
+                    }
+                } else {
+                    for (TableTransformInput ti : fmInputs) {
+                        if (ti.getSourceTableShort() == null || ti.getSourceTableShort().isEmpty()) continue;
+                        String sourceTableFull = findTableFullName(edges, ti.getSourceTableShort());
+                        if (sourceTableFull == null) continue;
+                        String sourceColKey = toColKey(sourceTableFull, ti.getSourceField());
+                        mergeColumnNode(sourceColKey, ti.getSourceField(), sourceTableFull);
+                        mergeBelongsRelationship(sourceColKey, sourceTableFull);
+                        createInputToRelationship(sourceColKey, transformId, ti.getRole(), ti.getSourceAlias());
+                    }
+                }
+
+                // 4. OUTPUT_TO 关系
+                createOutputToRelationship(transformId, targetColKey);
             }
 
             // DDL 补全字段：对所有涉及的表（源表+目标表，排除临时表），
@@ -185,8 +233,8 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
             // 更新 SOURCE 类型
             updateSourceTableTypes();
 
-            // 清理孤儿节点
-            neo4jClient.query("MATCH (n) WHERE (n:Table OR n:Column) AND NOT (n)--() DELETE n").run();
+            // 清理孤儿节点（含 Transform）
+            neo4jClient.query("MATCH (n) WHERE (n:Table OR n:Column OR n:Transform) AND NOT (n)--() DELETE n").run();
 
             updateSyncLog(logId, "SUCCESS", null);
             log.info("Neo4j 同步成功 proc={}", procName);
@@ -214,15 +262,26 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
     public void deleteProcData(String procName) {
         String scriptFile = procName + ".py";
         try {
+            // 1. 删除该 proc 的 READS 关系（不变）
             neo4jClient.query("MATCH ()-[r:READS {proc_name: $procName}]->() DELETE r")
                     .bind(procName).to("procName").run();
+
+            // 2. 删除该 proc 的 MAPS_TO 关系（过渡期兼容旧数据）
             neo4jClient.query("MATCH ()-[r:MAPS_TO {proc_name: $procName}]->() DELETE r")
                     .bind(procName).to("procName").run();
+
+            // 3. 删除该 proc 的 Transform 节点（DETACH DELETE 清除 INPUT_TO/OUTPUT_TO）
+            neo4jClient.query("MATCH (t:Transform {proc_name: $procName}) DETACH DELETE t")
+                    .bind(procName).to("procName").run();
+
+            // 4. 删除 Script 节点及其关系（不变）
             neo4jClient.query("MATCH (s:Script {file: $scriptFile})-[r]->() DELETE r")
                     .bind(scriptFile).to("scriptFile").run();
             neo4jClient.query("MATCH (s:Script {file: $scriptFile}) DETACH DELETE s")
                     .bind(scriptFile).to("scriptFile").run();
-            neo4jClient.query("MATCH (n) WHERE (n:Table OR n:Column) AND NOT (n)--() DELETE n").run();
+
+            // 5. 清理孤儿节点（范围扩展含 Transform）
+            neo4jClient.query("MATCH (n) WHERE (n:Table OR n:Column OR n:Transform) AND NOT (n)--() DELETE n").run();
         } catch (Exception e) {
             log.warn("删除 Neo4j 旧数据失败 proc={}: {}", procName, e.getMessage());
         }
@@ -408,44 +467,161 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                 .bindAll(params).run();
     }
 
-    private void createMapsToRelationship(TableFieldMapping fm, TableLineage edge,
-                                           String sourceColKey, String targetColKey,
-                                           String transType, String scriptFile) {
-        Map<String, Object> params = new HashMap<>();
-        params.put("sourceColKey", sourceColKey.toLowerCase());
-        params.put("targetColKey", targetColKey.toLowerCase());
-        params.put("procName", fm.getProcName());
-        params.put("sourceExpr", fm.getSourceExpr());
-        params.put("transType", transType);
-        params.put("scriptFile", scriptFile);
+    /**
+     * 生成 Transform 节点 id: md5(proc_name + "|" + target_col_key), 全小写
+     */
+    private String generateTransformId(String procName, String targetColKey) {
+        String raw = procName + "|" + (targetColKey != null ? targetColKey.toLowerCase() : "");
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            byte[] digest = md.digest(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            log.warn("MD5 计算失败,降级 hashCode: {}", e.getMessage());
+            return Integer.toHexString(raw.hashCode());
+        }
+    }
 
-        neo4jClient.query("MATCH (s:Column {col_key: $sourceColKey}), " +
-                "(t:Column {col_key: $targetColKey}) " +
-                "MERGE (s)-[r:MAPS_TO {proc_name: $procName, source_expr: $sourceExpr}]->(t) " +
-                "SET r.transformation_type = $transType, r.script_file = $scriptFile")
+    /**
+     * MERGE Transform 节点
+     */
+    private void mergeTransformNode(String id, String expression, String logicType,
+                                     String sqlHint, String procName,
+                                     String targetColKey, String scriptFile) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("id", id);
+        params.put("expression", expression);
+        params.put("logicType", logicType);
+        params.put("sqlHint", sqlHint);
+        params.put("procName", procName);
+        params.put("targetColKey", targetColKey != null ? targetColKey.toLowerCase() : null);
+        params.put("scriptFile", scriptFile);
+        neo4jClient.query(
+                "MERGE (t:Transform {id: $id}) " +
+                "SET t.expression = $expression, t.logic_type = $logicType, " +
+                "    t.sql_hint = $sqlHint, t.proc_name = $procName, " +
+                "    t.target_col_key = $targetColKey, t.script_file = $scriptFile")
                 .bindAll(params).run();
     }
 
-    public String classifyTransformation(String sourceExpr) {
-        if (sourceExpr == null || sourceExpr.isBlank()) return "direct";
-        String trimmed = sourceExpr.trim();
+    /**
+     * 创建 INPUT_TO 关系: Column -[:INPUT_TO {role, source_alias}]-> Transform
+     */
+    private void createInputToRelationship(String sourceColKey, String transformId,
+                                            String role, String sourceAlias) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("sourceColKey", sourceColKey.toLowerCase());
+        params.put("transformId", transformId);
+        params.put("role", role);
+        params.put("sourceAlias", sourceAlias);
+        String cypher = "MATCH (c:Column {col_key: $sourceColKey}), (t:Transform {id: $transformId}) " +
+                "MERGE (c)-[r:INPUT_TO]->(t) " +
+                "SET r.role = $role" +
+                (sourceAlias != null ? ", r.source_alias = $sourceAlias" : "");
+        neo4jClient.query(cypher).bindAll(params).run();
+    }
 
-        // 字面量: 'N'、123、'2024-01-01'
-        if (trimmed.matches("^'[^']*'$") || trimmed.matches("^\\d+(\\.\\d+)?$")) {
-            return "literal";
+    /**
+     * 创建 OUTPUT_TO 关系: Transform -[:OUTPUT_TO]-> Column
+     */
+    private void createOutputToRelationship(String transformId, String targetColKey) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("transformId", transformId);
+        params.put("targetColKey", targetColKey.toLowerCase());
+        neo4jClient.query(
+                "MATCH (t:Transform {id: $transformId}), (c:Column {col_key: $targetColKey}) " +
+                "MERGE (t)-[:OUTPUT_TO]->(c)")
+                .bindAll(params).run();
+    }
+
+    /**
+     * MERGE 虚拟字面量 Column 节点
+     * col_key = "__literal__." + transformId, 无 BELONGS_TO 关系
+     */
+    private void mergeLiteralColumn(String colKey, String expr) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("colKey", colKey.toLowerCase());
+        params.put("name", expr);
+        params.put("tableFullName", "__literal__");
+        neo4jClient.query(
+                "MERGE (c:Column {col_key: $colKey}) " +
+                "SET c.name = $name, c.table_full_name = $tableFullName")
+                .bindAll(params).run();
+    }
+
+    /**
+     * 生成 sql_hint
+     * 格式: block_seq={n}; via_temp={temp_chain}
+     */
+    private String generateSqlHint(TableLineage edge, List<TableLineage> allEdges) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("block_seq=").append(edge.getSqlBlockSeq());
+
+        String targetShort = extractShortName(edge.getTargetTable());
+        if (isTempTableName(targetShort)) {
+            String tempChain = findTempUpstreamChain(edge.getTargetTable(), allEdges);
+            if (tempChain != null) {
+                sb.append("; via_temp=").append(tempChain);
+            }
         }
-        // 聚合函数: SUM/COUNT/AVG/MAX/MIN(...)
-        if (trimmed.matches("^(?i)(SUM|COUNT|AVG|MAX|MIN|STDDEV|VARIANCE)\\s*\\(.*")) {
-            return "aggregation";
+        return sb.toString();
+    }
+
+    /**
+     * 反查临时表的上游真实表链路
+     * 防环: visited 集合记录已访问表
+     */
+    private String findTempUpstreamChain(String tempTable, List<TableLineage> allEdges) {
+        List<String> chain = new ArrayList<>();
+        Set<String> visited = new HashSet<>();
+        String current = tempTable;
+        while (current != null && !visited.contains(current)) {
+            visited.add(current);
+            chain.add(current);
+            String next = null;
+            for (TableLineage e : allEdges) {
+                if (e.getTargetTable().equalsIgnoreCase(current)) {
+                    String sourceShort = extractShortName(e.getSourceTable());
+                    if (!isTempTableName(sourceShort)) {
+                        chain.add(e.getSourceTable());
+                        return String.join("←", chain);
+                    }
+                    next = e.getSourceTable();
+                    break;
+                }
+            }
+            current = next;
         }
-        // 表达式派生: 含运算符或函数调用，或 CASE WHEN 表达式
-        if (trimmed.matches(".*[+\\-*/].*")
-                || trimmed.matches("^(?i)\\w+\\s*\\(.*")
-                || trimmed.matches("(?i)^CASE\\b.*")) {
-            return "derived";
-        }
-        // 默认: 直接字段引用
-        return "direct";
+        return chain.size() > 1 ? String.join("←", chain) : null;
+    }
+
+    /**
+     * 降级:从 sourceExpr 推断 logic_type
+     * 仅用于兼容旧数据(table_field_mapping 无 logic_type 列时的回退)
+     */
+    private String inferLogicTypeFromExpr(String expr) {
+        if (expr == null || expr.isBlank()) return "DIRECT";
+        String t = expr.trim();
+        if (t.matches("^'[^']*'$") || t.matches("^\\d+(\\.\\d+)?$")) return "LITERAL";
+        if (t.matches("(?i)^CASE\\b.*END$")) return "CASE";
+        String upper = t.toUpperCase();
+        if (upper.startsWith("SUM(")) return "SUM";
+        if (upper.startsWith("COUNT(")) return "COUNT";
+        if (upper.startsWith("AVG(")) return "AVG";
+        if (upper.startsWith("MAX(")) return "MAX";
+        if (upper.startsWith("MIN(")) return "MIN";
+        if (upper.startsWith("NVL(") || upper.startsWith("COALESCE(")) return "NVL";
+        if (t.contains("||") || upper.startsWith("CONCAT(")) return "CONCAT";
+        if (t.contains("+")) return "ADDITION";
+        if (t.contains("-")) return "SUBTRACTION";
+        if (t.contains("*")) return "MULTIPLICATION";
+        if (t.contains("/")) return "DIVISION";
+        if (t.matches("(?i)^\\w+\\s*\\(.*")) return "FUNCTION_OTHER";
+        return "DIRECT";
     }
 
     private String toColKey(String tableFullName, String fieldName) {

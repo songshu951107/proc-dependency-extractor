@@ -50,10 +50,20 @@ public class ImpactAnalysisVO {
         private String id;
         private String label;
         private String type;           // SOURCE / TEMP / TARGET
-        private String nodeLevel;      // TABLE / FIELD
+        private String nodeLevel;      // TABLE / FIELD / TRANSFORM
         private String tableFullName;
         private Integer depth;
         private Boolean isTemp;        // 是否临时表（用于统计时排除）
+        /** Transform 节点专用:表达式原文 */
+        private String expression;
+        /** Transform 节点专用:logic_type */
+        private String logicType;
+        /** Transform 节点专用:SQL 提示 */
+        private String sqlHint;
+        /** Transform 节点专用:所属存储过程名 */
+        private String procName;
+        /** Transform 节点专用:关联脚本文件 */
+        private String scriptFile;
     }
 
     @Data
@@ -68,6 +78,12 @@ public class ImpactAnalysisVO {
         private String sourceExpr;
         private String sourceAlias;
         private String procName;
+        /** 边类型: INPUT_TO / OUTPUT_TO / READS */
+        private String edgeType;
+        /** INPUT_TO 的角色: value / condition */
+        private String role;
+        /** OUTPUT_TO 边的表达式(冗余自 Transform 节点) */
+        private String expression;
     }
 
     @Data

@@ -128,3 +128,32 @@ CREATE TABLE `sql_block_info` (
 
 -- 报表影响分析相关表（详见 report_tables.sql）
 SOURCE report_tables.sql;
+
+-- =============================================
+-- Transform 模型扩展（v2）
+-- =============================================
+
+-- 1. table_field_mapping 新增 logic_type 列
+ALTER TABLE table_field_mapping
+ADD COLUMN logic_type VARCHAR(30) DEFAULT NULL COMMENT 'Transform logic_type(DIRECT/LITERAL/ADDITION/...)' AFTER source_table_short;
+
+-- 2. Transform 输入字段表
+DROP TABLE IF EXISTS `table_transform_input`;
+CREATE TABLE `table_transform_input` (
+    `id`                  BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `field_mapping_id`    BIGINT       NOT NULL COMMENT '关联 table_field_mapping.id',
+    `lineage_id`          BIGINT       NOT NULL COMMENT '关联 table_lineage.id(冗余,便于直接查询)',
+    `proc_name`           VARCHAR(200) NOT NULL COMMENT '存储过程名(冗余)',
+    `target_field`        VARCHAR(200) NOT NULL COMMENT '目标字段名(冗余)',
+    `source_table_short`  VARCHAR(200)          DEFAULT NULL COMMENT '输入字段来源表短名',
+    `source_field`        VARCHAR(200)          DEFAULT NULL COMMENT '输入字段名',
+    `source_alias`        VARCHAR(100)          DEFAULT NULL COMMENT '表达式中该字段别名',
+    `role`                VARCHAR(20)  NOT NULL DEFAULT 'value' COMMENT '输入角色:value/condition',
+    `input_order`         INT          NOT NULL COMMENT '在表达式中出现顺序(从1开始)',
+    `extract_time`        DATETIME     NOT NULL COMMENT '提取时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_field_mapping_id` (`field_mapping_id`),
+    KEY `idx_lineage_id` (`lineage_id`),
+    KEY `idx_proc_name` (`proc_name`),
+    KEY `idx_source_table` (`source_table_short`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Transform 输入字段';

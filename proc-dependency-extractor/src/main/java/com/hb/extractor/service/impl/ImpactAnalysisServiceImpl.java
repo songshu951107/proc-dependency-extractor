@@ -155,7 +155,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
     }
 
     /**
-     * 字段级分析：从已查询的 FIELD 节点和 MAPS_TO 边构建表级 impactedByDepth。
+     * 字段级分析：从已查询的 FIELD/TRANSFORM 节点和 INPUT_TO/OUTPUT_TO 边构建表级 impactedByDepth。
      *
      * 字段节点 id 格式：schema.table.field
      * 实现步骤：
@@ -181,16 +181,42 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             tableFieldsMap.computeIfAbsent(tableFullName, k -> new ArrayList<>()).add(n.getLabel());
         }
 
-        // 2. 表级 impactSource：target 表 -> 首个 source 表
+        // 2. 表级 impactSource: 通过 Transform 节点配对 INPUT_TO + OUTPUT_TO 推导
         Map<String, String> tableImpactSourceMap = new LinkedHashMap<>();
+
+        // 构造 transformId -> outputColKey 映射
+        Map<String, String> transformOutputMap = new HashMap<>();
         for (ImpactAnalysisVO.EdgeVO e : edges) {
-            String[] srcParts = e.getSource().split("\\.");
-            String[] tgtParts = e.getTarget().split("\\.");
-            if (srcParts.length < 3 || tgtParts.length < 3) continue;
-            String srcTable = (srcParts[0] + "." + srcParts[1]).toLowerCase();
-            String tgtTable = (tgtParts[0] + "." + tgtParts[1]).toLowerCase();
+            if ("OUTPUT_TO".equals(e.getEdgeType())) {
+                transformOutputMap.put(e.getSource(), e.getTarget());
+            }
+        }
+
+        // 对每个 INPUT_TO 边, 配对同 Transform 的 OUTPUT_TO, 推导 表A → 表B
+        for (ImpactAnalysisVO.EdgeVO e : edges) {
+            if (!"INPUT_TO".equals(e.getEdgeType())) continue;
+            String transformId = e.getTarget();
+            String outputColKey = transformOutputMap.get(transformId);
+            if (outputColKey == null) continue;
+            String srcTable = extractTableFromId(e.getSource());
+            String tgtTable = extractTableFromId(outputColKey);
+            if (srcTable == null || tgtTable == null) continue;
             if (!tgtTable.equals(sourceTable) && !tableImpactSourceMap.containsKey(tgtTable)) {
                 tableImpactSourceMap.put(tgtTable, srcTable);
+            }
+        }
+
+        // 降级: 边无 edgeType 时(旧数据), 用原 split 逻辑
+        if (tableImpactSourceMap.isEmpty()) {
+            for (ImpactAnalysisVO.EdgeVO e : edges) {
+                String[] srcParts = e.getSource().split("\\.");
+                String[] tgtParts = e.getTarget().split("\\.");
+                if (srcParts.length < 3 || tgtParts.length < 3) continue;
+                String srcTable = (srcParts[0] + "." + srcParts[1]).toLowerCase();
+                String tgtTable = (tgtParts[0] + "." + tgtParts[1]).toLowerCase();
+                if (!tgtTable.equals(sourceTable) && !tableImpactSourceMap.containsKey(tgtTable)) {
+                    tableImpactSourceMap.put(tgtTable, srcTable);
+                }
             }
         }
 
@@ -430,6 +456,40 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         return "-" + rel + "->";
     }
 
+    /**
+     * 构建字段级查询的箭头
+     * 字段跳数 depth 对应关系跳数 depth*2
+     * 注意: cypherMaxHops 通过字符串拼接注入 Cypher（Neo4j 不支持关系跳数参数化）
+     */
+    private String buildFieldArrow(String direction, int cypherMaxHops) {
+        String rel = "[:INPUT_TO|OUTPUT_TO*1.." + cypherMaxHops + "]";
+        if ("UPSTREAM".equals(direction)) return "<-" + rel + "-";
+        if ("BOTH".equals(direction)) return "-" + rel + "-";
+        return "-" + rel + "->";
+    }
+
+    /**
+     * 判断 id 是否为 Transform 节点 id（32 位 md5 hex）
+     */
+    private boolean isTransformId(String id) {
+        if (id == null || id.isEmpty()) return false;
+        return id.matches("^[a-f0-9]{32}$") && !id.contains(".");
+    }
+
+    /**
+     * 从节点 id 提取表全名(schema.table)
+     * - 字段节点: schema.table.field → schema.table
+     * - Transform 节点(md5 hash): 返回 null
+     * - 虚拟字面量节点: 返回 null
+     */
+    private String extractTableFromId(String id) {
+        if (id == null) return null;
+        if (id.startsWith("__literal__")) return null;
+        String[] parts = id.split("\\.");
+        if (parts.length < 3) return null;
+        return (parts[0] + "." + parts[1]).toLowerCase();
+    }
+
     private String extractShortName(String fullName) {
         int idx = fullName.indexOf('.');
         return idx > 0 ? fullName.substring(idx + 1) : fullName;
@@ -438,89 +498,118 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
     private void analyzeFieldLevel(String fieldFullName, String direction, int depth,
                                     List<ImpactAnalysisVO.NodeVO> nodes,
                                     List<ImpactAnalysisVO.EdgeVO> edges) {
-        String arrow = buildArrow(direction, "MAPS_TO", depth);
-        String cypher = "MATCH path = (src:Column {col_key: $key})" + arrow + "(tgt:Column) " +
-                "WITH path, relationships(path) AS rels, nodes(path) AS cols " +
-                "UNWIND range(0, size(rels)-1) AS i " +
-                "WITH cols[i] AS srcCol, rels[i] AS r, cols[i+1] AS tgtCol, i+1 AS depth " +
-                "RETURN srcCol.col_key AS sourceId, srcCol.name AS sourceLabel, " +
-                "tgtCol.col_key AS targetId, tgtCol.name AS targetLabel, " +
-                "depth, r.transformation_type AS transType, r.proc_name AS procName, " +
-                "r.source_expr AS sourceExpr, r.script_file AS scriptFile " +
-                "ORDER BY depth, targetId";
+        int cypherMaxHops = depth * 2;
+        String arrow = buildFieldArrow(direction, cypherMaxHops);
+
+        Set<String> nodeIds = new LinkedHashSet<>();
+        nodeIds.add(fieldFullName);
+
+        // 添加起点 Column 节点
+        ImpactAnalysisVO.NodeVO startNode = new ImpactAnalysisVO.NodeVO();
+        startNode.setId(fieldFullName);
+        String[] parts = fieldFullName.split("\\.");
+        String label = parts.length >= 3 ? parts[2] : fieldFullName;
+        startNode.setLabel(label);
+        startNode.setNodeLevel("FIELD");
+        startNode.setDepth(0);
+        nodes.add(startNode);
 
         try {
-            Collection<Object[]> result = neo4jClient.query(cypher)
+            // 步骤 1:查询所有可达 Column 节点
+            String nodeCypher = "MATCH path = (src:Column {col_key: $key})" + arrow + "(tgt:Column) " +
+                    "WHERE src <> tgt " +
+                    "WITH tgt, min(length(path)) AS minRelLen " +
+                    "RETURN tgt.col_key AS id, tgt.name AS label, " +
+                    "       tgt.table_full_name AS tableFullName, " +
+                    "       (minRelLen + 1) / 2 AS depth " +
+                    "ORDER BY depth, tgt.col_key";
+
+            Collection<ImpactAnalysisVO.NodeVO> colNodes = neo4jClient.query(nodeCypher)
                     .bind(fieldFullName).to("key")
-                    .fetchAs(Object[].class)
-                    .mappedBy((type, record) -> new Object[]{
-                            record.get("sourceId").asString(),
-                            record.get("sourceLabel").asString(),
-                            record.get("targetId").asString(),
-                            record.get("targetLabel").asString(),
-                            (int) record.get("depth").asLong(),
-                            record.get("transType").isNull() ? null : record.get("transType").asString(),
-                            record.get("procName").isNull() ? null : record.get("procName").asString(),
-                            record.get("sourceExpr").isNull() ? null : record.get("sourceExpr").asString(),
-                            record.get("scriptFile").isNull() ? null : record.get("scriptFile").asString()
+                    .fetchAs(ImpactAnalysisVO.NodeVO.class)
+                    .mappedBy((type, record) -> {
+                        ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
+                        n.setId(record.get("id").asString());
+                        n.setLabel(record.get("label").asString());
+                        n.setNodeLevel("FIELD");
+                        n.setTableFullName(record.get("tableFullName").isNull() ? null : record.get("tableFullName").asString());
+                        n.setDepth((int) record.get("depth").asLong());
+                        return n;
                     })
                     .all();
-
-            Set<String> nodeIds = new LinkedHashSet<>();
-            nodeIds.add(fieldFullName);
-
-            // 添加起点节点
-            ImpactAnalysisVO.NodeVO startNode = new ImpactAnalysisVO.NodeVO();
-            startNode.setId(fieldFullName);
-            startNode.setLabel(fieldFullName.split("\\.")[2]);
-            startNode.setNodeLevel("FIELD");
-            startNode.setDepth(0);
-            nodes.add(startNode);
-
-            for (Object[] row : result) {
-                String sourceId = (String) row[0];
-                String sourceLabel = (String) row[1];
-                String targetId = (String) row[2];
-                String targetLabel = (String) row[3];
-                int d = (int) row[4];
-                String transType = (String) row[5];
-                String procName = (String) row[6];
-                String sourceExpr = (String) row[7];
-
-                if (!nodeIds.contains(sourceId)) {
-                    nodeIds.add(sourceId);
-                    ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
-                    n.setId(sourceId);
-                    n.setLabel(sourceLabel);
-                    n.setNodeLevel("FIELD");
-                    n.setDepth(d - 1);
+            for (ImpactAnalysisVO.NodeVO n : colNodes) {
+                if (nodeIds.add(n.getId())) {
                     nodes.add(n);
                 }
-                if (!nodeIds.contains(targetId)) {
-                    nodeIds.add(targetId);
-                    ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
-                    n.setId(targetId);
-                    n.setLabel(targetLabel);
-                    n.setNodeLevel("FIELD");
-                    n.setDepth(d);
-                    nodes.add(n);
+            }
+
+            // 步骤 2:查询所有 Transform 节点 + 边
+            String edgeCypher = "MATCH path = (src:Column {col_key: $key})" + arrow + "(tgt:Column) " +
+                    "WHERE src <> tgt " +
+                    "UNWIND nodes(path) AS n " +
+                    "WITH DISTINCT n " +
+                    "WHERE n:Transform " +
+                    "OPTIONAL MATCH (in:Column)-[rIn:INPUT_TO]->(n) " +
+                    "OPTIONAL MATCH (n)-[rOut:OUTPUT_TO]->(out:Column) " +
+                    "RETURN n.id AS transformId, n.expression AS expression, " +
+                    "       n.logic_type AS logicType, n.sql_hint AS sqlHint, " +
+                    "       n.proc_name AS procName, n.script_file AS scriptFile, " +
+                    "       collect(DISTINCT {colKey: in.col_key, role: rIn.role, alias: rIn.source_alias}) AS inputs, " +
+                    "       out.col_key AS outputColKey";
+
+            Collection<Map<String, Object>> transformRows = neo4jClient.query(edgeCypher)
+                    .bind(fieldFullName).to("key")
+                    .fetch().all();
+
+            for (Map<String, Object> row : transformRows) {
+                String transformId = (String) row.get("transformId");
+
+                // 添加 Transform 节点
+                if (transformId != null && nodeIds.add(transformId)) {
+                    ImpactAnalysisVO.NodeVO tNode = new ImpactAnalysisVO.NodeVO();
+                    tNode.setId(transformId);
+                    tNode.setLabel(transformId);
+                    tNode.setNodeLevel("TRANSFORM");
+                    tNode.setExpression((String) row.get("expression"));
+                    tNode.setLogicType((String) row.get("logicType"));
+                    tNode.setSqlHint((String) row.get("sqlHint"));
+                    tNode.setProcName((String) row.get("procName"));
+                    tNode.setScriptFile((String) row.get("scriptFile"));
+                    nodes.add(tNode);
                 }
 
-                ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
-                edge.setSource(sourceId);
-                edge.setTarget(targetId);
-                edge.setProcName(procName);
-                edge.setSourceExpr(sourceExpr);
-                edges.add(edge);
+                // 添加 INPUT_TO 边
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> inputs = (List<Map<String, Object>>) row.get("inputs");
+                if (inputs != null) {
+                    for (Map<String, Object> input : inputs) {
+                        String colKey = (String) input.get("colKey");
+                        if (colKey == null) continue;
+                        ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
+                        edge.setSource(colKey);
+                        edge.setTarget(transformId);
+                        edge.setEdgeType("INPUT_TO");
+                        edge.setRole((String) input.get("role"));
+                        edge.setSourceAlias((String) input.get("alias"));
+                        edge.setProcName((String) row.get("procName"));
+                        edges.add(edge);
+                    }
+                }
+
+                // 添加 OUTPUT_TO 边
+                String outputColKey = (String) row.get("outputColKey");
+                if (outputColKey != null) {
+                    ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
+                    edge.setSource(transformId);
+                    edge.setTarget(outputColKey);
+                    edge.setEdgeType("OUTPUT_TO");
+                    edge.setExpression((String) row.get("expression"));
+                    edge.setProcName((String) row.get("procName"));
+                    edges.add(edge);
+                }
             }
         } catch (Exception e) {
             log.error("字段级影响查询失败: {}", e.getMessage());
-            ImpactAnalysisVO.NodeVO startNode = new ImpactAnalysisVO.NodeVO();
-            startNode.setId(fieldFullName);
-            startNode.setLabel(fieldFullName.split("\\.")[2]);
-            startNode.setNodeLevel("FIELD");
-            startNode.setDepth(0);
-            nodes.add(startNode);
         }
     }
 
@@ -702,13 +791,16 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         List<ImpactAnalysisVO.NodeVO> nodes = new ArrayList<>();
         List<ImpactAnalysisVO.EdgeVO> edges = new ArrayList<>();
 
-        boolean isFieldLevel = request.getNodeId().chars().filter(c -> c == '.').count() >= 2;
+        boolean isFieldLevel = request.getNodeId().chars().filter(c -> c == '.').count() >= 2
+                || isTransformId(request.getNodeId());
 
         if (isFieldLevel) {
-            String arrow = buildArrow(direction, "MAPS_TO", depth);
+            int cypherMaxHops = depth * 2;
+            String arrow = buildFieldArrow(direction, cypherMaxHops);
             String cypher = "MATCH path = (src:Column {col_key: $key})" + arrow + "(tgt:Column) " +
+                    "WHERE src <> tgt " +
                     "RETURN DISTINCT tgt.col_key AS id, tgt.name AS label, " +
-                    "min(length(path)) AS depth ORDER BY depth, tgt.col_key";
+                    "       (min(length(path)) + 1) / 2 AS depth ORDER BY depth, tgt.col_key";
             try {
                 Collection<ImpactAnalysisVO.NodeVO> result = neo4jClient.query(cypher)
                         .bind(request.getNodeId()).to("key")
@@ -801,8 +893,9 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         stats.setAffectedProcCount(procs.size());
-        // 最大深度：取实际非临时表节点的最大 depth（排除临时表，避免临时表拉高深度）
+        // 最大深度：取实际非临时表节点的最大 depth（排除临时表与 TRANSFORM，避免拉高深度）
         int actualMax = nodes.stream()
+                .filter(n -> !"TRANSFORM".equals(n.getNodeLevel()))
                 .filter(n -> !Boolean.TRUE.equals(n.getIsTemp()))
                 .map(ImpactAnalysisVO.NodeVO::getDepth)
                 .filter(Objects::nonNull)

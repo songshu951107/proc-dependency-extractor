@@ -2,6 +2,9 @@ package com.hb.extractor.parser.dto;
 
 import lombok.Data;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * 字段级映射 DTO（解析期）
  */
@@ -19,4 +22,10 @@ public class FieldMapping {
     private String sourceAlias;
     /** 推断的来源表短名 */
     private String sourceTableShort;
+
+    /** Transform 输入字段列表（拆分 sourceExpr 得到） */
+    private List<TransformInput> inputs = new ArrayList<>();
+
+    /** logic_type 分类（解析期填充，同步期写入 Transform 节点） */
+    private String logicType;
 }

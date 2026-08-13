@@ -1,6 +1,7 @@
 package com.hb.extractor.parser;
 
 import com.hb.extractor.parser.dto.FieldMapping;
+import com.hb.extractor.parser.dto.TransformInput;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -139,6 +140,7 @@ public class FieldMappingExtractor {
                 fm.setSourceExpr(matchedExpr);
                 fm.setTargetField(ddlField);
                 extractAliasAndTable(matchedExpr, aliasMap, fm, singleSourceTable);
+                populateInputsAndLogicType(fm, aliasMap, singleSourceTable);
                 mappings.add(fm);
             }
         } else {
@@ -155,12 +157,256 @@ public class FieldMappingExtractor {
                 fm.setTargetField(targetField);
 
                 extractAliasAndTable(expr, aliasMap, fm, singleSourceTable);
+                populateInputsAndLogicType(fm, aliasMap, singleSourceTable);
 
                 mappings.add(fm);
             }
         }
 
         return mappings;
+    }
+
+    /** CASE WHEN 整体匹配 */
+    private static final Pattern CASE_PATTERN = Pattern.compile(
+            "(?i)CASE\\s+(.+?)\\s+END", Pattern.DOTALL);
+    /** WHEN...THEN 段匹配 */
+    private static final Pattern WHEN_THEN_PATTERN = Pattern.compile(
+            "(?i)WHEN\\s+(.+?)\\s+THEN\\s+(.+?)(?=\\s+(?:WHEN|ELSE|END)\\b)", Pattern.DOTALL);
+    /** ELSE 段匹配 */
+    private static final Pattern ELSE_PATTERN = Pattern.compile(
+            "(?i)ELSE\\s+(.+?)(?=\\s+END\\b)", Pattern.DOTALL);
+
+    /**
+     * 对表达式进行 logic_type 分类
+     * 优先级: LITERAL > CASE > 算术运算(顶层) > 聚合函数 > NVL > CONCAT > FUNCTION_OTHER > DIRECT
+     * 注意: 顶层运算符优先于内层聚合（SUM(x) + y → ADDITION；SUM(x + y) → SUM）
+     *
+     * @param expr SELECT 列表达式原文
+     * @return logic_type 枚举值
+     */
+    public String classifyLogicType(String expr) {
+        if (expr == null || expr.isBlank()) return "DIRECT";
+        String t = stripAsAlias(expr.trim());
+
+        // 1. LITERAL: 字面量
+        if (t.matches("^'[^']*'$")
+                || t.matches("^\\d+(\\.\\d+)?$")
+                || t.matches("(?i)^DATE\\s*'[^']*'$")
+                || t.matches("(?i)^TIMESTAMP\\s*'[^']*'$")
+                || t.matches("^\\{\\w+\\}$")) {
+            return "LITERAL";
+        }
+
+        // 2. CASE
+        if (t.matches("(?i)^CASE\\b.*END$")) return "CASE";
+
+        // 3. 算术运算符（顶层深度 0，按 +、-、*、/ 顺序取首个）
+        //    顶层运算符优先于内层聚合：SUM(x) + y → ADDITION
+        char firstOp = findFirstTopLevelOperator(t);
+        if (firstOp == '+') return "ADDITION";
+        if (firstOp == '-') return "SUBTRACTION";
+        if (firstOp == '*') return "MULTIPLICATION";
+        if (firstOp == '/') return "DIVISION";
+
+        // 4. 聚合函数（无顶层运算符时，如 SUM(x)、SUM(x + y)）
+        String upper = t.toUpperCase();
+        if (upper.startsWith("SUM(")) return "SUM";
+        if (upper.startsWith("COUNT(")) return "COUNT";
+        if (upper.startsWith("AVG(")) return "AVG";
+        if (upper.startsWith("MAX(")) return "MAX";
+        if (upper.startsWith("MIN(")) return "MIN";
+
+        // 5. NVL / COALESCE
+        if (upper.startsWith("NVL(") || upper.startsWith("COALESCE(")) return "NVL";
+
+        // 6. CONCAT: || 或 CONCAT(...)
+        if (t.contains("||") || upper.startsWith("CONCAT(")) return "CONCAT";
+
+        // 7. FUNCTION_OTHER: 其他函数调用
+        if (t.matches("(?i)^\\w+\\s*\\(.*")) return "FUNCTION_OTHER";
+
+        // 8. DIRECT: 默认
+        return "DIRECT";
+    }
+
+    /**
+     * 去除表达式末尾的 "AS alias" 后缀，返回核心表达式
+     * 用于 classifyLogicType / extractInputs，避免 AS alias 干扰分类
+     */
+    private String stripAsAlias(String expr) {
+        if (expr == null) return null;
+        String t = expr.trim();
+        Matcher m = AS_ALIAS_PATTERN.matcher(t);
+        if (m.find()) {
+            return t.substring(0, m.start()).trim();
+        }
+        return t;
+    }
+
+    /**
+     * 在括号深度 0 处扫描首个算术运算符，返回该运算符字符；无则返回 '\0'
+     */
+    private char findFirstTopLevelOperator(String expr) {
+        int depth = 0;
+        for (int i = 0; i < expr.length(); i++) {
+            char c = expr.charAt(i);
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            else if (depth == 0 && "+-*/".indexOf(c) >= 0) {
+                if (i == 0) continue;
+                char prev = expr.charAt(i - 1);
+                if (!"+-*/(".contains(String.valueOf(prev))) {
+                    return c;
+                }
+            }
+        }
+        return '\0';
+    }
+
+    /**
+     * 从表达式中拆分出所有输入字段
+     *
+     * 算法:
+     * 1. CASE WHEN 表达式: WHEN...THEN 之间的字段 → role=condition; THEN/ELSE 后的字段 → role=value
+     * 2. 普通表达式: 提取所有 alias.field, 全部 role=value
+     * 3. 去重: 同一 (sourceTableShort, sourceField) 多次出现 → 保留首次, input_order 取首次位置
+     *    但不同 role 不去重
+     *
+     * @param expr SELECT 列表达式原文
+     * @param aliasMap 别名 → 表短名映射
+     * @param singleSourceTable 预计算的唯一源表（无别名前缀时使用），可为 null
+     * @return TransformInput 列表，按 input_order 排序
+     */
+    public List<TransformInput> extractInputs(String expr, Map<String, String> aliasMap,
+                                               String singleSourceTable) {
+        List<TransformInput> inputs = new ArrayList<>();
+        if (expr == null || expr.isBlank() || aliasMap == null || aliasMap.isEmpty()) {
+            return inputs;
+        }
+        String t = stripAsAlias(expr);
+
+        try {
+            // 判断是否为 CASE WHEN 表达式
+            Matcher caseM = CASE_PATTERN.matcher(t);
+            if (caseM.matches()) {
+                // CASE WHEN: 分别提取 condition 和 value 字段
+                int order = 1;
+                Set<String> seen = new HashSet<>();
+
+                // WHEN...THEN 段: WHEN 后是 condition, THEN 后是 value
+                Matcher whenThenM = WHEN_THEN_PATTERN.matcher(t);
+                while (whenThenM.find()) {
+                    String conditionPart = whenThenM.group(1);
+                    String valuePart = whenThenM.group(2);
+                    // 提取 condition 字段
+                    order = addInputsFromSegment(conditionPart, aliasMap, singleSourceTable,
+                            "condition", inputs, seen, order);
+                    // 提取 value 字段
+                    order = addInputsFromSegment(valuePart, aliasMap, singleSourceTable,
+                            "value", inputs, seen, order);
+                }
+
+                // ELSE 段: value
+                Matcher elseM = ELSE_PATTERN.matcher(t);
+                if (elseM.find()) {
+                    String elsePart = elseM.group(1);
+                    order = addInputsFromSegment(elsePart, aliasMap, singleSourceTable,
+                            "value", inputs, seen, order);
+                }
+            } else {
+                // 普通表达式: 提取所有 alias.field, 全部 role=value
+                Set<String> seen = new HashSet<>();
+                addInputsFromSegment(t, aliasMap, singleSourceTable, "value", inputs, seen, 1);
+            }
+        } catch (Exception e) {
+            log.warn("表达式拆分异常: expr={}, error={}", expr, e.getMessage());
+            return new ArrayList<>();
+        }
+
+        return inputs;
+    }
+
+    /**
+     * 从表达式片段中提取 alias.field 字段并添加到 inputs 列表
+     * 去重: 同一 (sourceTableShort, sourceField) + role 组合只保留首次
+     *
+     * @return 下一个 input_order 值
+     */
+    private int addInputsFromSegment(String segment, Map<String, String> aliasMap,
+                                      String singleSourceTable, String role,
+                                      List<TransformInput> inputs, Set<String> seen, int startOrder) {
+        int order = startOrder;
+        Matcher m = ALIAS_FIELD_PATTERN.matcher(segment);
+        while (m.find()) {
+            String alias = m.group(1);
+            String field = m.group(2);
+            String tableShort = aliasMap.get(alias.toUpperCase());
+
+            // 去重键: tableShort + field + role
+            String dedupKey = (tableShort != null ? tableShort : "null") + "|" + field + "|" + role;
+            if (seen.contains(dedupKey)) continue;
+            seen.add(dedupKey);
+
+            TransformInput ti = new TransformInput();
+            ti.setSourceAlias(alias);
+            ti.setSourceField(field);
+            ti.setSourceTableShort(tableShort);
+            ti.setRole(role);
+            ti.setInputOrder(order++);
+            inputs.add(ti);
+        }
+
+        // 处理无 alias 前缀的字段（如 acct_no），用 singleSourceTable 推断
+        if (singleSourceTable != null) {
+            // 提取独立字段名（不含点号的标识符）
+            // (?!\s*\() 负向前瞻：跳过函数调用名（如 SUM、NVL 后跟括号），避免函数名被误当作字段
+            Pattern standaloneField = Pattern.compile("(?<![\\w.])\\b(\\w+)\\b(?![\\w.])(?!\\s*\\()");
+            Matcher sfm = standaloneField.matcher(segment);
+            while (sfm.find()) {
+                String field = sfm.group(1);
+                // 跳过 SQL 关键字
+                if (field.toUpperCase().matches("(CASE|WHEN|THEN|ELSE|END|AND|OR|NOT|NULL|IS|IN|BETWEEN|LIKE)")) {
+                    continue;
+                }
+                // 跳过纯数字
+                if (field.matches("\\d+")) continue;
+
+                String dedupKey = singleSourceTable + "|" + field + "|" + role;
+                if (seen.contains(dedupKey)) continue;
+                seen.add(dedupKey);
+
+                TransformInput ti = new TransformInput();
+                ti.setSourceAlias(null);
+                ti.setSourceField(field);
+                ti.setSourceTableShort(singleSourceTable);
+                ti.setRole(role);
+                ti.setInputOrder(order++);
+                inputs.add(ti);
+            }
+        }
+
+        return order;
+    }
+
+    /**
+     * 为 FieldMapping 填充 inputs 和 logicType
+     * 在 extract() 构造每个 FieldMapping 后调用
+     *
+     * @param fm 待填充的 FieldMapping
+     * @param aliasMap 别名 → 表短名映射
+     * @param singleSourceTable 预计算的唯一源表，可为 null
+     */
+    private void populateInputsAndLogicType(FieldMapping fm, Map<String, String> aliasMap,
+                                             String singleSourceTable) {
+        if (fm == null || fm.getSourceExpr() == null) {
+            if (fm != null) {
+                fm.setLogicType("DIRECT");
+                fm.setInputs(new ArrayList<>());
+            }
+            return;
+        }
+        fm.setLogicType(classifyLogicType(fm.getSourceExpr()));
+        fm.setInputs(extractInputs(fm.getSourceExpr(), aliasMap, singleSourceTable));
     }
 
     /**

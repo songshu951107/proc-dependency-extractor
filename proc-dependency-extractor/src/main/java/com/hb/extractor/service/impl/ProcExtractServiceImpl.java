@@ -12,15 +12,18 @@ import com.hb.extractor.entity.SqlBlockInfo;
 import com.hb.extractor.entity.TableFieldMapping;
 import com.hb.extractor.entity.TableLineage;
 import com.hb.extractor.entity.TableLineageFilter;
+import com.hb.extractor.entity.TableTransformInput;
 import com.hb.extractor.mapper.ProcInfoMapper;
 import com.hb.extractor.mapper.ProcTableDependencyMapper;
 import com.hb.extractor.mapper.SqlBlockInfoMapper;
 import com.hb.extractor.mapper.TableFieldMappingMapper;
 import com.hb.extractor.mapper.TableLineageFilterMapper;
 import com.hb.extractor.mapper.TableLineageMapper;
+import com.hb.extractor.mapper.TableTransformInputMapper;
 import com.hb.extractor.parser.PyProcParser;
 import com.hb.extractor.parser.dto.FieldMapping;
 import com.hb.extractor.parser.dto.LineageEdge;
+import com.hb.extractor.parser.dto.TransformInput;
 import com.hb.extractor.parser.dto.LineageFilter;
 import com.hb.extractor.parser.dto.LineageParseResult;
 import com.hb.extractor.parser.dto.ProcMetadata;
@@ -66,6 +69,9 @@ public class ProcExtractServiceImpl implements ProcExtractService {
 
     @Autowired
     private TableFieldMappingMapper tableFieldMappingMapper;
+
+    @Autowired
+    private TableTransformInputMapper tableTransformInputMapper;
 
     @Autowired
     private SqlBlockInfoMapper sqlBlockInfoMapper;
@@ -283,6 +289,9 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                 .eq(TableLineage::getProcName, procName));
         tableFieldMappingMapper.delete(new LambdaQueryWrapper<TableFieldMapping>()
                 .eq(TableFieldMapping::getProcName, procName));
+        // 删除 Transform 输入字段
+        tableTransformInputMapper.delete(new LambdaQueryWrapper<TableTransformInput>()
+                .eq(TableTransformInput::getProcName, procName));
         sqlBlockInfoMapper.delete(new LambdaQueryWrapper<SqlBlockInfo>()
                 .eq(SqlBlockInfo::getProcName, procName));
 
@@ -395,6 +404,8 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                     .eq(TableLineageFilter::getProcName, procName));
             tableFieldMappingMapper.delete(new LambdaQueryWrapper<TableFieldMapping>()
                     .eq(TableFieldMapping::getProcName, procName));
+            tableTransformInputMapper.delete(new LambdaQueryWrapper<TableTransformInput>()
+                    .eq(TableTransformInput::getProcName, procName));
             sqlBlockInfoMapper.delete(new LambdaQueryWrapper<SqlBlockInfo>()
                     .eq(SqlBlockInfo::getProcName, procName));
 
@@ -450,8 +461,27 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                 record.setSourceExpr(fm.getSourceExpr());
                 record.setSourceAlias(fm.getSourceAlias());
                 record.setSourceTableShort(fm.getSourceTableShort());
+                record.setLogicType(fm.getLogicType());
                 record.setExtractTime(now);
                 tableFieldMappingMapper.insert(record);
+
+                // 插入 Transform 输入字段
+                if (fm.getInputs() != null) {
+                    for (TransformInput ti : fm.getInputs()) {
+                        TableTransformInput inputRecord = new TableTransformInput();
+                        inputRecord.setFieldMappingId(record.getId());
+                        inputRecord.setLineageId(record.getLineageId());
+                        inputRecord.setProcName(procName);
+                        inputRecord.setTargetField(fm.getTargetField());
+                        inputRecord.setSourceTableShort(ti.getSourceTableShort());
+                        inputRecord.setSourceField(ti.getSourceField());
+                        inputRecord.setSourceAlias(ti.getSourceAlias());
+                        inputRecord.setRole(ti.getRole());
+                        inputRecord.setInputOrder(ti.getInputOrder());
+                        inputRecord.setExtractTime(now);
+                        tableTransformInputMapper.insert(inputRecord);
+                    }
+                }
             }
 
             // 插入 SQL 块信息

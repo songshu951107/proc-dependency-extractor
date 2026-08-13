@@ -10,6 +10,9 @@
       <template #node-impactNode="props">
         <ImpactNode :id="props.id" :data="props.data" />
       </template>
+      <template #node-transformNode="props">
+        <ImpactNode :id="props.id" :data="props.data" />
+      </template>
     </VueFlow>
     <div v-if="nodes.length === 0" class="empty-tip">
       <el-empty description="未找到影响链路" :image-size="60" />
@@ -108,7 +111,7 @@ function rebuildGraph() {
       id,
       position: { x: dagreNode.x - 110, y: dagreNode.y - 30 },
       data: node,
-      type: 'impactNode',
+      type: node.nodeLevel === 'TRANSFORM' ? 'transformNode' : 'impactNode',
       // 筛选时：命中=高亮，未命中（链路祖先）=变淡；无筛选=正常
       classed: filtering ? (matched ? 'node-highlight' : 'node-dim') : ''
     }
@@ -116,17 +119,23 @@ function rebuildGraph() {
 
   edges.value = g.edges().map(e => {
     const bothMatched = isMatched(e.v) && isMatched(e.w)
+    const edgeData = graphStore.edgeMap.get(`${e.v}-${e.w}`) || {}
+    const isInputTo = edgeData.edgeType === 'INPUT_TO'
+    const isOutputTo = edgeData.edgeType === 'OUTPUT_TO'
     return {
       id: `${e.v}-${e.w}`,
       source: e.v,
       target: e.w,
       type: 'smoothstep',
-      animated: filtering ? bothMatched : true,
+      animated: filtering ? bothMatched : !isInputTo,
       classed: filtering ? (bothMatched ? 'edge-highlight' : 'edge-dim') : '',
       style: {
-        stroke: filtering ? (bothMatched ? '#1890ff' : '#64748b') : '#64748b',
+        stroke: filtering
+          ? (bothMatched ? '#1890ff' : '#64748b')
+          : (isInputTo ? '#94a3b8' : (isOutputTo ? '#3b82f6' : '#64748b')),
         strokeWidth: filtering && bothMatched ? 2 : 1.5,
-        opacity: filtering ? (bothMatched ? 1 : 0.15) : 1
+        opacity: filtering ? (bothMatched ? 1 : 0.15) : 1,
+        strokeDasharray: isInputTo ? '5,5' : 'none'
       }
     }
   })
@@ -149,7 +158,12 @@ async function expandNode(nodeId) {
           label: n.label || n.id,
           layer: n.layer,
           isTemp: n.isTemp,
-          matchedColumns: n.matchedColumns || []
+          matchedColumns: n.matchedColumns || [],
+          nodeLevel: n.nodeLevel,
+          expression: n.expression,
+          logicType: n.logicType,
+          sqlHint: n.sqlHint,
+          procName: n.procName
         })
         changed = true
       }
@@ -157,7 +171,15 @@ async function expandNode(nodeId) {
     newEdges.forEach(e => {
       const key = `${e.source}-${e.target}`
       if (!graphStore.edgeMap.has(key)) {
-        graphStore.edgeMap.set(key, { source: e.source, target: e.target })
+        graphStore.edgeMap.set(key, {
+          source: e.source,
+          target: e.target,
+          edgeType: e.edgeType,
+          role: e.role,
+          expression: e.expression,
+          sourceAlias: e.sourceAlias,
+          procName: e.procName
+        })
         changed = true
       }
     })
@@ -181,14 +203,27 @@ function loadInitial(initialNodes, initialEdges) {
       label: n.label || n.shortName || n.id || n.name,
       layer: n.layer,
       isTemp: n.isTemp || n.temp,
-      matchedColumns: n.matchedColumns || []
+      matchedColumns: n.matchedColumns || [],
+      nodeLevel: n.nodeLevel,
+      expression: n.expression,
+      logicType: n.logicType,
+      sqlHint: n.sqlHint,
+      procName: n.procName
     })
   })
   initialEdges.forEach(e => {
     const src = e.source || e.impactSource
     const tgt = e.target || e.name
     if (src && tgt) {
-      graphStore.edgeMap.set(`${src}-${tgt}`, { source: src, target: tgt })
+      graphStore.edgeMap.set(`${src}-${tgt}`, {
+        source: src,
+        target: tgt,
+        edgeType: e.edgeType,
+        role: e.role,
+        expression: e.expression,
+        sourceAlias: e.sourceAlias,
+        procName: e.procName
+      })
     }
   })
 

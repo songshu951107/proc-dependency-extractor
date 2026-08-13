@@ -3,6 +3,7 @@ package com.hb.extractor.service;
 import com.hb.extractor.dto.SyncResult;
 import com.hb.extractor.entity.*;
 import com.hb.extractor.mapper.*;
+import com.hb.extractor.parser.DdlParser;
 import com.hb.extractor.service.impl.Neo4jSyncServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,9 +36,13 @@ class Neo4jSyncServiceTest {
     @Mock
     private TableFieldMappingMapper tableFieldMappingMapper;
     @Mock
+    private TableTransformInputMapper tableTransformInputMapper;
+    @Mock
     private SqlBlockInfoMapper sqlBlockInfoMapper;
     @Mock
     private Neo4jSyncLogMapper neo4jSyncLogMapper;
+    @Mock
+    private DdlParser ddlParser;
 
     @InjectMocks
     private Neo4jSyncServiceImpl syncService;
@@ -91,35 +96,58 @@ class Neo4jSyncServiceTest {
         assertDoesNotThrow(() -> syncService.deleteProcData("test_proc"));
     }
 
+    /**
+     * 验证 syncProc 在有字段映射 + Transform 输入时，会创建 Transform/INPUT_TO/OUTPUT_TO
+     * （而非旧的 MAPS_TO）。重点验证不抛异常且以 SUCCESS 收尾。
+     */
     @Test
-    void testClassifyTransformation_Direct() {
-        assertEquals("direct", syncService.classifyTransformation("T01.acct_id"));
-        assertEquals("direct", syncService.classifyTransformation(null));
-        assertEquals("direct", syncService.classifyTransformation(""));
-        assertEquals("direct", syncService.classifyTransformation("   "));
-    }
+    void testSyncProc_TransformNodeSync_Success() {
+        ProcInfo procInfo = new ProcInfo();
+        procInfo.setProcName("test_proc");
+        procInfo.setUpdateTarget("CDM.TEST_TABLE");
 
-    @Test
-    void testClassifyTransformation_Literal() {
-        assertEquals("literal", syncService.classifyTransformation("'N'"));
-        assertEquals("literal", syncService.classifyTransformation("123"));
-        assertEquals("literal", syncService.classifyTransformation("2024"));
-        assertEquals("literal", syncService.classifyTransformation("'2024-01-01'"));
-    }
+        TableLineage edge = new TableLineage();
+        edge.setId(1L);
+        edge.setProcName("test_proc");
+        edge.setSourceTable("FDM.SRC_TABLE");
+        edge.setSourceTableShort("SRC_TABLE");
+        edge.setTargetTable("CDM.TEST_TABLE");
+        edge.setTargetTableShort("TEST_TABLE");
+        edge.setTargetIsTemp(0);
+        edge.setOperation("INSERT_SELECT");
+        edge.setSqlBlockSeq(1);
 
-    @Test
-    void testClassifyTransformation_Aggregation() {
-        assertEquals("aggregation", syncService.classifyTransformation("SUM(T01.amt)"));
-        assertEquals("aggregation", syncService.classifyTransformation("COUNT(*)"));
-        assertEquals("aggregation", syncService.classifyTransformation("AVG(T01.amt)"));
-        assertEquals("aggregation", syncService.classifyTransformation("MAX(T01.amt)"));
-        assertEquals("aggregation", syncService.classifyTransformation("MIN(T01.amt)"));
-    }
+        TableFieldMapping fm = new TableFieldMapping();
+        fm.setId(10L);
+        fm.setLineageId(1L);
+        fm.setProcName("test_proc");
+        fm.setTargetField("acct_no");
+        fm.setFieldOrder(1);
+        fm.setSourceExpr("T01.acct_no");
+        fm.setSourceAlias("T01");
+        fm.setSourceTableShort("SRC_TABLE");
+        fm.setLogicType("DIRECT");
 
-    @Test
-    void testClassifyTransformation_Derived() {
-        assertEquals("derived", syncService.classifyTransformation("T01.amt + T02.fee"));
-        assertEquals("derived", syncService.classifyTransformation("COALESCE(T01.amt, 0)"));
-        assertEquals("derived", syncService.classifyTransformation("CASE WHEN T01.flag = '1' THEN 'A' ELSE 'B' END"));
+        TableTransformInput input = new TableTransformInput();
+        input.setFieldMappingId(10L);
+        input.setSourceTableShort("SRC_TABLE");
+        input.setSourceField("acct_no");
+        input.setSourceAlias("T01");
+        input.setRole("value");
+        input.setInputOrder(1);
+
+        when(procInfoMapper.selectOne(any())).thenReturn(procInfo);
+        when(tableLineageMapper.selectList(any())).thenReturn(Collections.singletonList(edge));
+        when(tableFieldMappingMapper.selectList(any())).thenReturn(Collections.singletonList(fm));
+        when(tableTransformInputMapper.selectList(any())).thenReturn(Collections.singletonList(input));
+        when(neo4jSyncLogMapper.selectById(any())).thenReturn(null);
+        when(ddlParser.parse(anyString())).thenReturn(Collections.emptyList());
+
+        SyncResult result = syncService.syncProc("test_proc");
+
+        assertTrue(result.isSuccess());
+        // 应执行多次 Cypher 写入（Transform 节点 + INPUT_TO + OUTPUT_TO 等）
+        verify(neo4jClient, atLeast(5)).query(anyString());
+        verify(neo4jSyncLogMapper).updateById(argThat((Neo4jSyncLog log) -> "SUCCESS".equals(log.getSyncStatus())));
     }
 }

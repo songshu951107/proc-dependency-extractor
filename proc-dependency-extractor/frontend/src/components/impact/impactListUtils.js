@@ -120,10 +120,11 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
  * 表级数据构建（规格 §4.2，迁移并改造原 ImpactAnalysis.vue buildWithoutTemp）。
  * 在全图（含临时表）上算最长路径（临时表透明=穿透），返回行+全图（弹窗链路需要含临时表）。
  * @param impactedByDepth 后端 result.impactedByDepth
+ * @param sourceLayer 源表层级（可选；源表不在 impactedByDepth 中时用于补充节点）
  * @return { rows: [{procName, table, level, targetId}], nodes, edges, depthMap }
  *   nodes/edges 为含临时表的全图（节点含 temp/scriptFile/shortName），行只含非临时表
  */
-export function buildTableImpactData(sourceTable, impactedByDepth) {
+export function buildTableImpactData(sourceTable, impactedByDepth, sourceLayer) {
   // 全图邻接与信息
   const tableInfoMap = {}
   const allEdges = []
@@ -141,6 +142,18 @@ export function buildTableImpactData(sourceTable, impactedByDepth) {
     scriptFile: tableInfoMap[name].scriptFile,
     nodeLevel: 'TABLE'
   }))
+  // 后端 impactedByDepth 不含源表（Cypher WHERE src <> downstream），但 allEdges 含以源表为起点的边，
+  // 需补充源表节点，否则弹窗链路图缺源表且首跳边引用悬空
+  if (!tableInfoMap[sourceTable]) {
+    allNodes.unshift({
+      id: sourceTable,
+      label: sourceTable,
+      layer: sourceLayer || 'UNKNOWN',
+      temp: false,
+      scriptFile: undefined,
+      nodeLevel: 'TABLE'
+    })
+  }
   const nodeMap = new Map(allNodes.map(n => [n.id, n]))
   const depthMap = computeLongestDepth(allNodes, allEdges, sourceTable, n => n.temp)
 

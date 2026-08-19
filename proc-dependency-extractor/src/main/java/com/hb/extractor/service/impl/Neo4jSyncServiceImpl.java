@@ -183,7 +183,7 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                     if (fm.getSourceAlias() != null && fm.getSourceTableShort() != null) {
                         String sourceTableFull = findTableFullName(edges, fm.getSourceTableShort());
                         if (sourceTableFull != null) {
-                            String sourceFieldName = extractFieldName(fm.getSourceExpr());
+                            String sourceFieldName = extractFieldFromExpr(fm.getSourceExpr());
                             if (sourceFieldName != null) {
                                 String sourceColKey = toColKey(sourceTableFull, sourceFieldName);
                                 mergeColumnNode(sourceColKey, sourceFieldName, sourceTableFull);
@@ -519,9 +519,8 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
         params.put("role", role);
         params.put("sourceAlias", sourceAlias);
         String cypher = "MATCH (c:Column {col_key: $sourceColKey}), (t:Transform {id: $transformId}) " +
-                "MERGE (c)-[r:INPUT_TO]->(t) " +
-                "SET r.role = $role" +
-                (sourceAlias != null ? ", r.source_alias = $sourceAlias" : "");
+                "MERGE (c)-[r:INPUT_TO {role: $role}]->(t) " +
+                (sourceAlias != null ? "SET r.source_alias = $sourceAlias" : "");
         neo4jClient.query(cypher).bindAll(params).run();
     }
 
@@ -588,7 +587,7 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                     String sourceShort = extractShortName(e.getSourceTable());
                     if (!isTempTableName(sourceShort)) {
                         chain.add(e.getSourceTable());
-                        return String.join("←", chain);
+                        return String.join(" <- ", chain);
                     }
                     next = e.getSourceTable();
                     break;
@@ -596,7 +595,7 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
             }
             current = next;
         }
-        return chain.size() > 1 ? String.join("←", chain) : null;
+        return chain.size() > 1 ? String.join(" <- ", chain) : null;
     }
 
     /**
@@ -634,7 +633,7 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
         return idx > 0 ? fullName.substring(idx + 1) : fullName;
     }
 
-    private String extractFieldName(String expr) {
+    private String extractFieldFromExpr(String expr) {
         if (expr == null) return null;
         Matcher m = FIELD_PATTERN.matcher(expr);
         if (m.find()) return m.group(2);

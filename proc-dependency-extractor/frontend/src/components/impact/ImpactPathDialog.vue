@@ -11,7 +11,7 @@
   >
     <div class="path-dialog-body">
       <div class="summary" v-if="row">
-        <el-tag size="small">{{ row.reason }}</el-tag>
+        <el-tag v-if="row.reason" size="small">{{ row.reason }}</el-tag>
         <span class="summary-text">
           {{ sourceId }} →（{{ row.level }} 跳）→ {{ row.table }}{{ row.field ? '.' + row.field : '' }}
         </span>

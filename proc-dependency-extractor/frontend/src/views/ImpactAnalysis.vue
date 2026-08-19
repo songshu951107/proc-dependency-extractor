@@ -137,14 +137,14 @@ const handleAnalyze = async (request) => {
       impactRows.value = buildFieldImpactRows(nodes, edges, sourceNodeId.value)
       pathDialogNodes.value = nodes
       pathDialogEdges.value = edges
-      exportFileName.value = `影响分析_${request.schema}.${request.tableShortName}.${request.fieldName}`
+      exportFileName.value = `影响分析_${request.schema}.${request.tableShortName}.${request.fieldName}_${request.direction || 'DOWNSTREAM'}`
     } else {
       const built = buildTableImpactData(res.data?.sourceTable, res.data?.impactedByDepth || {}, res.data?.sourceLayer)
       sourceNodeId.value = res.data?.sourceTable || ''
       impactRows.value = built.rows
       pathDialogNodes.value = built.nodes
       pathDialogEdges.value = built.edges
-      exportFileName.value = `影响分析_${res.data?.sourceTable || ''}`
+      exportFileName.value = `影响分析_${res.data?.sourceTable || ''}_${request.direction || 'DOWNSTREAM'}`
     }
   } catch (e) {
     neo4jError.value = e.message || '查询失败'
@@ -154,6 +154,13 @@ const handleAnalyze = async (request) => {
   }
 }
 
+// 分析源表（字段级取 col_key 前两段），作为脚本片段弹窗的上游影响来源
+const sourceTableLabel = computed(() => {
+  const id = sourceNodeId.value || ''
+  const parts = id.split('.')
+  return parts.length >= 3 ? `${parts[0]}.${parts[1]}` : id
+})
+
 const handleRowViewScript = (row) => {
   if (!row.procName || row.procName === '-') {
     ElMessage.warning('该表无关联脚本')
@@ -162,7 +169,7 @@ const handleRowViewScript = (row) => {
   scriptModalData.value = {
     name: row.table,
     scriptFile: row.procName,
-    impactSource: row.table
+    impactSource: sourceTableLabel.value
   }
   scriptModalVisible.value = true
 }

@@ -5,6 +5,7 @@ import com.hb.extractor.parser.dto.TransformInput;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -15,10 +16,36 @@ import static org.junit.jupiter.api.Assertions.*;
 class FieldMappingExtractorTest {
 
     private FieldMappingExtractor extractor;
+    private JsqlSqlAnalyzer analyzer;
+    private SqlPlaceholderReplacer placeholderReplacer;
 
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
+        placeholderReplacer = new SqlPlaceholderReplacer();
+        analyzer = new JsqlSqlAnalyzer();
+        // JsqlSqlAnalyzer 的 @Autowired placeholderReplacer 字段需手动注入
+        setField(analyzer, "placeholderReplacer", placeholderReplacer);
+
         extractor = new FieldMappingExtractor();
+        // FieldMappingExtractor 的 @Autowired analyzer / placeholderReplacer 字段需手动注入
+        setField(extractor, "analyzer", analyzer);
+        setField(extractor, "placeholderReplacer", placeholderReplacer);
+    }
+
+    /** 反射注入 private 字段（@Autowired 字段在单元测试中需手动注入） */
+    private static void setField(Object target, String fieldName, Object value) throws Exception {
+        Field f = null;
+        Class<?> clazz = target.getClass();
+        while (clazz != null && f == null) {
+            try {
+                f = clazz.getDeclaredField(fieldName);
+            } catch (NoSuchFieldException ignored) {
+                clazz = clazz.getSuperclass();
+            }
+        }
+        if (f == null) throw new IllegalStateException("字段未找到: " + fieldName);
+        f.setAccessible(true);
+        f.set(target, value);
     }
 
     private Map<String, String> aliasMap() {
@@ -27,6 +54,11 @@ class FieldMappingExtractorTest {
         m.put("T01", "F_AC_CRBS_DEPOSIT_ACCT");
         m.put("TCA", "F_AC_CRBS_CUST_ACCT_NO_COMPAR_RELA");
         return m;
+    }
+
+    /** 创建已注入 analyzer / placeholderReplacer 的 extractor（tableColumnMetaMapper 不注入，保持为 null） */
+    private FieldMappingExtractor createExtractor() {
+        return extractor;
     }
 
     @Test
@@ -49,7 +81,8 @@ class FieldMappingExtractorTest {
 
     @Test
     void testTempTableWithAsAlias() {
-        String sql = "CREATE TEMPORARY TABLE VT_X \n" +
+        // JsqlParser 4.9 要求 CREATE TABLE AS SELECT 标准语法（GBase 的无 AS 方言需 preprocess 补齐）
+        String sql = "CREATE TEMPORARY TABLE VT_X AS \n" +
                 "SELECT T01.liabi_acct_no AS acct_no, T01.cust_id AS cust_no, CASE WHEN T01.amt > 0 THEN 'Y' ELSE 'N' END AS flag \n" +
                 "FROM F_AC_CRBS_DEPOSIT_ACCT T01";
         List<FieldMapping> result = extractor.extract(sql, "VT_X", aliasMap(), null);
@@ -128,7 +161,7 @@ class FieldMappingExtractorTest {
     @Test
     void testClassifyLogicType_Nvl() {
         assertEquals("NVL", extractor.classifyLogicType("NVL(T01.a, T02.b)"));
-        assertEquals("NVL", extractor.classifyLogicType("COALESCE(T01.a, T02.b, T03.c)"));
+        assertEquals("COALESCE", extractor.classifyLogicType("COALESCE(T01.a, T02.b, T03.c)"));
     }
 
     @Test
@@ -147,9 +180,9 @@ class FieldMappingExtractorTest {
 
     @Test
     void testClassifyLogicType_MixedArithmetic() {
-        // 混合运算取首个运算符
-        assertEquals("ADDITION", extractor.classifyLogicType("T01.amt + T02.fee - T03.tax"));
-        assertEquals("SUBTRACTION", extractor.classifyLogicType("T01.amt - T02.fee + T03.tax"));
+        // AST 顶层运算符（同优先级左结合：(a+b)-c 顶层为 Subtraction，(a-b)+c 顶层为 Addition）
+        assertEquals("SUBTRACTION", extractor.classifyLogicType("T01.amt + T02.fee - T03.tax"));
+        assertEquals("ADDITION", extractor.classifyLogicType("T01.amt - T02.fee + T03.tax"));
     }
 
     @Test
@@ -311,6 +344,43 @@ class FieldMappingExtractorTest {
         assertEquals("b", inputs.get(1).getSourceField());
     }
 
+    @Test
+    void testExtractInputs_ConcatOperator() {
+        // CONCAT 运算符 || 拆分
+        Map<String, String> aMap = new HashMap<>();
+        aMap.put("T01", "F_AC_CRBS_DEPOSIT_ACCT");
+        List<TransformInput> inputs = extractor.extractInputs("T01.prefix || T01.code", aMap, null);
+        assertEquals(2, inputs.size());
+        assertEquals("prefix", inputs.get(0).getSourceField());
+        assertEquals("code", inputs.get(1).getSourceField());
+        assertEquals("T01", inputs.get(0).getSourceAlias());
+    }
+
+    @Test
+    void testExtractInputs_ConcatFunction() {
+        // CONCAT 函数拆分
+        Map<String, String> aMap = new HashMap<>();
+        aMap.put("T01", "F_AC_CRBS_DEPOSIT_ACCT");
+        List<TransformInput> inputs = extractor.extractInputs("CONCAT(T01.prefix, T01.code)", aMap, null);
+        assertEquals(2, inputs.size());
+        assertEquals("prefix", inputs.get(0).getSourceField());
+        assertEquals("code", inputs.get(1).getSourceField());
+    }
+
+    @Test
+    void testExtractInputs_MixedArithmetic() {
+        // 混合运算多运算符拆分:所有字段都应被提取
+        Map<String, String> aMap = new HashMap<>();
+        aMap.put("T01", "F_AC_CRBS_DEPOSIT_ACCT");
+        aMap.put("T02", "F_AC_CRBS_CUST_INFO");
+        aMap.put("T03", "F_AC_CRBS_LOAN_ACCT");
+        List<TransformInput> inputs = extractor.extractInputs("T01.a + T02.b - T03.c", aMap, null);
+        assertEquals(3, inputs.size());
+        assertEquals("a", inputs.get(0).getSourceField());
+        assertEquals("b", inputs.get(1).getSourceField());
+        assertEquals("c", inputs.get(2).getSourceField());
+    }
+
     // ===== 集成测试 =====
 
     @Test
@@ -337,5 +407,35 @@ class FieldMappingExtractorTest {
         // 第3列: LITERAL, 0个输入
         assertEquals("LITERAL", result.get(2).getLogicType());
         assertTrue(result.get(2).getInputs().isEmpty());
+    }
+
+    // ===== ON/WHERE 条件字段 INPUT_TO 增强 =====
+
+    @Test
+    void testConditionFields_JoinOnAddedToInputs() throws Exception {
+        FieldMappingExtractor extractor = createExtractor();
+        String sql = "INSERT INTO cdm.target_tbl SELECT t1.a, t1.b FROM tab1 t1 LEFT JOIN tab2 t2 ON t1.a = t2.b";
+        java.util.Map<String, String> aliasMap = new java.util.HashMap<>();
+        aliasMap.put("T1", "tab1");
+        aliasMap.put("T2", "tab2");
+
+        List<com.hb.extractor.parser.dto.FieldMapping> result = extractor.extract(
+            sql, "target_tbl", aliasMap, java.util.Arrays.asList("a", "b"));
+
+        // 应有 2 个 FieldMapping (a, b)
+        assertEquals(2, result.size());
+        // 每个 FieldMapping 应有条件字段的 TransformInput
+        for (com.hb.extractor.parser.dto.FieldMapping fm : result) {
+            boolean hasJoinCondition = fm.getInputs().stream()
+                .anyMatch(ti -> "join_condition".equals(ti.getRole()));
+            assertTrue(hasJoinCondition, "FieldMapping " + fm.getTargetField() + " 应包含 join_condition 输入");
+        }
+        // 验证 T2.b 条件字段的 sourceTableShort 正确解析
+        boolean hasT2B = result.get(0).getInputs().stream()
+            .anyMatch(ti -> "T2".equals(ti.getSourceAlias())
+                         && "b".equals(ti.getSourceField())
+                         && "tab2".equals(ti.getSourceTableShort())
+                         && "join_condition".equals(ti.getRole()));
+        assertTrue(hasT2B, "应有 T2.b 的 join_condition 输入, sourceTableShort=tab2");
     }
 }

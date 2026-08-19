@@ -186,6 +186,11 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             analyzeTableLevel(tableFullName, direction, depth, nodes, edges);
         }
 
+        // 删除不与任何有 depth 节点连通的 depth=null 辅助节点（ensureFieldNode 补全的
+        // 非路径 FieldMapping 条件字段等），在组装 VO 与统计前清理（表级分析节点均有
+        // depth 或为 TABLE 级，此调用为 no-op）
+        removeDanglingAuxNodes(nodes, edges);
+
         vo.setNodes(nodes);
         vo.setEdges(edges);
         vo.setStats(buildStats(nodes, edges, depth));
@@ -799,6 +804,41 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         n.setTableFullName(p.length >= 2 ? (p[0] + "." + p[1]).toLowerCase() : null);
         n.setDepth(null);
         nodes.add(n);
+    }
+
+    /**
+     * 清理悬空辅助节点：删除 depth=null 且不与任何有 depth 节点连通的 FIELD/TRANSFORM 节点。
+     * 这些节点来自非路径 FieldMapping 的条件字段补全（ensureFieldNode），不在影响范围内。
+     * 迭代保留直至不动点：与保留节点有边相连的 depth=null 节点必须保留
+     * （如 CASE Transform 的输入字段、路径上条件字段的解释性输入），其邻居也可能因此保留。
+     * 注意：TABLE 级节点即使 depth=null 也直接保留（表级视图依赖表节点）。
+     */
+    private void removeDanglingAuxNodes(List<ImpactAnalysisVO.NodeVO> nodes,
+                                        List<ImpactAnalysisVO.EdgeVO> edges) {
+        // 1. 初始保留集：有 depth 的节点 + 非 FIELD/TRANSFORM 层级节点
+        Set<String> keep = nodes.stream()
+                .filter(n -> n.getDepth() != null
+                        || (!"FIELD".equals(n.getNodeLevel()) && !"TRANSFORM".equals(n.getNodeLevel())))
+                .map(ImpactAnalysisVO.NodeVO::getId)
+                .collect(Collectors.toSet());
+        // 2. 迭代：depth=null 的 FIELD/TRANSFORM 节点若有一条边连到保留集则入保留集
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (ImpactAnalysisVO.NodeVO n : nodes) {
+                if (keep.contains(n.getId())) continue;
+                boolean touchesKept = edges.stream().anyMatch(e ->
+                        (n.getId().equals(e.getSource()) && keep.contains(e.getTarget()))
+                        || (n.getId().equals(e.getTarget()) && keep.contains(e.getSource())));
+                if (touchesKept) {
+                    keep.add(n.getId());
+                    changed = true;
+                }
+            }
+        }
+        // 3. 删除未保留的节点 + 任一端未保留的边
+        nodes.removeIf(n -> !keep.contains(n.getId()));
+        edges.removeIf(e -> !keep.contains(e.getSource()) || !keep.contains(e.getTarget()));
     }
 
     private void collectEdges(String startId, String direction, int depth, String relType,

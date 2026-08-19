@@ -16,10 +16,9 @@
             </el-table-column>
             <el-table-column prop="table" label="受影响表" min-width="220" show-overflow-tooltip />
             <el-table-column v-if="isFieldLevel" prop="field" label="受影响字段" min-width="140" show-overflow-tooltip />
-            <el-table-column v-if="isFieldLevel" prop="reason" label="影响原因" width="110" align="center">
+            <el-table-column v-if="isFieldLevel" label="影响原因" width="150" align="center">
               <template #default="{ row }">
-                <el-tag v-if="row.reason !== '直接来源'" type="warning" size="small">{{ row.reason }}</el-tag>
-                <el-tag v-else type="success" size="small">直接来源</el-tag>
+                <el-tag v-for="r in row.reasons" :key="r" :type="r === '直接来源' ? 'success' : 'warning'" size="small" style="margin: 2px">{{ r }}</el-tag>
               </template>
             </el-table-column>
             <el-table-column label="操作" width="90" align="center">
@@ -71,7 +70,7 @@ function exportAll() {
     ? ['层级', '受影响脚本', '受影响表', '受影响字段', '影响原因']
     : ['层级', '受影响脚本', '受影响表']
   const data = props.rows.map(r => props.isFieldLevel
-    ? [`第${levelLabel(r.level ?? 0)}层级`, r.procName, r.table, r.field, r.reason]
+    ? [`第${levelLabel(r.level ?? 0)}层级`, r.procName, r.table, r.field, r.reasons.join('+')]
     : [`第${levelLabel(r.level ?? 0)}层级`, r.procName, r.table])
   const ws = XLSX.utils.aoa_to_sheet([header, ...data])
   const wb = XLSX.utils.book_new()

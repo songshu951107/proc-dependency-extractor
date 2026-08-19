@@ -1,6 +1,7 @@
 // 影响分析清单化展示的纯函数工具：层级计算（最长路径+临时表/Transform穿透）、清单行推导、链路回溯
 
-const CONDITION_ROLE_LABELS = {
+const REASON_ORDER = ['直接来源', 'JOIN 条件', 'WHERE 条件']
+const ROLE_TO_REASON = {
   join_condition: 'JOIN 条件',
   where_condition: 'WHERE 条件'
 }
@@ -68,48 +69,94 @@ function bfsShallowDepth(nodeMap, edges, startId, isTransparent) {
 }
 
 /**
- * 字段级清单行推导（规格 §4.1）。
- * 只为"非临时表的 FIELD 节点"（排除起点）生成行；
- * DERIVED_FROM 入边：无 role=直接来源，有 role=条件原因；
- * OUTPUT_TO 入边：直接来源 + 聚合该 Transform 的条件 INPUT_TO role；
- * INPUT_TO（target=Transform）不生成行。
- * @return [{ procName, table, field, reason, level, targetId }] 按 level/表/字段排序
+ * 字段级清单行推导（根因标签传播）。
+ * 标签 = 起点进入链路那一跳的身份：起点出边无 role/未知 role → 直接来源，
+ * join_condition → JOIN 条件，where_condition → WHERE 条件；
+ * 起点→Transform（INPUT_TO）时标签授予该 Transform 的所有 OUTPUT_TO 目标字段。
+ * BFS 继承传播：已标记字段沿出边把已有标签传给下游（经 Transform 穿透到其输出、
+ * 经 DERIVED_FROM 直达），中段边的 role 不再影响标签；字段自身标签不变，起点不标记。
+ * 行生成：到达边（DERIVED_FROM/OUTPUT_TO）触发行，行 key=(procName, targetId) 去重，
+ * reasons = 字段标签集合（按 REASON_ORDER 排序），同一字段多原因聚合一行；
+ * 无标签字段不生成行（可达判据）。level 仍取最长路径层级。
+ * @return [{ procName, table, field, reasons: string[], level, targetId }] 按 level/表/字段排序
  */
 export function buildFieldImpactRows(nodes, edges, startFieldId) {
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
   const depth = computeLongestDepth(nodes, edges, startFieldId,
     n => n.nodeLevel === 'TRANSFORM' || isTempFieldName(n.id))
+
+  // 出边索引 + Transform 输出索引
+  const outEdges = new Map()
+  for (const e of edges) {
+    if (!outEdges.has(e.source)) outEdges.set(e.source, [])
+    outEdges.get(e.source).push(e)
+  }
+  const transformOutputs = new Map()
+  for (const e of edges) {
+    if (e.edgeType === 'OUTPUT_TO') {
+      if (!transformOutputs.has(e.source)) transformOutputs.set(e.source, [])
+      transformOutputs.get(e.source).push(e.target)
+    }
+  }
+  const reasonOf = (e) => ROLE_TO_REASON[e.role] || '直接来源'
+
+  const reasonMap = new Map() // fieldId -> Set<reason>
+  const visited = new Set()   // `${fieldId}|${reason}`
+  const queue = []
+  const push = (fieldId, reason) => {
+    if (fieldId === startFieldId) return
+    const key = `${fieldId}|${reason}`
+    if (visited.has(key)) return
+    visited.add(key)
+    if (!reasonMap.has(fieldId)) reasonMap.set(fieldId, new Set())
+    reasonMap.get(fieldId).add(reason)
+    queue.push([fieldId, reason])
+  }
+  // 初始标签：起点出边
+  for (const e of (outEdges.get(startFieldId) || [])) {
+    if (e.edgeType === 'INPUT_TO') {
+      const t = nodeMap.get(e.target)
+      if (!t || t.nodeLevel !== 'TRANSFORM') continue
+      for (const out of (transformOutputs.get(e.target) || [])) push(out, reasonOf(e))
+    } else {
+      const t = nodeMap.get(e.target)
+      if (!t || t.nodeLevel !== 'FIELD') continue
+      push(e.target, reasonOf(e))
+    }
+  }
+  // 继承传播
+  while (queue.length) {
+    const [cur, reason] = queue.shift()
+    for (const e of (outEdges.get(cur) || [])) {
+      if (e.edgeType === 'INPUT_TO') {
+        for (const out of (transformOutputs.get(e.target) || [])) push(out, reason)
+      } else if (e.edgeType === 'DERIVED_FROM' || !e.edgeType) {
+        const t = nodeMap.get(e.target)
+        if (t && t.nodeLevel === 'FIELD') push(e.target, reason)
+      }
+    }
+  }
+
+  // 行生成
   const rows = []
   const seen = new Set()
-  const addRow = (targetNode, procName, reason) => {
-    const key = `${procName}|${targetNode.id}|${reason}`
-    if (seen.has(key)) return
-    seen.add(key)
-    const parts = targetNode.id.split('.')
-    rows.push({
-      procName: procName || '-',
-      table: parts.length >= 2 ? `${parts[0]}.${parts[1]}` : targetNode.id,
-      field: parts[parts.length - 1],
-      reason,
-      level: depth.get(targetNode.id),
-      targetId: targetNode.id
-    })
-  }
   for (const e of edges) {
+    if (e.edgeType !== 'DERIVED_FROM' && e.edgeType !== 'OUTPUT_TO') continue
     const t = nodeMap.get(e.target)
     if (!t || t.nodeLevel !== 'FIELD' || t.id === startFieldId) continue
-    if (isTempFieldName(t.id) || !depth.has(t.id)) continue
-    if (e.edgeType === 'OUTPUT_TO') {
-      addRow(t, e.procName, '直接来源')
-      // 聚合该 Transform 的条件输入（同一 procName）
-      for (const ie of edges) {
-        if (ie.target === e.source && ie.procName === e.procName && CONDITION_ROLE_LABELS[ie.role]) {
-          addRow(t, e.procName, CONDITION_ROLE_LABELS[ie.role])
-        }
-      }
-    } else if (e.edgeType === 'DERIVED_FROM') {
-      addRow(t, e.procName, e.role ? (CONDITION_ROLE_LABELS[e.role] || e.role) : '直接来源')
-    }
+    if (isTempFieldName(t.id) || !reasonMap.has(t.id)) continue
+    const key = `${e.procName || '-'}|${t.id}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const parts = t.id.split('.')
+    rows.push({
+      procName: e.procName || '-',
+      table: parts.length >= 2 ? `${parts[0]}.${parts[1]}` : t.id,
+      field: parts[parts.length - 1],
+      reasons: REASON_ORDER.filter(r => reasonMap.get(t.id).has(r)),
+      level: depth.get(t.id),
+      targetId: t.id
+    })
   }
   rows.sort((a, b) => (a.level ?? 99) - (b.level ?? 99)
     || a.table.localeCompare(b.table) || a.field.localeCompare(b.field))

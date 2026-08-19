@@ -4,7 +4,10 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hb.extractor.dto.*;
 import com.hb.extractor.entity.Neo4jSyncLog;
+import com.hb.extractor.entity.TableDdlInfo;
 import com.hb.extractor.mapper.Neo4jSyncLogMapper;
+import com.hb.extractor.mapper.TableColumnMetaMapper;
+import com.hb.extractor.mapper.TableDdlInfoMapper;
 import com.hb.extractor.service.ImpactAnalysisService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +29,12 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
     @Autowired
     private Neo4jSyncLogMapper neo4jSyncLogMapper;
 
+    @Autowired
+    private TableDdlInfoMapper ddlInfoMapper;
+
+    @Autowired
+    private TableColumnMetaMapper columnMetaMapper;
+
     @Value("${impact.analysis.max-depth:20}")
     private int maxAllowedDepth;
 
@@ -33,48 +42,123 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
 
     @Override
     public List<String> getSchemas() {
-        Collection<String> schemas = neo4jClient.query(
-                "MATCH (t:Table) WHERE t.schema_prefix IS NOT NULL " +
-                "RETURN DISTINCT toUpper(t.schema_prefix) AS schema ORDER BY schema")
-                .fetchAs(String.class)
-                .mappedBy((type, record) -> record.get("schema").asString())
-                .all();
-        return new ArrayList<>(schemas);
+        // 主数据源：MySQL table_ddl_info（已导入的全部物理表元数据）
+        // 保证下拉框能显示所有已导入的 schema，而不只是 Neo4j 中已建图的少量 schema。
+        Set<String> schemaSet = new TreeSet<>();
+        try {
+            List<String> mysqlSchemas = ddlInfoMapper.selectDistinctSchemas();
+            if (mysqlSchemas != null) {
+                for (String s : mysqlSchemas) {
+                    if (s != null && !s.isEmpty()) schemaSet.add(s.toUpperCase());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("从 MySQL 查询 schemas 失败: {}", e.getMessage());
+        }
+        // 合并 Neo4j 中的 schema（临时表等可能只存在于 Neo4j）
+        try {
+            Collection<String> neoSchemas = neo4jClient.query(
+                    "MATCH (t:Table) WHERE t.schema_prefix IS NOT NULL " +
+                    "RETURN DISTINCT toUpper(t.schema_prefix) AS schema ORDER BY schema")
+                    .fetchAs(String.class)
+                    .mappedBy((type, record) -> record.get("schema").asString())
+                    .all();
+            schemaSet.addAll(neoSchemas);
+        } catch (Exception e) {
+            log.warn("合并 Neo4j schemas 失败: {}", e.getMessage());
+        }
+        return new ArrayList<>(schemaSet);
     }
 
     @Override
     public List<TableOption> getTables(String schema) {
-        // 过滤临时表：is_temp=true 的、VT_/TMP_ 前缀的、_TMP 后缀(含数字)的
-        String cypher = "MATCH (t:Table) WHERE toUpper(t.schema_prefix) = toUpper($schema) " +
-                "AND (t.is_temp IS NULL OR t.is_temp = false) " +
-                "AND NOT toUpper(t.short_name) =~ 'VT_.*|TMP_.*|.*_TMP\\d*' " +
-                "RETURN t.name AS fullName, t.short_name AS shortName, t.layer AS type " +
-                "ORDER BY t.short_name";
-        Collection<TableOption> tables = neo4jClient.query(cypher)
-                .bind(schema).to("schema")
-                .fetchAs(TableOption.class)
-                .mappedBy((type, record) -> {
-                    TableOption opt = new TableOption();
-                    opt.setFullName(record.get("fullName").asString());
-                    opt.setShortName(record.get("shortName").asString());
-                    opt.setType(record.get("type").isNull() ? null : record.get("type").asString());
-                    return opt;
-                })
-                .all();
-        return new ArrayList<>(tables);
+        // 主数据源：MySQL table_ddl_info（全部已导入的物理表）
+        List<TableOption> result = new ArrayList<>();
+        if (schema != null && !schema.isEmpty()) {
+            try {
+                List<TableDdlInfo> rows = ddlInfoMapper.selectBySchema(schema.toLowerCase());
+                if (rows != null) {
+                    for (TableDdlInfo r : rows) {
+                        // 过滤临时表命名（与原 Neo4j 逻辑保持一致）
+                        // 过滤 bak 备份表（如 bak2、xxx_bak、xxx_bak2），columns0818.xlsx 导入时未过滤
+                        String shortName = r.getTableName();
+                        if (shortName == null) continue;
+                        String upper = shortName.toUpperCase();
+                        if (upper.matches("VT_.*|TMP_.*|.*_TMP\\d*")) continue;
+                        if (upper.matches("BAK\\d*|.*_BAK|.*_BAK\\d+")) continue;
+                        TableOption opt = new TableOption();
+                        opt.setFullName(r.getFullTableName());
+                        opt.setShortName(shortName);
+                        opt.setType(null);
+                        result.add(opt);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("从 MySQL 查询表列表失败 schema={}: {}", schema, e.getMessage());
+            }
+        }
+        // Neo4j fallback：补齐 MySQL 中没有但 Neo4j 已建图的表（如某些临时表）
+        try {
+            String cypher = "MATCH (t:Table) WHERE toUpper(t.schema_prefix) = toUpper($schema) " +
+                    "AND (t.is_temp IS NULL OR t.is_temp = false) " +
+                    "AND NOT toUpper(t.short_name) =~ 'VT_.*|TMP_.*|.*_TMP\\d*|BAK\\d*|.*_BAK|.*_BAK\\d+' " +
+                    "RETURN t.name AS fullName, t.short_name AS shortName, t.layer AS type " +
+                    "ORDER BY t.short_name";
+            Collection<TableOption> neoTables = neo4jClient.query(cypher)
+                    .bind(schema == null ? "" : schema).to("schema")
+                    .fetchAs(TableOption.class)
+                    .mappedBy((type, record) -> {
+                        TableOption opt = new TableOption();
+                        opt.setFullName(record.get("fullName").asString());
+                        opt.setShortName(record.get("shortName").asString());
+                        opt.setType(record.get("type").isNull() ? null : record.get("type").asString());
+                        return opt;
+                    })
+                    .all();
+            // 合并去重（按 fullName）
+            Set<String> existing = new HashSet<>();
+            for (TableOption t : result) existing.add(t.getFullName());
+            for (TableOption t : neoTables) {
+                if (t.getFullName() != null && existing.add(t.getFullName())) {
+                    result.add(t);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("合并 Neo4j 表列表失败 schema={}: {}", schema, e.getMessage());
+        }
+        // 按短名排序
+        result.sort(Comparator.comparing(TableOption::getShortName,
+                Comparator.nullsLast(String::compareToIgnoreCase)));
+        return result;
     }
 
     @Override
     public List<String> getFields(String tableFullName) {
-        String tableName = tableFullName.toLowerCase();
-        Collection<String> fields = neo4jClient.query(
-                "MATCH (t:Table {name: $tableName})<-[:BELONGS_TO]-(c:Column) " +
-                "RETURN c.name AS field ORDER BY c.name")
-                .bind(tableName).to("tableName")
-                .fetchAs(String.class)
-                .mappedBy((type, record) -> record.get("field").asString())
-                .all();
-        return new ArrayList<>(fields);
+        if (tableFullName == null || tableFullName.isEmpty()) return new ArrayList<>();
+        // 主数据源：MySQL table_column_meta（覆盖全部已导入字段）
+        try {
+            List<String> fields = columnMetaMapper.selectFieldNamesByFullTable(tableFullName.toLowerCase());
+            if (fields != null && !fields.isEmpty()) {
+                return fields;
+            }
+        } catch (Exception e) {
+            log.warn("从 MySQL 查询字段失败 table={}: {}", tableFullName, e.getMessage());
+        }
+        // Neo4j fallback：MySQL 未导入该表时，从已建图的 Column 节点读取
+        try {
+            String tableName = tableFullName.toLowerCase();
+            Collection<String> fields = neo4jClient.query(
+                    "MATCH (t:Table {name: $tableName})<-[:BELONGS_TO]-(c:Column) " +
+                    "RETURN c.name AS field ORDER BY c.name")
+                    .bind(tableName).to("tableName")
+                    .fetchAs(String.class)
+                    .mappedBy((type, record) -> record.get("field").asString())
+                    .all();
+            return new ArrayList<>(fields);
+        } catch (Exception e) {
+            log.warn("从 Neo4j 查询字段失败 table={}: {}", tableFullName, e.getMessage());
+            return new ArrayList<>();
+        }
     }
 
     @Override
@@ -206,6 +290,17 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             }
         }
 
+        // DIRECT 类型的 DERIVED_FROM 边: 直接推导 表A → 表B
+        for (ImpactAnalysisVO.EdgeVO e : edges) {
+            if (!"DERIVED_FROM".equals(e.getEdgeType())) continue;
+            String srcTable = extractTableFromId(e.getSource());
+            String tgtTable = extractTableFromId(e.getTarget());
+            if (srcTable == null || tgtTable == null) continue;
+            if (!tgtTable.equals(sourceTable) && !tableImpactSourceMap.containsKey(tgtTable)) {
+                tableImpactSourceMap.put(tgtTable, srcTable);
+            }
+        }
+
         // 降级: 边无 edgeType 时(旧数据), 用原 split 逻辑
         if (tableImpactSourceMap.isEmpty()) {
             for (ImpactAnalysisVO.EdgeVO e : edges) {
@@ -279,7 +374,10 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
      */
     private int calcNonTempMaxDepth(String sourceTable,
                                      Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> impactedByDepth) {
-        // 构建邻接表（含临时表）和临时表集合
+        // 构建双向邻接表（含临时表）和临时表集合
+        // 双向：字段级 UPSTREAM 中 impactSource 是上游表（更深），name 是下游表（更浅）；
+        //       表级分析中 impactSource 是下游表（更浅），name 是上游表（更深）。
+        //       双向邻接表确保 BFS 从 sourceTable 出发能到达所有节点。
         Map<String, List<String>> adjacency = new HashMap<>();
         Set<String> tempTables = new HashSet<>();
         for (List<ImpactAnalysisVO.ImpactedTable> tables : impactedByDepth.values()) {
@@ -288,7 +386,16 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                 if (t.getImpactSource() != null) {
                     adjacency.computeIfAbsent(t.getImpactSource(), k -> new ArrayList<>())
                             .add(t.getName());
+                    adjacency.computeIfAbsent(t.getName(), k -> new ArrayList<>())
+                            .add(t.getImpactSource());
                 }
+            }
+        }
+        // 如果 sourceTable 不在邻接表中（字段级分析排除了 sourceTable），
+        // 将 depth=1 的表与 sourceTable 连接，确保 BFS 能从 sourceTable 出发
+        if (!adjacency.containsKey(sourceTable)) {
+            for (ImpactAnalysisVO.ImpactedTable t : impactedByDepth.getOrDefault(1, Collections.emptyList())) {
+                adjacency.computeIfAbsent(sourceTable, k -> new ArrayList<>()).add(t.getName());
             }
         }
         // BFS 跳过临时表
@@ -420,6 +527,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                         node.setId(record.get("id").asString());
                         node.setLabel(record.get("label").isNull() ? record.get("id").asString() : record.get("label").asString());
                         node.setNodeLevel("TABLE");
+                        node.setLayer(record.get("layer").isNull() ? extractLayerFromId(node.getId()) : record.get("layer").asString());
                         node.setDepth((int) record.get("depth").asLong());
                         node.setIsTemp(record.get("isTemp").isNull() ? false : record.get("isTemp").asBoolean());
                         return node;
@@ -431,6 +539,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             startNode.setId(tableFullName);
             startNode.setLabel(extractShortName(tableFullName));
             startNode.setNodeLevel("TABLE");
+            startNode.setLayer(extractLayerFromId(tableFullName));
             startNode.setDepth(0);
             nodes.add(startNode);
             nodes.addAll(result);
@@ -444,6 +553,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             startNode.setId(tableFullName);
             startNode.setLabel(extractShortName(tableFullName));
             startNode.setNodeLevel("TABLE");
+            startNode.setLayer(extractLayerFromId(tableFullName));
             startNode.setDepth(0);
             nodes.add(startNode);
         }
@@ -495,6 +605,14 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         return idx > 0 ? fullName.substring(idx + 1) : fullName;
     }
 
+    /** 从节点 id（格式 schema.table.field 或 schema.table）解析数据层级，大写返回 */
+    private String extractLayerFromId(String id) {
+        if (id == null || id.isEmpty()) return null;
+        int idx = id.indexOf('.');
+        if (idx <= 0) return null;
+        return id.substring(0, idx).toUpperCase();
+    }
+
     private void analyzeFieldLevel(String fieldFullName, String direction, int depth,
                                     List<ImpactAnalysisVO.NodeVO> nodes,
                                     List<ImpactAnalysisVO.EdgeVO> edges) {
@@ -511,6 +629,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         String label = parts.length >= 3 ? parts[2] : fieldFullName;
         startNode.setLabel(label);
         startNode.setNodeLevel("FIELD");
+        startNode.setLayer(extractLayerFromId(fieldFullName));
         startNode.setDepth(0);
         nodes.add(startNode);
 
@@ -532,6 +651,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                         n.setId(record.get("id").asString());
                         n.setLabel(record.get("label").asString());
                         n.setNodeLevel("FIELD");
+                        n.setLayer(extractLayerFromId(n.getId()));
                         n.setTableFullName(record.get("tableFullName").isNull() ? null : record.get("tableFullName").asString());
                         n.setDepth((int) record.get("depth").asLong());
                         return n;
@@ -563,54 +683,122 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
 
             for (Map<String, Object> row : transformRows) {
                 String transformId = (String) row.get("transformId");
+                String logicType = (String) row.get("logicType");
+                String outputColKey = (String) row.get("outputColKey");
+                String procName = (String) row.get("procName");
 
-                // 添加 Transform 节点
+                // DIRECT 类型: 无计算转换, 不创建 Transform 节点,
+                // 直接合并 INPUT_TO + OUTPUT_TO 为 源Column → 目标Column 的 DERIVED_FROM 边
+                if ("DIRECT".equals(logicType)) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> directInputs = (List<Map<String, Object>>) row.get("inputs");
+                    if (directInputs != null && outputColKey != null) {
+                        ensureFieldNode(outputColKey, nodeIds, nodes);
+                        for (Map<String, Object> input : directInputs) {
+                            String colKey = (String) input.get("colKey");
+                            if (colKey == null) continue;
+                            String role = (String) input.get("role");
+                            boolean isCondition = "join_condition".equals(role) || "where_condition".equals(role);
+
+                            if (!nodeIds.contains(colKey)) {
+                                if (isCondition) {
+                                    // 条件字段: 补全节点, 创建 DERIVED_FROM 边
+                                    ensureFieldNode(colKey, nodeIds, nodes);
+                                } else {
+                                    // SELECT 列辅助字段: 跳过
+                                    continue;
+                                }
+                            }
+
+                            ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
+                            edge.setSource(colKey);
+                            edge.setTarget(outputColKey);
+                            edge.setEdgeType("DERIVED_FROM");
+                            edge.setSourceAlias((String) input.get("alias"));
+                            edge.setProcName(procName);
+                            if (isCondition) {
+                                edge.setRole(role);
+                            }
+                            edges.add(edge);
+                        }
+                    }
+                    continue;
+                }
+
+                // 非 DIRECT 类型: 创建 Transform 节点 + INPUT_TO/OUTPUT_TO 边
                 if (transformId != null && nodeIds.add(transformId)) {
                     ImpactAnalysisVO.NodeVO tNode = new ImpactAnalysisVO.NodeVO();
                     tNode.setId(transformId);
-                    tNode.setLabel(transformId);
+                    String expression = (String) row.get("expression");
+                    // label 用截断的 expression，避免显示无意义的 md5 hash
+                    String tLabel = expression != null
+                            ? expression.replaceAll("\\s+", " ").trim()
+                            : transformId.substring(0, 8);
+                    tNode.setLabel(tLabel.length() > 30 ? tLabel.substring(0, 30) + "..." : tLabel);
                     tNode.setNodeLevel("TRANSFORM");
-                    tNode.setExpression((String) row.get("expression"));
-                    tNode.setLogicType((String) row.get("logicType"));
+                    tNode.setExpression(expression);
+                    tNode.setLogicType(logicType);
                     tNode.setSqlHint((String) row.get("sqlHint"));
-                    tNode.setProcName((String) row.get("procName"));
+                    tNode.setProcName(procName);
                     tNode.setScriptFile((String) row.get("scriptFile"));
                     nodes.add(tNode);
                 }
 
-                // 添加 INPUT_TO 边
+                // 添加 INPUT_TO 边（输入字段可能是主路径外的辅助输入，需补全为 FIELD 节点，
+                // 否则前端按"两端节点可见"过滤边时会丢弃这些输入边）
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> inputs = (List<Map<String, Object>>) row.get("inputs");
                 if (inputs != null) {
                     for (Map<String, Object> input : inputs) {
                         String colKey = (String) input.get("colKey");
                         if (colKey == null) continue;
+                        ensureFieldNode(colKey, nodeIds, nodes);
                         ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
                         edge.setSource(colKey);
                         edge.setTarget(transformId);
                         edge.setEdgeType("INPUT_TO");
                         edge.setRole((String) input.get("role"));
                         edge.setSourceAlias((String) input.get("alias"));
-                        edge.setProcName((String) row.get("procName"));
+                        edge.setProcName(procName);
                         edges.add(edge);
                     }
                 }
 
                 // 添加 OUTPUT_TO 边
-                String outputColKey = (String) row.get("outputColKey");
                 if (outputColKey != null) {
+                    ensureFieldNode(outputColKey, nodeIds, nodes);
                     ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
                     edge.setSource(transformId);
                     edge.setTarget(outputColKey);
                     edge.setEdgeType("OUTPUT_TO");
                     edge.setExpression((String) row.get("expression"));
-                    edge.setProcName((String) row.get("procName"));
+                    edge.setProcName(procName);
                     edges.add(edge);
                 }
             }
         } catch (Exception e) {
             log.error("字段级影响查询失败: {}", e.getMessage());
         }
+    }
+
+    /**
+     * 补全字段节点：Transform 的输入/输出字段可能不在主路径上（辅助输入），
+     * 若尚未存在于 nodeIds 则创建一个 FIELD 节点加入 nodes，确保前端按可见节点过滤边时不丢失输入边。
+     * col_key 格式: schema.table.field（小写）
+     */
+    private void ensureFieldNode(String colKey, Set<String> nodeIds,
+                                  List<ImpactAnalysisVO.NodeVO> nodes) {
+        if (colKey == null || !nodeIds.add(colKey)) return;
+        ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
+        n.setId(colKey);
+        String[] p = colKey.split("\\.");
+        String fieldName = p.length >= 1 ? p[p.length - 1] : colKey;
+        n.setLabel(fieldName.toUpperCase());
+        n.setNodeLevel("FIELD");
+        n.setLayer(extractLayerFromId(colKey));
+        n.setTableFullName(p.length >= 2 ? (p[0] + "." + p[1]).toLowerCase() : null);
+        n.setDepth(null);
+        nodes.add(n);
     }
 
     private void collectEdges(String startId, String direction, int depth, String relType,
@@ -666,6 +854,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                                 n.setId(sourceId);
                                 n.setLabel(extractShortName(sourceId));
                                 n.setNodeLevel("TABLE");
+                                n.setLayer(extractLayerFromId(sourceId));
                                 nodes.add(n);
                             }
                             if (!nodeIds.contains(targetId)) {
@@ -674,6 +863,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                                 n.setId(targetId);
                                 n.setLabel(extractShortName(targetId));
                                 n.setNodeLevel("TABLE");
+                                n.setLayer(extractLayerFromId(targetId));
                                 nodes.add(n);
                             }
 
@@ -775,7 +965,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         for (Map.Entry<Integer, List<ImpactAnalysisVO.ImpactedTable>> entry : impactedByDepth.entrySet()) {
             for (ImpactAnalysisVO.ImpactedTable t : entry.getValue()) {
                 if (t.getImpactSource() != null) {
-                    chains.add(t.getImpactSource() + " → " + t.getName());
+                    chains.add(t.getImpactSource() + " -> " + t.getName());
                 }
             }
         }
@@ -810,6 +1000,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                             n.setId(record.get("id").asString());
                             n.setLabel(record.get("label").asString());
                             n.setNodeLevel("FIELD");
+                            n.setLayer(extractLayerFromId(n.getId()));
                             n.setDepth((int) record.get("depth").asLong());
                             return n;
                         })
@@ -833,6 +1024,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                             n.setId(record.get("id").asString());
                             n.setLabel(record.get("label").isNull() ? record.get("id").asString() : record.get("label").asString());
                             n.setNodeLevel("TABLE");
+                            n.setLayer(record.get("layer").isNull() ? extractLayerFromId(n.getId()) : record.get("layer").asString());
                             n.setDepth((int) record.get("depth").asLong());
                             return n;
                         })

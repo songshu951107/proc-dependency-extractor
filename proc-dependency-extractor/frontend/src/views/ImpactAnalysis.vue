@@ -13,7 +13,7 @@
       <el-button size="small" @click="handleAnalyze(lastRequest)">重试</el-button>
     </el-alert>
 
-    <ImpactStats :stats="displayStats" :upstream="isUpstream" />
+    <ImpactStats :stats="displayStats" :upstream="isUpstream" @statClick="openStatsDetail" />
 
     <el-alert
       v-if="result && !impactRows.length"
@@ -66,6 +66,16 @@
       :targetTable="scriptModalData.name"
       @close="scriptModalVisible = false"
     />
+
+    <ImpactStatsDetailDialog
+      :visible="statsDialogVisible"
+      :type="statsDialogType"
+      :rows="impactRows"
+      :reportRows="reportImpactRows"
+      :isFieldLevel="isFieldLevel"
+      :upstream="isUpstream"
+      @update:visible="statsDialogVisible = $event"
+    />
   </div>
 </template>
 
@@ -75,6 +85,7 @@ import ImpactFilter from '@/components/impact/ImpactFilter.vue'
 import ImpactStats from '@/components/impact/ImpactStats.vue'
 import ImpactResultTabs from '@/components/impact/ImpactResultTabs.vue'
 import ImpactPathDialog from '@/components/impact/ImpactPathDialog.vue'
+import ImpactStatsDetailDialog from '@/components/impact/ImpactStatsDetailDialog.vue'
 import ScriptSnippetModal from '@/components/impact/ScriptSnippetModal.vue'
 import { analyze } from '@/api/impact'
 import { buildFieldImpactRows, buildFieldSourceRows, buildTableImpactData } from '@/components/impact/impactListUtils'
@@ -95,6 +106,14 @@ const pathDialogEdges = ref([])
 const sourceNodeId = ref('')
 const isUpstream = ref(false)
 const exportFileName = ref('影响分析')
+const statsDialogVisible = ref(false)
+const statsDialogType = ref('tables')
+
+// 统计卡点击 → 弹出对应维度明细（表/字段/proc/报表）
+function openStatsDetail(type) {
+  statsDialogType.value = type
+  statsDialogVisible.value = true
+}
 
 const isFieldLevel = computed(() => {
   return lastRequest.value?.fieldName && lastRequest.value.fieldName !== ''

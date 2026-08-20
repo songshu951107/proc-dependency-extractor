@@ -445,3 +445,56 @@ export function levelLabel(level) {
   const cn = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十']
   return level >= 0 && level <= 10 ? cn[level] : String(level)
 }
+
+/**
+ * 统计卡点击明细行推导：从清单行聚合出表/字段/proc 维度的去重清单。
+ * 层级沿用"最大层级"规则（同对象多路径取最深）；表维度排除临时表；
+ * proc 维度的表数同样排除临时表。
+ * @param {'tables'|'fields'|'procs'} type 明细维度
+ * @param {Array} rows 清单行（impactRows）
+ */
+export function buildStatsDetailRows(type, rows) {
+  if (type === 'tables') {
+    const map = new Map()
+    for (const r of rows) {
+      if (r.temp) continue
+      if (!map.has(r.table)) map.set(r.table, { table: r.table, level: 0, procs: new Set(), fields: new Set() })
+      const t = map.get(r.table)
+      t.level = Math.max(t.level, r.level ?? 0)
+      if (r.procName && r.procName !== '-') t.procs.add(r.procName)
+      if (r.targetId) t.fields.add(r.targetId)
+    }
+    return [...map.values()]
+      .map(t => ({ table: t.table, level: t.level, procCount: t.procs.size, fieldCount: t.fields.size }))
+      .sort((a, b) => a.level - b.level || a.table.localeCompare(b.table))
+  }
+  if (type === 'fields') {
+    const map = new Map()
+    for (const r of rows) {
+      if (!r.targetId || !r.field) continue // 表级行无字段维度，跳过
+      if (!map.has(r.targetId)) map.set(r.targetId, { table: r.table, field: r.field, level: 0, reasons: new Set(), procs: new Set() })
+      const f = map.get(r.targetId)
+      f.level = Math.max(f.level, r.level ?? 0)
+      for (const x of r.reasons || []) f.reasons.add(x)
+      if (r.procName && r.procName !== '-') f.procs.add(r.procName)
+    }
+    return [...map.values()]
+      .map(f => ({ table: f.table, field: f.field, level: f.level, reasons: REASON_ORDER.filter(x => f.reasons.has(x)), procCount: f.procs.size }))
+      .sort((a, b) => a.level - b.level || a.table.localeCompare(b.table) || a.field.localeCompare(b.field))
+  }
+  if (type === 'procs') {
+    const map = new Map()
+    for (const r of rows) {
+      const p = r.procName
+      if (!p || p === '-') continue
+      if (!map.has(p)) map.set(p, { procName: p, tables: new Set(), fields: new Set() })
+      const pr = map.get(p)
+      if (!r.temp) pr.tables.add(r.table)
+      if (r.targetId) pr.fields.add(r.targetId)
+    }
+    return [...map.values()]
+      .map(pr => ({ procName: pr.procName, tableCount: pr.tables.size, fieldCount: pr.fields.size }))
+      .sort((a, b) => b.tableCount - a.tableCount || a.procName.localeCompare(b.procName))
+  }
+  return []
+}

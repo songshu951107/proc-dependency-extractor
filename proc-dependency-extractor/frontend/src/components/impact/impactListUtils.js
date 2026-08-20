@@ -73,8 +73,9 @@ function bfsShallowDepth(nodeMap, edges, startId, isTransparent) {
  * 标签 = 起点进入链路那一跳的身份：起点出边无 role/未知 role → 直接来源，
  * join_condition → JOIN 条件，where_condition → WHERE 条件；
  * 起点→Transform（INPUT_TO）时标签授予该 Transform 的所有 OUTPUT_TO 目标字段。
- * BFS 继承传播：已标记字段沿出边把已有标签传给下游（经 Transform 穿透到其输出、
- * 经 DERIVED_FROM 直达），中段边的 role 不再影响标签；字段自身标签不变，起点不标记。
+ * BFS 继承传播：标签沿出边传给下游（经 Transform 穿透到其输出、经 DERIVED_FROM 直达），
+ * 经过带角色的边（role=join_condition/where_condition）时标签跳变为该角色，无边角色
+ * 的边继承当前标签——影响方式由路径上最近一次角色跳变决定；字段自身标签不变，起点不标记。
  * 行生成：到达边（DERIVED_FROM/OUTPUT_TO）触发行，行 key=(procName, targetId) 去重，
  * reasons = 字段标签集合（按 REASON_ORDER 排序），同一字段多原因聚合一行；
  * 无标签字段不生成行（可达判据）。level 仍取最长路径层级。
@@ -124,15 +125,16 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
       push(e.target, reasonOf(e))
     }
   }
-  // 继承传播
+  // 继承传播：边带角色时标签跳变为该角色（影响方式由最近一次角色跳变决定），无边角色时继承
   while (queue.length) {
     const [cur, reason] = queue.shift()
     for (const e of (outEdges.get(cur) || [])) {
+      const nextReason = ROLE_TO_REASON[e.role] || reason
       if (e.edgeType === 'INPUT_TO') {
-        for (const out of (transformOutputs.get(e.target) || [])) push(out, reason)
+        for (const out of (transformOutputs.get(e.target) || [])) push(out, nextReason)
       } else if (e.edgeType === 'DERIVED_FROM' || !e.edgeType) {
         const t = nodeMap.get(e.target)
-        if (t && t.nodeLevel === 'FIELD') push(e.target, reason)
+        if (t && t.nodeLevel === 'FIELD') push(e.target, nextReason)
       }
     }
   }

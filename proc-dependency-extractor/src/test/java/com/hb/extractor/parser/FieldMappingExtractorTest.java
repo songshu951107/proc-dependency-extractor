@@ -2,6 +2,7 @@ package com.hb.extractor.parser;
 
 import com.hb.extractor.parser.dto.FieldMapping;
 import com.hb.extractor.parser.dto.TransformInput;
+import net.sf.jsqlparser.statement.Statement;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -437,5 +438,117 @@ class FieldMappingExtractorTest {
                          && "tab2".equals(ti.getSourceTableShort())
                          && "join_condition".equals(ti.getRole()));
         assertTrue(hasT2B, "应有 T2.b 的 join_condition 输入, sourceTableShort=tab2");
+    }
+
+    // ===== 修复 A / C: 无别名表字段归属 + UNION 子查询字段穿透 =====
+
+    /** 模拟 LineageExtractor 真实流程: 用 analyzer.extractAliasMap 构造 aliasMap */
+    private Map<String, String> buildAliasMapByAnalyzer(String sql) throws Exception {
+        Statement stmt = analyzer.parse(sql);
+        assertNotNull(stmt, "SQL 应解析成功");
+        var insert = (net.sf.jsqlparser.statement.insert.Insert) stmt;
+        var plainSelect = (net.sf.jsqlparser.statement.select.PlainSelect) insert.getSelect().getSelectBody();
+        return analyzer.extractAliasMap(plainSelect);
+    }
+
+    @Test
+    void testNoAliasSingleTable_FieldAttribution() throws Exception {
+        // dwa_c_cus_pri_cust_prft block 16 场景: FROM VT_C_CUS_PRI_CUST_PRFT_01 无别名
+        String sql = "INSERT INTO {CDM}.C_CUS_PRI_CUST_PRFT " +
+                "SELECT DATE '{ETL_TX_DT}', cust_no, txn_org_no, '999', SUM(cust_day_prft) " +
+                "FROM {CDM}.VT_C_CUS_PRI_CUST_PRFT_01 " +
+                "GROUP BY cust_no, txn_org_no";
+        Map<String, String> aliasMap = buildAliasMapByAnalyzer(sql);
+        assertEquals(1, aliasMap.size(), "无别名单表应有隐式 alias 登记");
+
+        List<String> ddlFields = Arrays.asList("data_dt", "cust_no", "txn_org_no", "prft_type", "cust_day_prft");
+        List<FieldMapping> result = extractor.extract(sql, "c_cus_pri_cust_prft", aliasMap, ddlFields);
+        assertEquals(5, result.size());
+
+        FieldMapping custNo = result.stream()
+                .filter(fm -> "cust_no".equals(fm.getTargetField())).findFirst().orElse(null);
+        assertNotNull(custNo, "应有 cust_no 映射");
+        assertTrue(custNo.getInputs().stream()
+                        .anyMatch(ti -> "cust_no".equals(ti.getSourceField())
+                                     && "vt_c_cus_pri_cust_prft_01".equals(ti.getSourceTableShort())),
+                "cust_no 输入应归属到 vt_c_cus_pri_cust_prft_01, 实际 inputs: "
+                        + custNo.getInputs().stream().map(ti -> ti.getSourceField() + "->" + ti.getSourceTableShort()).toList());
+
+        FieldMapping dayPrft = result.stream()
+                .filter(fm -> "cust_day_prft".equals(fm.getTargetField())).findFirst().orElse(null);
+        assertNotNull(dayPrft, "应有 cust_day_prft 映射");
+        assertTrue(dayPrft.getInputs().stream()
+                        .anyMatch(ti -> "cust_day_prft".equals(ti.getSourceField())
+                                     && "vt_c_cus_pri_cust_prft_01".equals(ti.getSourceTableShort())),
+                "SUM(cust_day_prft) 输入应归属到 vt_c_cus_pri_cust_prft_01");
+    }
+
+    @Test
+    void testUnionSubqueryColumnPassthrough() throws Exception {
+        // dwa_c_agt_ldr_acct_intst block 4 场景: FROM (SELECT...UNION ALL SELECT...) TAA GROUP BY TAA.acct_no
+        String sql = "INSERT INTO {CDM}.C_AGT_LDR_ACCT_INTST " +
+                "SELECT DATE '{ETL_TX_DT}' " +
+                "      ,TAA.acct_no " +
+                "      ,SUM(day_intst)   AS day_intst " +
+                "      ,SUM(month_intst) AS month_intst " +
+                "      ,SUM(quart_intst) AS quart_intst " +
+                "      ,SUM(year_intst)  AS year_intst " +
+                "FROM (SELECT TLX.acct_no " +
+                "            ,day_intst AS day_intst " +
+                "            ,day_intst AS month_intst " +
+                "            ,day_intst AS quart_intst " +
+                "            ,day_intst AS year_intst " +
+                "       FROM {CDM}.VT_C_AGT_LDR_ACCT_INTST_01 TLX " +
+                "      UNION ALL " +
+                "      SELECT TLD.acct_no " +
+                "            ,0 AS day_intst " +
+                "            ,TLD.month_intst AS month_intst " +
+                "            ,TLD.quart_intst AS quart_intst " +
+                "            ,TLD.year_intst  AS year_intst " +
+                "       FROM {CDM}.C_AGT_LDR_ACCT_INTST TLD " +
+                "      WHERE data_dt = DATE '{I_LAST_DT}' " +
+                "      ) TAA " +
+                " GROUP BY TAA.acct_no";
+        Map<String, String> aliasMap = buildAliasMapByAnalyzer(sql);
+        // TAA → null 占位（子查询 alias 不映射具体表）
+        assertTrue(aliasMap.containsKey("TAA"), "aliasMap 应含子查询 alias 占位 TAA");
+        assertNull(aliasMap.get("TAA"));
+
+        List<String> ddlFields = Arrays.asList("data_dt", "acct_no", "day_intst",
+                "month_intst", "quart_intst", "year_intst");
+        List<FieldMapping> result = extractor.extract(sql, "c_agt_ldr_acct_intst", aliasMap, ddlFields);
+        assertEquals(6, result.size());
+
+        // acct_no: 沿 UNION 两分支穿透 → vt_01.acct_no + c_agt_ldr_acct_intst.acct_no
+        FieldMapping acctNo = result.stream()
+                .filter(fm -> "acct_no".equals(fm.getTargetField())).findFirst().orElse(null);
+        assertNotNull(acctNo);
+        String acctNoInputs = acctNo.getInputs().stream()
+                .map(ti -> ti.getSourceTableShort() + "." + ti.getSourceField()).toList().toString();
+        assertTrue(acctNo.getInputs().stream().anyMatch(ti ->
+                        "vt_c_agt_ldr_acct_intst_01".equals(ti.getSourceTableShort())
+                     && "acct_no".equals(ti.getSourceField())),
+                "acct_no 应穿透到 vt_c_agt_ldr_acct_intst_01.acct_no, 实际: " + acctNoInputs);
+        assertTrue(acctNo.getInputs().stream().anyMatch(ti ->
+                        "c_agt_ldr_acct_intst".equals(ti.getSourceTableShort())
+                     && "acct_no".equals(ti.getSourceField())),
+                "acct_no 应穿透到 c_agt_ldr_acct_intst.acct_no, 实际: " + acctNoInputs);
+
+        // day_intst: 分支 1 为 day_intst 裸列, 分支 2 为字面量 0 → 仅 vt_01.day_intst
+        FieldMapping dayIntst = result.stream()
+                .filter(fm -> "day_intst".equals(fm.getTargetField())).findFirst().orElse(null);
+        assertNotNull(dayIntst);
+        assertTrue(dayIntst.getInputs().stream().anyMatch(ti ->
+                        "vt_c_agt_ldr_acct_intst_01".equals(ti.getSourceTableShort())
+                     && "day_intst".equals(ti.getSourceField())),
+                "day_intst 应穿透到 vt_c_agt_ldr_acct_intst_01.day_intst, 实际: "
+                        + dayIntst.getInputs().stream().map(ti -> ti.getSourceTableShort() + "." + ti.getSourceField()).toList());
+
+        // data_dt: DATE 字面量, 无字段归属（inputs 为空或不产生带表归属的输入）
+        FieldMapping dataDt = result.stream()
+                .filter(fm -> "data_dt".equals(fm.getTargetField())).findFirst().orElse(null);
+        assertNotNull(dataDt);
+        assertTrue(dataDt.getInputs().stream().noneMatch(ti -> ti.getSourceTableShort() != null),
+                "data_dt 为字面量, 不应有表归属输入");
     }
 }

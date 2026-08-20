@@ -32,6 +32,7 @@ import net.sf.jsqlparser.statement.select.ParenthesedSelect;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectItem;
+import net.sf.jsqlparser.statement.select.SetOperationList;
 import net.sf.jsqlparser.statement.update.Update;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -142,19 +143,32 @@ public class JsqlSqlAnalyzer {
             TableRefInfo info = tableRefInfo((Table) fromItem);
             result.add(info);
         } else if (fromItem instanceof ParenthesedSelect) {
-            // 子查询：递归提取内部第一个 PlainSelect 的表
-            PlainSelect inner = extractInnerSelect(fromItem);
-            if (inner != null) {
-                List<TableRefInfo> innerTables = extractTablesRecursively(inner, depth + 1);
-                // 子查询本身可能也有 alias，但内部表更重要
-                result.addAll(innerTables);
-                // 子查询 alias 也记录（用于子查询内字段归属）
-                TableRefInfo subAliasInfo = new TableRefInfo();
-                subAliasInfo.isSubquery = true;
-                Alias a = fromItem.getAlias();
-                subAliasInfo.alias = a != null ? a.getName().toUpperCase() : null;
-                result.add(subAliasInfo);
+            // 子查询：递归收集内部所有分支的表（支持 PlainSelect / SetOperationList(UNION) / 嵌套括号）
+            Select innerSelect = ((ParenthesedSelect) fromItem).getSelect();
+            collectSelectTables(innerSelect, result, depth + 1);
+            // 子查询 alias 也记录（用于子查询内字段归属）
+            TableRefInfo subAliasInfo = new TableRefInfo();
+            subAliasInfo.isSubquery = true;
+            Alias a = fromItem.getAlias();
+            subAliasInfo.alias = a != null ? a.getName().toUpperCase() : null;
+            result.add(subAliasInfo);
+        }
+    }
+
+    /**
+     * 递归收集 Select（PlainSelect / SetOperationList / ParenthesedSelect）内部所有分支的表引用。
+     * UNION ALL 子查询（SetOperationList）的每个分支都提取，深度沿用 ≤5。
+     */
+    private void collectSelectTables(Select sel, List<TableRefInfo> result, int depth) {
+        if (sel == null || depth > 5) return;
+        if (sel instanceof PlainSelect) {
+            result.addAll(extractTablesRecursively((PlainSelect) sel, depth));
+        } else if (sel instanceof SetOperationList) {
+            for (Select s : ((SetOperationList) sel).getSelects()) {
+                collectSelectTables(s, result, depth + 1);
             }
+        } else if (sel instanceof ParenthesedSelect) {
+            collectSelectTables(((ParenthesedSelect) sel).getSelect(), result, depth + 1);
         }
     }
 
@@ -171,16 +185,6 @@ public class JsqlSqlAnalyzer {
         info.alias = a != null ? a.getName().toUpperCase() : null;
         info.isSubquery = false;
         return info;
-    }
-
-    private PlainSelect extractInnerSelect(FromItem fromItem) {
-        Select innerSelect = null;
-        if (fromItem instanceof ParenthesedSelect) {
-            // 4.9: SubSelect 改名 ParenthesedSelect，getSelectBody() 改为 getSelect()
-            innerSelect = ((ParenthesedSelect) fromItem).getSelect();
-        }
-        if (innerSelect instanceof PlainSelect) return (PlainSelect) innerSelect;
-        return null;
     }
 
     /** ==================== 别名映射 ==================== **/
@@ -203,18 +207,21 @@ public class JsqlSqlAnalyzer {
     private void collectAlias(FromItem fromItem, Map<String, String> aliasMap) {
         if (fromItem == null) return;
         Alias a = fromItem.getAlias();
-        if (a != null && a.getName() != null) {
-            String alias = a.getName().toUpperCase();
-            if (fromItem instanceof Table) {
-                Table t = (Table) fromItem;
-                if (t.getName() != null) {
-                    aliasMap.put(alias, t.getName().toLowerCase());
+        String alias = (a != null && a.getName() != null) ? a.getName().toUpperCase() : null;
+        if (fromItem instanceof Table) {
+            Table t = (Table) fromItem;
+            if (t.getName() != null) {
+                String tableShort = t.getName().toLowerCase();
+                if (alias != null) {
+                    aliasMap.put(alias, tableShort);
+                } else {
+                    // 无显式别名: 表名自身即隐式引用前缀（FROM t1 ≡ FROM t1 t1，SQL 标准语义）
+                    aliasMap.put(tableShort.toUpperCase(), tableShort);
                 }
-            } else if (fromItem instanceof ParenthesedSelect) {
-                // 子查询 alias 暂不映射到表（无法确定具体表）
-                // 但保留 alias 占位，避免字段归属到错误表
-                aliasMap.put(alias, null);
             }
+        } else if (fromItem instanceof ParenthesedSelect && alias != null) {
+            // 子查询 alias 暂不映射到表（无法确定具体表），保留占位避免字段归属到错误表
+            aliasMap.put(alias, null);
         }
     }
 

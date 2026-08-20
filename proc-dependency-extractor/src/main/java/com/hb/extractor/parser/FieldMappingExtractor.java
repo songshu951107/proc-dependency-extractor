@@ -15,9 +15,13 @@ import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.insert.Insert;
 import net.sf.jsqlparser.statement.select.AllColumns;
+import net.sf.jsqlparser.statement.select.FromItem;
+import net.sf.jsqlparser.statement.select.Join;
+import net.sf.jsqlparser.statement.select.ParenthesedSelect;
 import net.sf.jsqlparser.statement.select.PlainSelect;
 import net.sf.jsqlparser.statement.select.Select;
 import net.sf.jsqlparser.statement.select.SelectItem;
+import net.sf.jsqlparser.statement.select.SetOperationList;
 import net.sf.jsqlparser.statement.create.table.CreateTable;
 import net.sf.jsqlparser.schema.Table;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -156,6 +160,9 @@ public class FieldMappingExtractor {
             // 无 DDL：按 SELECT 列原顺序，targetField 从 AS alias / alias.field 推断
             matchBySelectOnly(exprInfos, aliasMap, result);
         }
+
+        // 子查询字段穿透解析: TAA.field / 裸字段 → 沿 UNION 各分支 SELECT 项解析到底层表字段
+        applySubqueryColumnPassthrough(select, result);
 
         // 【新增】为每个 FieldMapping 添加 ON/WHERE 条件字段的 TransformInput
         if (select != null && !result.isEmpty()) {
@@ -497,6 +504,174 @@ public class FieldMappingExtractor {
             }
         }
         return matchCount == 1 ? matched : null;
+    }
+
+    /** ==================== 子查询字段穿透解析 ==================== **/
+
+    /** 子查询列解析结果: 子查询 SELECT 项内字段引用解析到底层表后的归属 */
+    private static class ResolvedRef {
+        final String sourceTableShort;
+        final String sourceField;
+        final String sourceAlias;
+
+        ResolvedRef(String sourceTableShort, String sourceField, String sourceAlias) {
+            this.sourceTableShort = sourceTableShort;
+            this.sourceField = sourceField;
+            this.sourceAlias = sourceAlias;
+        }
+    }
+
+    /**
+     * 子查询字段穿透解析。
+     *
+     * 外层引用子查询别名（如 FROM (SELECT...UNION ALL...) TAA 后取 TAA.acct_no）
+     * 或裸字段时，aliasMap 中 TAA → null，字段无法归属具体表。
+     * 本方法预建"子查询 scope 别名 → 列名 → 底层表字段"索引，
+     * 再把 FieldMapping.inputs 中无表归属的输入替换为沿 UNION 各分支
+     * SELECT 项解析出的底层表字段（如 TAA.acct_no → vt_01.acct_no + c_agt.acct_no）。
+     * 查不到的输入保持原样；已有表归属的输入不受影响。
+     */
+    private void applySubqueryColumnPassthrough(PlainSelect select, List<FieldMapping> result) {
+        if (select == null || result == null || result.isEmpty()) return;
+        Map<String, Map<String, List<ResolvedRef>>> subqueryIndex = buildSubqueryColumnIndex(select);
+        if (subqueryIndex.isEmpty()) return;
+
+        for (FieldMapping fm : result) {
+            if (fm.getInputs() == null || fm.getInputs().isEmpty()) continue;
+            List<TransformInput> oldInputs = fm.getInputs();
+            boolean changed = false;
+            // 新输入列表（按 table+field+role 去重）
+            LinkedHashMap<String, TransformInput> dedup = new LinkedHashMap<>();
+            int nextOrder = oldInputs.stream().mapToInt(TransformInput::getInputOrder).max().orElse(0);
+            for (TransformInput ti : oldInputs) {
+                if (ti.getSourceTableShort() != null) {
+                    addPassthroughInput(dedup, ti.getSourceTableShort(), ti.getSourceField(),
+                            ti.getSourceAlias(), ti.getRole(), ti.getInputOrder());
+                    continue;
+                }
+                // 确定查询 scope: 有别名按别名（如 TAA）; 裸字段且 FROM 恰好只有一个子查询项时用唯一 scope
+                Map<String, List<ResolvedRef>> scopeColumns = null;
+                if (ti.getSourceAlias() != null) {
+                    scopeColumns = subqueryIndex.get(ti.getSourceAlias());
+                } else if (subqueryIndex.size() == 1) {
+                    scopeColumns = subqueryIndex.values().iterator().next();
+                }
+                List<ResolvedRef> resolved = scopeColumns != null
+                        ? scopeColumns.get(ti.getSourceField()) : null;
+                if (resolved == null || resolved.isEmpty()) {
+                    // 查不到: 保持原样
+                    addPassthroughInput(dedup, null, ti.getSourceField(),
+                            ti.getSourceAlias(), ti.getRole(), ti.getInputOrder());
+                    continue;
+                }
+                changed = true;
+                for (ResolvedRef rr : resolved) {
+                    addPassthroughInput(dedup, rr.sourceTableShort, rr.sourceField,
+                            rr.sourceAlias, ti.getRole(), ++nextOrder);
+                }
+            }
+            if (changed) {
+                List<TransformInput> newInputs = new ArrayList<>(dedup.values());
+                fm.setInputs(newInputs);
+            }
+        }
+    }
+
+    /** 构造子查询列索引: scope别名(大写) → 列名(小写) → 底层表字段解析列表 */
+    private Map<String, Map<String, List<ResolvedRef>>> buildSubqueryColumnIndex(PlainSelect select) {
+        Map<String, Map<String, List<ResolvedRef>>> index = new LinkedHashMap<>();
+        List<FromItem> fromItems = new ArrayList<>();
+        if (select.getFromItem() != null) fromItems.add(select.getFromItem());
+        if (select.getJoins() != null) {
+            for (Join join : select.getJoins()) {
+                if (join.getRightItem() != null) fromItems.add(join.getRightItem());
+            }
+        }
+        for (FromItem fi : fromItems) {
+            if (!(fi instanceof ParenthesedSelect)) continue;
+            Alias a = fi.getAlias();
+            if (a == null || a.getName() == null) continue;  // 无别名子查询无法被外层引用
+            String scope = a.getName().toUpperCase();
+            Map<String, List<ResolvedRef>> scopeColumns =
+                    index.computeIfAbsent(scope, k -> new LinkedHashMap<>());
+            collectBranchColumns(((ParenthesedSelect) fi).getSelect(), scopeColumns, 0);
+        }
+        return index;
+    }
+
+    /** 遍历子查询内部各分支（PlainSelect / SetOperationList / 嵌套括号，深度 ≤2）建立列索引 */
+    private void collectBranchColumns(Select sel, Map<String, List<ResolvedRef>> scopeColumns, int depth) {
+        if (sel == null || depth > 2) return;
+        if (sel instanceof PlainSelect) {
+            indexBranchColumns((PlainSelect) sel, scopeColumns);
+        } else if (sel instanceof SetOperationList) {
+            for (Select s : ((SetOperationList) sel).getSelects()) {
+                collectBranchColumns(s, scopeColumns, depth + 1);
+            }
+        } else if (sel instanceof ParenthesedSelect) {
+            collectBranchColumns(((ParenthesedSelect) sel).getSelect(), scopeColumns, depth + 1);
+        }
+    }
+
+    /** 单个分支: 遍历 SELECT 项，列名（AS 别名优先，其次裸列名）→ 项内字段引用解析到底层表 */
+    private void indexBranchColumns(PlainSelect branch, Map<String, List<ResolvedRef>> scopeColumns) {
+        Map<String, String> branchAliasMap = analyzer.extractAliasMap(branch);
+        for (SelectItem<?> item : branch.getSelectItems()) {
+            Expression expr = item.getExpression();
+            if (expr == null || expr instanceof AllColumns) continue;  // SELECT * 无法按列名索引
+            String colName = null;
+            Alias a = item.getAlias();
+            if (a != null && a.getName() != null) {
+                colName = a.getName().toLowerCase();
+            } else if (expr instanceof Column && ((Column) expr).getColumnName() != null) {
+                colName = ((Column) expr).getColumnName().toLowerCase();
+            }
+            if (colName == null) continue;
+
+            List<JsqlSqlAnalyzer.ColumnRef> refs = new ArrayList<>();
+            analyzer.collectColumnRefs(expr, "value", refs);
+            for (JsqlSqlAnalyzer.ColumnRef ref : refs) {
+                if (ref.field == null) continue;
+                if (SQL_KEYWORDS.contains(ref.field.toUpperCase())) continue;
+                if (ref.field.matches("\\d+")) continue;
+                // 归属表解析: 分支 aliasMap; 裸列用分支单表兜底
+                String table = null;
+                if (ref.alias != null && branchAliasMap.containsKey(ref.alias)) {
+                    table = branchAliasMap.get(ref.alias);
+                } else if (ref.alias == null && branchAliasMap.size() == 1) {
+                    String only = branchAliasMap.values().iterator().next();
+                    if (only != null) table = only;
+                }
+                if (table == null) continue;
+                List<ResolvedRef> list = scopeColumns.computeIfAbsent(colName, k -> new ArrayList<>());
+                boolean exists = false;
+                for (ResolvedRef r : list) {
+                    if (r.sourceTableShort.equals(table) && r.sourceField.equals(ref.field)
+                            && java.util.Objects.equals(r.sourceAlias, ref.alias)) {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists) {
+                    list.add(new ResolvedRef(table, ref.field, ref.alias));
+                }
+            }
+        }
+    }
+
+    /** 追加穿透输入（按 table+field+role 去重） */
+    private void addPassthroughInput(LinkedHashMap<String, TransformInput> dedup,
+                                     String tableShort, String field, String alias,
+                                     String role, int inputOrder) {
+        String key = tableShort + "." + field + "/" + role;
+        if (dedup.containsKey(key)) return;
+        TransformInput ti = new TransformInput();
+        ti.setSourceTableShort(tableShort);
+        ti.setSourceField(field);
+        ti.setSourceAlias(alias);
+        ti.setRole(role);
+        ti.setInputOrder(inputOrder);
+        dedup.put(key, ti);
     }
 
     /** 内部：SELECT 列表达式信息 */

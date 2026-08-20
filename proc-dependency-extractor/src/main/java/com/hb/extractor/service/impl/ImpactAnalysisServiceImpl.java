@@ -38,6 +38,9 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
     @Value("${impact.analysis.max-depth:20}")
     private int maxAllowedDepth;
 
+    /** 字段级分析 BFS 安全阀：nodes 总数超过该值提前终止扩展（防可达闭包爆炸） */
+    private static final int MAX_FIELD_GRAPH_NODES = 100_000;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -618,12 +621,26 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         return id.substring(0, idx).toUpperCase();
     }
 
+    /**
+     * 字段级影响分析：Java 迭代 BFS 逐层扩展（替代 Cypher 变长路径枚举，避免组合爆炸）。
+     *
+     * 图模型: (:Column)-[:INPUT_TO {role, source_alias}]->(:Transform)-[:OUTPUT_TO]->(:Column)
+     * 字段跳 = 2 关系跳；depth 参数 = 最大字段跳数（等价于旧实现 *1..depth*2 的关系跳上限）。
+     *
+     * 每层一次扩展查询（frontier 为上一层 Column col_key 列表，走 col_key 唯一索引）：
+     * - DOWNSTREAM: frontier Column -INPUT_TO-> Transform，下一层 = Transform 的输出字段
+     * - UPSTREAM:   Transform -OUTPUT_TO-> frontier Column，下一层 = Transform 的输入字段（上游字段）
+     * - BOTH = 两方向各跑一遍（先 DOWNSTREAM 后 UPSTREAM），visited 跨方向共享去重。
+     *
+     * 语义与旧 path 枚举实现等价：
+     * - 可达 Column 集合与 depth（BFS 层号 = 最短字段跳数，同 min(length(path))/2）
+     * - Transform 行在 BFS 期间收集、BFS 结束后统一处理，保证 DIRECT 分支的
+     *   nodeIds.contains 判断与旧实现"先查全部可达节点、再查 Transform 边"看到相同的完整可达集
+     * - 无输入或无输出的 Transform 不可能出现在任何路径上（路径要求中间 Transform 既有入边又有出边），跳过
+     */
     private void analyzeFieldLevel(String fieldFullName, String direction, int depth,
                                     List<ImpactAnalysisVO.NodeVO> nodes,
                                     List<ImpactAnalysisVO.EdgeVO> edges) {
-        int cypherMaxHops = depth * 2;
-        String arrow = buildFieldArrow(direction, cypherMaxHops);
-
         Set<String> nodeIds = new LinkedHashSet<>();
         nodeIds.add(fieldFullName);
 
@@ -639,57 +656,93 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         nodes.add(startNode);
 
         try {
-            // 步骤 1:查询所有可达 Column 节点
-            String nodeCypher = "MATCH path = (src:Column {col_key: $key})" + arrow + "(tgt:Column) " +
-                    "WHERE src <> tgt " +
-                    "WITH tgt, min(length(path)) AS minRelLen " +
-                    "RETURN tgt.col_key AS id, tgt.name AS label, " +
-                    "       tgt.table_full_name AS tableFullName, " +
-                    "       (minRelLen + 1) / 2 AS depth " +
-                    "ORDER BY depth, tgt.col_key";
+            // 每层一次扩展查询：返回与 frontier 相邻的 Transform 及其全量输入/输出
+            String expandDownstream = "UNWIND $frontier AS ck " +
+                    "MATCH (c:Column {col_key: ck})-[:INPUT_TO]->(t:Transform) " +
+                    "OPTIONAL MATCH (in:Column)-[rIn:INPUT_TO]->(t) " +
+                    "OPTIONAL MATCH (t)-[:OUTPUT_TO]->(out:Column) " +
+                    "RETURN t.id AS transformId, t.expression AS expression, " +
+                    "  t.logic_type AS logicType, t.sql_hint AS sqlHint, " +
+                    "  t.proc_name AS procName, t.script_file AS scriptFile, " +
+                    "  collect(DISTINCT {colKey: in.col_key, role: rIn.role, alias: rIn.source_alias, " +
+                    "    name: in.name, tableFullName: in.table_full_name}) AS inputs, " +
+                    "  collect(DISTINCT {colKey: out.col_key, name: out.name, " +
+                    "    tableFullName: out.table_full_name}) AS outputs";
+            String expandUpstream = "UNWIND $frontier AS ck " +
+                    "MATCH (c:Column {col_key: ck})<-[:OUTPUT_TO]-(t:Transform) " +
+                    "OPTIONAL MATCH (in:Column)-[rIn:INPUT_TO]->(t) " +
+                    "OPTIONAL MATCH (t)-[:OUTPUT_TO]->(out:Column) " +
+                    "RETURN t.id AS transformId, t.expression AS expression, " +
+                    "  t.logic_type AS logicType, t.sql_hint AS sqlHint, " +
+                    "  t.proc_name AS procName, t.script_file AS scriptFile, " +
+                    "  collect(DISTINCT {colKey: in.col_key, role: rIn.role, alias: rIn.source_alias, " +
+                    "    name: in.name, tableFullName: in.table_full_name}) AS inputs, " +
+                    "  collect(DISTINCT {colKey: out.col_key, name: out.name, " +
+                    "    tableFullName: out.table_full_name}) AS outputs";
 
-            Collection<ImpactAnalysisVO.NodeVO> colNodes = neo4jClient.query(nodeCypher)
-                    .bind(fieldFullName).to("key")
-                    .fetchAs(ImpactAnalysisVO.NodeVO.class)
-                    .mappedBy((type, record) -> {
-                        ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
-                        n.setId(record.get("id").asString());
-                        n.setLabel(record.get("label").asString());
-                        n.setNodeLevel("FIELD");
-                        n.setLayer(extractLayerFromId(n.getId()));
-                        n.setTableFullName(record.get("tableFullName").isNull() ? null : record.get("tableFullName").asString());
-                        n.setDepth((int) record.get("depth").asLong());
-                        return n;
-                    })
-                    .all();
-            for (ImpactAnalysisVO.NodeVO n : colNodes) {
-                if (nodeIds.add(n.getId())) {
-                    nodes.add(n);
+            List<String> dirs = new ArrayList<>();
+            if ("UPSTREAM".equals(direction)) {
+                dirs.add("UPSTREAM");
+            } else if ("BOTH".equals(direction)) {
+                dirs.add("DOWNSTREAM");
+                dirs.add("UPSTREAM");
+            } else {
+                dirs.add("DOWNSTREAM");
+            }
+
+            // Transform 行先收集、BFS 结束后统一处理（见方法 javadoc）
+            Set<String> seenTransforms = new HashSet<>();
+            List<Map<String, Object>> transformRows = new ArrayList<>();
+
+            for (String dir : dirs) {
+                boolean downstream = "DOWNSTREAM".equals(dir);
+                String cypher = downstream ? expandDownstream : expandUpstream;
+                Set<String> frontier = new LinkedHashSet<>();
+                frontier.add(fieldFullName);
+                for (int layer = 1; layer <= depth; layer++) {
+                    if (frontier.isEmpty()) break;
+                    // 安全阀：防真闭包爆炸把 API 打死
+                    if (nodes.size() > MAX_FIELD_GRAPH_NODES) {
+                        log.warn("字段级分析节点数超过安全上限 {}，提前终止扩展 field={} direction={}",
+                                MAX_FIELD_GRAPH_NODES, fieldFullName, dir);
+                        break;
+                    }
+                    Collection<Map<String, Object>> rows = neo4jClient.query(cypher)
+                            .bind(new ArrayList<>(frontier)).to("frontier")
+                            .fetch().all();
+                    Set<String> nextFrontier = new LinkedHashSet<>();
+                    for (Map<String, Object> row : rows) {
+                        String transformId = (String) row.get("transformId");
+                        if (transformId == null) continue;
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> rowInputs = (List<Map<String, Object>>) row.get("inputs");
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> rowOutputs = (List<Map<String, Object>>) row.get("outputs");
+                        // 路径枚举语义：Transform 既有输入又有输出才会出现在任何路径上
+                        if (rowInputs == null || rowInputs.isEmpty()
+                                || rowOutputs == null || rowOutputs.isEmpty()) {
+                            continue;
+                        }
+                        if (seenTransforms.add(transformId)) {
+                            transformRows.add(row);
+                        }
+                        // 下一层 frontier：DOWNSTREAM 取输出字段，UPSTREAM 取输入字段（上游字段）
+                        List<Map<String, Object>> nextCols = downstream ? rowOutputs : rowInputs;
+                        for (Map<String, Object> col : nextCols) {
+                            String colKey = (String) col.get("colKey");
+                            if (colKey == null || !nodeIds.add(colKey)) continue;
+                            nodes.add(buildFieldNode(col, colKey, layer));
+                            nextFrontier.add(colKey);
+                        }
+                    }
+                    frontier = nextFrontier;
                 }
             }
 
-            // 步骤 2:查询所有 Transform 节点 + 边
-            String edgeCypher = "MATCH path = (src:Column {col_key: $key})" + arrow + "(tgt:Column) " +
-                    "WHERE src <> tgt " +
-                    "UNWIND nodes(path) AS n " +
-                    "WITH DISTINCT n " +
-                    "WHERE n:Transform " +
-                    "OPTIONAL MATCH (in:Column)-[rIn:INPUT_TO]->(n) " +
-                    "OPTIONAL MATCH (n)-[rOut:OUTPUT_TO]->(out:Column) " +
-                    "RETURN n.id AS transformId, n.expression AS expression, " +
-                    "       n.logic_type AS logicType, n.sql_hint AS sqlHint, " +
-                    "       n.proc_name AS procName, n.script_file AS scriptFile, " +
-                    "       collect(DISTINCT {colKey: in.col_key, role: rIn.role, alias: rIn.source_alias}) AS inputs, " +
-                    "       out.col_key AS outputColKey";
-
-            Collection<Map<String, Object>> transformRows = neo4jClient.query(edgeCypher)
-                    .bind(fieldFullName).to("key")
-                    .fetch().all();
-
+            // 统一处理 Transform 节点 + 边（此时 nodeIds 已含全部可达字段）
             for (Map<String, Object> row : transformRows) {
                 String transformId = (String) row.get("transformId");
                 String logicType = (String) row.get("logicType");
-                String outputColKey = (String) row.get("outputColKey");
                 String procName = (String) row.get("procName");
 
                 // DIRECT 类型: 无计算转换, 不创建 Transform 节点,
@@ -697,34 +750,41 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                 if ("DIRECT".equals(logicType)) {
                     @SuppressWarnings("unchecked")
                     List<Map<String, Object>> directInputs = (List<Map<String, Object>>) row.get("inputs");
-                    if (directInputs != null && outputColKey != null) {
-                        ensureFieldNode(outputColKey, nodeIds, nodes);
-                        for (Map<String, Object> input : directInputs) {
-                            String colKey = (String) input.get("colKey");
-                            if (colKey == null) continue;
-                            String role = (String) input.get("role");
-                            boolean isCondition = "join_condition".equals(role) || "where_condition".equals(role);
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> directOutputs = (List<Map<String, Object>>) row.get("outputs");
+                    if (directInputs != null && directOutputs != null) {
+                        // 旧实现按 (Transform, output) 逐行处理；此处对每个 output 重复 DIRECT 处理
+                        for (Map<String, Object> output : directOutputs) {
+                            String outputColKey = (String) output.get("colKey");
+                            if (outputColKey == null) continue;
+                            ensureFieldNode(outputColKey, nodeIds, nodes);
+                            for (Map<String, Object> input : directInputs) {
+                                String colKey = (String) input.get("colKey");
+                                if (colKey == null) continue;
+                                String role = (String) input.get("role");
+                                boolean isCondition = "join_condition".equals(role) || "where_condition".equals(role);
 
-                            if (!nodeIds.contains(colKey)) {
-                                if (isCondition) {
-                                    // 条件字段: 补全节点, 创建 DERIVED_FROM 边
-                                    ensureFieldNode(colKey, nodeIds, nodes);
-                                } else {
-                                    // SELECT 列辅助字段: 跳过
-                                    continue;
+                                if (!nodeIds.contains(colKey)) {
+                                    if (isCondition) {
+                                        // 条件字段: 补全节点, 创建 DERIVED_FROM 边
+                                        ensureFieldNode(colKey, nodeIds, nodes);
+                                    } else {
+                                        // SELECT 列辅助字段: 跳过
+                                        continue;
+                                    }
                                 }
-                            }
 
-                            ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
-                            edge.setSource(colKey);
-                            edge.setTarget(outputColKey);
-                            edge.setEdgeType("DERIVED_FROM");
-                            edge.setSourceAlias((String) input.get("alias"));
-                            edge.setProcName(procName);
-                            if (isCondition) {
-                                edge.setRole(role);
+                                ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
+                                edge.setSource(colKey);
+                                edge.setTarget(outputColKey);
+                                edge.setEdgeType("DERIVED_FROM");
+                                edge.setSourceAlias((String) input.get("alias"));
+                                edge.setProcName(procName);
+                                if (isCondition) {
+                                    edge.setRole(role);
+                                }
+                                edges.add(edge);
                             }
-                            edges.add(edge);
                         }
                     }
                     continue;
@@ -769,21 +829,46 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                     }
                 }
 
-                // 添加 OUTPUT_TO 边
-                if (outputColKey != null) {
-                    ensureFieldNode(outputColKey, nodeIds, nodes);
-                    ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
-                    edge.setSource(transformId);
-                    edge.setTarget(outputColKey);
-                    edge.setEdgeType("OUTPUT_TO");
-                    edge.setExpression((String) row.get("expression"));
-                    edge.setProcName(procName);
-                    edges.add(edge);
+                // 添加 OUTPUT_TO 边（Transform 可有多个输出，逐个建边）
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> outputs = (List<Map<String, Object>>) row.get("outputs");
+                if (outputs != null) {
+                    for (Map<String, Object> output : outputs) {
+                        String outputColKey = (String) output.get("colKey");
+                        if (outputColKey == null) continue;
+                        ensureFieldNode(outputColKey, nodeIds, nodes);
+                        ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
+                        edge.setSource(transformId);
+                        edge.setTarget(outputColKey);
+                        edge.setEdgeType("OUTPUT_TO");
+                        edge.setExpression((String) row.get("expression"));
+                        edge.setProcName(procName);
+                        edges.add(edge);
+                    }
                 }
             }
         } catch (Exception e) {
             log.error("字段级影响查询失败: {}", e.getMessage());
         }
+    }
+
+    /**
+     * BFS 层发现的字段节点构建（与旧可达节点查询的字段一致：
+     * label=Column.name, tableFullName=Column.table_full_name, depth=BFS 层号）
+     */
+    private ImpactAnalysisVO.NodeVO buildFieldNode(Map<String, Object> col, String colKey, int layer) {
+        ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
+        n.setId(colKey);
+        String[] p = colKey.split("\\.");
+        String name = (String) col.get("name");
+        n.setLabel(name != null ? name : (p.length >= 3 ? p[2] : colKey));
+        n.setNodeLevel("FIELD");
+        n.setLayer(extractLayerFromId(colKey));
+        String tableFullName = (String) col.get("tableFullName");
+        n.setTableFullName(tableFullName != null ? tableFullName
+                : (p.length >= 2 ? (p[0] + "." + p[1]).toLowerCase() : null));
+        n.setDepth(layer);
+        return n;
     }
 
     /**

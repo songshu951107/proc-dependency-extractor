@@ -13,7 +13,7 @@
       <el-button size="small" @click="handleAnalyze(lastRequest)">重试</el-button>
     </el-alert>
 
-    <ImpactStats :stats="result?.stats" />
+    <ImpactStats :stats="displayStats" />
 
     <el-alert
       v-if="result && !impactRows.length"
@@ -96,6 +96,31 @@ const exportFileName = ref('影响分析')
 
 const isFieldLevel = computed(() => {
   return lastRequest.value?.fieldName && lastRequest.value.fieldName !== ''
+})
+
+// 统计卡与表格同口径：从清单行（单一事实来源）推导，避免后端 stats
+// （原始 BFS 深度、节点计数）与表格（临时表穿透层级、行去重）数字不一致。
+// 表级分析无字段维度，affectedFieldCount 置 null 由统计卡隐藏；报表数沿用后端。
+const displayStats = computed(() => {
+  const backend = result.value?.stats || {}
+  const rows = impactRows.value || []
+  const tables = new Set()
+  const fields = new Set()
+  const procs = new Set()
+  let maxLevel = 0
+  for (const r of rows) {
+    if (!r.temp) tables.add(r.table)
+    if (r.targetId) fields.add(r.targetId)
+    if (r.procName && r.procName !== '-') procs.add(r.procName)
+    if (typeof r.level === 'number' && r.level > maxLevel) maxLevel = r.level
+  }
+  return {
+    ...backend,
+    affectedTableCount: tables.size,
+    affectedFieldCount: isFieldLevel.value ? fields.size : null,
+    affectedProcCount: procs.size,
+    maxDepthReached: maxLevel
+  }
 })
 
 // 报表影响行：将 reportImpacts 嵌套结构展平为表格行（每个报表一行）

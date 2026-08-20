@@ -48,7 +48,6 @@
     </div>
 
     <ImpactPathDialog
-      v-if="pathDialogVisible"
       :visible="pathDialogVisible"
       :row="pathDialogRow"
       :nodes="pathDialogNodes"

@@ -14,7 +14,12 @@
                 <el-link type="primary" @click="$emit('viewScript', row)">{{ row.procName }}</el-link>
               </template>
             </el-table-column>
-            <el-table-column prop="table" label="受影响表" min-width="220" show-overflow-tooltip />
+            <el-table-column prop="table" label="受影响表" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ row.table }}
+                <el-tag v-if="row.temp" type="info" size="small">临时表</el-tag>
+              </template>
+            </el-table-column>
             <el-table-column v-if="isFieldLevel" prop="field" label="受影响字段" min-width="140" show-overflow-tooltip />
             <el-table-column v-if="isFieldLevel" label="影响原因" width="150" align="center">
               <template #default="{ row }">
@@ -69,9 +74,12 @@ function exportAll() {
   const header = props.isFieldLevel
     ? ['层级', '受影响脚本', '受影响表', '受影响字段', '影响原因']
     : ['层级', '受影响脚本', '受影响表']
-  const data = props.rows.map(r => props.isFieldLevel
-    ? [`第${levelLabel(r.level ?? 0)}层级`, r.procName, r.table, r.field, r.reasons.join('+')]
-    : [`第${levelLabel(r.level ?? 0)}层级`, r.procName, r.table])
+  const data = props.rows.map(r => {
+    const table = r.temp ? `${r.table}(临时表)` : r.table
+    return props.isFieldLevel
+      ? [`第${levelLabel(r.level ?? 0)}层级`, r.procName, table, r.field, r.reasons.join('+')]
+      : [`第${levelLabel(r.level ?? 0)}层级`, r.procName, table]
+  })
   const ws = XLSX.utils.aoa_to_sheet([header, ...data])
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '受影响清单')

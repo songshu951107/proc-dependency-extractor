@@ -79,7 +79,9 @@ function bfsShallowDepth(nodeMap, edges, startId, isTransparent) {
  * 行生成：到达边（DERIVED_FROM/OUTPUT_TO）触发行，行 key=(procName, targetId) 去重，
  * reasons = 字段标签集合（按 REASON_ORDER 排序），同一字段多原因聚合一行；
  * 无标签字段不生成行（可达判据）。level 仍取最长路径层级。
- * @return [{ procName, table, field, reasons: string[], level, targetId }] 按 level/表/字段排序
+ * 补充行：仅产临时表的 proc（非临时交付物字段级血缘缺失）补临时表行（temp=true，
+ * level 用非透明跳数），保证清单覆盖全部受影响脚本、与 stats 一致。
+ * @return [{ procName, table, field, reasons: string[], level, targetId, temp }] 按 level/表/字段排序
  */
 export function buildFieldImpactRows(nodes, edges, startFieldId) {
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
@@ -139,7 +141,7 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
     }
   }
 
-  // 行生成
+  // 行生成（非临时表交付物）
   const rows = []
   const seen = new Set()
   for (const e of edges) {
@@ -157,8 +159,36 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
       field: parts[parts.length - 1],
       reasons: REASON_ORDER.filter(r => reasonMap.get(t.id).has(r)),
       level: depth.get(t.id),
-      targetId: t.id
+      targetId: t.id,
+      temp: false
     })
+  }
+  // 补充行：仅产临时表的 proc（其非临时交付物字段级血缘缺失，链路止于临时表）。
+  // 只为"无非临时行"的 proc 生成临时表行，避免临时中转节点大量入表；层级用非透明跳数。
+  const procsWithRows = new Set(rows.map(r => r.procName))
+  if (rows.length) {
+    const rawDepth = computeLongestDepth(nodes, edges, startFieldId, () => false)
+    for (const e of edges) {
+      if (e.edgeType !== 'DERIVED_FROM' && e.edgeType !== 'OUTPUT_TO') continue
+      const procName = e.procName || '-'
+      if (procsWithRows.has(procName)) continue
+      const t = nodeMap.get(e.target)
+      if (!t || t.nodeLevel !== 'FIELD' || t.id === startFieldId) continue
+      if (!isTempFieldName(t.id) || !reasonMap.has(t.id)) continue
+      const key = `${procName}|${t.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const parts = t.id.split('.')
+      rows.push({
+        procName,
+        table: parts.length >= 2 ? `${parts[0]}.${parts[1]}` : t.id,
+        field: parts[parts.length - 1],
+        reasons: REASON_ORDER.filter(r => reasonMap.get(t.id).has(r)),
+        level: rawDepth.get(t.id),
+        targetId: t.id,
+        temp: true
+      })
+    }
   }
   rows.sort((a, b) => (a.level ?? 99) - (b.level ?? 99)
     || a.table.localeCompare(b.table) || a.field.localeCompare(b.field))

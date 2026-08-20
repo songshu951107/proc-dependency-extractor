@@ -13,7 +13,7 @@
       <el-button size="small" @click="handleAnalyze(lastRequest)">重试</el-button>
     </el-alert>
 
-    <ImpactStats :stats="displayStats" />
+    <ImpactStats :stats="displayStats" :upstream="isUpstream" />
 
     <el-alert
       v-if="result && !impactRows.length"
@@ -27,6 +27,7 @@
       v-if="impactRows.length"
       :rows="impactRows"
       :isFieldLevel="isFieldLevel"
+      :upstream="isUpstream"
       :exportFileName="exportFileName"
       @viewScript="handleRowViewScript"
       @viewPath="pathDialogVisible = true; pathDialogRow = $event"
@@ -76,7 +77,7 @@ import ImpactResultTabs from '@/components/impact/ImpactResultTabs.vue'
 import ImpactPathDialog from '@/components/impact/ImpactPathDialog.vue'
 import ScriptSnippetModal from '@/components/impact/ScriptSnippetModal.vue'
 import { analyze } from '@/api/impact'
-import { buildFieldImpactRows, buildTableImpactData } from '@/components/impact/impactListUtils'
+import { buildFieldImpactRows, buildFieldSourceRows, buildTableImpactData } from '@/components/impact/impactListUtils'
 import { ElMessage } from 'element-plus'
 
 const loading = ref(false)
@@ -92,6 +93,7 @@ const pathDialogRow = ref(null)
 const pathDialogNodes = ref([])
 const pathDialogEdges = ref([])
 const sourceNodeId = ref('')
+const isUpstream = ref(false)
 const exportFileName = ref('影响分析')
 
 const isFieldLevel = computed(() => {
@@ -158,13 +160,18 @@ const handleAnalyze = async (request) => {
       const startId = `${request.schema}.${request.tableShortName}.${request.fieldName}`.toLowerCase()
       sourceNodeId.value = nodes.some(n => n.id === startId) ? startId
         : (nodes.find(n => n.depth === 0 && n.nodeLevel === 'FIELD')?.id || startId)
-      impactRows.value = buildFieldImpactRows(nodes, edges, sourceNodeId.value)
+      // UPSTREAM：行 = 来源字段清单（反向传播推导）；BOTH 暂按下游清单展示
+      isUpstream.value = (request.direction || 'DOWNSTREAM') === 'UPSTREAM'
+      impactRows.value = isUpstream.value
+        ? buildFieldSourceRows(nodes, edges, sourceNodeId.value)
+        : buildFieldImpactRows(nodes, edges, sourceNodeId.value)
       pathDialogNodes.value = nodes
       pathDialogEdges.value = edges
       exportFileName.value = `影响分析_${request.schema}.${request.tableShortName}.${request.fieldName}_${request.direction || 'DOWNSTREAM'}`
     } else {
       const built = buildTableImpactData(res.data?.sourceTable, res.data?.impactedByDepth || {}, res.data?.sourceLayer)
       sourceNodeId.value = res.data?.sourceTable || ''
+      isUpstream.value = false
       impactRows.value = built.rows
       pathDialogNodes.value = built.nodes
       pathDialogEdges.value = built.edges

@@ -13,7 +13,9 @@
       <div class="summary" v-if="row">
         <el-tag v-for="r in (row.reasons || [])" :key="r" size="small" style="margin-right: 4px">{{ r }}</el-tag>
         <span class="summary-text">
-          {{ sourceId }} →（{{ row.level }} 跳）→ {{ row.table }}{{ row.field ? '.' + row.field : '' }}
+          {{ row.upstream
+            ? `${row.table}${row.field ? '.' + row.field : ''} 在该脚本中的流向（距分析起点 ${row.level} 跳）`
+            : `${sourceId} →（${row.level} 跳）→ ${row.table}${row.field ? '.' + row.field : ''}` }}
         </span>
         <span class="meta" v-if="subgraph">节点 {{ subgraph.nodes.length }} · 边 {{ subgraph.edges.length }}</span>
       </div>
@@ -44,7 +46,7 @@
 import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import G6 from '@antv/g6'
-import { traceUpstreamSubgraph } from './impactListUtils'
+import { traceUpstreamSubgraph, traceDownstreamSubgraph } from './impactListUtils'
 
 const props = defineProps({
   visible: Boolean,
@@ -61,8 +63,11 @@ const subgraph = ref(null)
 const loaded = ref(false)
 const selectedNode = ref(null)
 
-const dialogTitle = computed(() =>
-  props.row ? `影响链路：${props.row.table}${props.row.field ? '.' + props.row.field : ''}` : '影响链路')
+const dialogTitle = computed(() => {
+  if (!props.row) return '影响链路'
+  const target = `${props.row.table}${props.row.field ? '.' + props.row.field : ''}`
+  return props.row.upstream ? `来源链路：${target}` : `影响链路：${target}`
+})
 
 const LAYER_COLORS = {
   FDM: '#67c23a',   // 绿
@@ -82,7 +87,11 @@ async function handleOpen() {
   await nextTick()
   loaded.value = false
   if (!props.row) return
-  subgraph.value = traceUpstreamSubgraph(props.nodes, props.edges, props.row.targetId, props.row.procName)
+  // UPSTREAM 行: 来源字段在该行脚本中的正向流向（traceUpstream 的镜像）;
+  // DOWNSTREAM 行: 目标字段在该行脚本中的反向回溯
+  subgraph.value = props.row.upstream
+    ? traceDownstreamSubgraph(props.nodes, props.edges, props.row.targetId, props.row.procName)
+    : traceUpstreamSubgraph(props.nodes, props.edges, props.row.targetId, props.row.procName)
   loaded.value = true
   await renderGraph()
 }

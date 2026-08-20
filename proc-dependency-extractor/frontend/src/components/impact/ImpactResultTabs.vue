@@ -9,19 +9,19 @@
           :label="`第${levelLabel(lv)}层级（${rowsByLevel[lv].length}）`"
         >
           <el-table :data="rowsByLevel[lv]" border size="small" style="width: 100%">
-            <el-table-column prop="procName" label="受影响脚本" min-width="220" show-overflow-tooltip>
+            <el-table-column prop="procName" :label="upstream ? '关联脚本' : '受影响脚本'" min-width="220" show-overflow-tooltip>
               <template #default="{ row }">
                 <el-link type="primary" @click="$emit('viewScript', row)">{{ row.procName }}</el-link>
               </template>
             </el-table-column>
-            <el-table-column prop="table" label="受影响表" min-width="220" show-overflow-tooltip>
+            <el-table-column prop="table" :label="upstream ? '来源表' : '受影响表'" min-width="220" show-overflow-tooltip>
               <template #default="{ row }">
                 {{ row.table }}
                 <el-tag v-if="row.temp" type="info" size="small">临时表</el-tag>
               </template>
             </el-table-column>
-            <el-table-column v-if="isFieldLevel" prop="field" label="受影响字段" min-width="140" show-overflow-tooltip />
-            <el-table-column v-if="isFieldLevel" label="影响原因" width="150" align="center">
+            <el-table-column v-if="isFieldLevel" prop="field" :label="upstream ? '来源字段' : '受影响字段'" min-width="140" show-overflow-tooltip />
+            <el-table-column v-if="isFieldLevel" :label="upstream ? '关联原因' : '影响原因'" width="150" align="center">
               <template #default="{ row }">
                 <el-tag v-for="r in row.reasons" :key="r" :type="r === '直接来源' ? 'success' : 'warning'" size="small" style="margin: 2px">{{ r }}</el-tag>
               </template>
@@ -48,6 +48,7 @@ import { levelLabel } from './impactListUtils'
 const props = defineProps({
   rows: { type: Array, default: () => [] },
   isFieldLevel: Boolean,
+  upstream: Boolean,
   exportFileName: String
 })
 defineEmits(['viewScript', 'viewPath'])
@@ -72,7 +73,9 @@ watch(levels, (lvs) => {
 function exportAll() {
   if (!props.rows.length) return
   const header = props.isFieldLevel
-    ? ['层级', '受影响脚本', '受影响表', '受影响字段', '影响原因']
+    ? (props.upstream
+        ? ['层级', '关联脚本', '来源表', '来源字段', '关联原因']
+        : ['层级', '受影响脚本', '受影响表', '受影响字段', '影响原因'])
     : ['层级', '受影响脚本', '受影响表']
   const data = props.rows.map(r => {
     const table = r.temp ? `${r.table}(临时表)` : r.table
@@ -82,7 +85,7 @@ function exportAll() {
   })
   const ws = XLSX.utils.aoa_to_sheet([header, ...data])
   const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, '受影响清单')
+  XLSX.utils.book_append_sheet(wb, ws, props.upstream ? '来源清单' : '受影响清单')
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
   XLSX.writeFile(wb, `${props.exportFileName || '影响分析'}_${stamp}.xlsx`)
   ElMessage.success(`已导出 ${props.rows.length} 行`)

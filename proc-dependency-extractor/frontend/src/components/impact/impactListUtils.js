@@ -253,6 +253,163 @@ export function buildTableImpactData(sourceTable, impactedByDepth, sourceLayer) 
 }
 
 /**
+ * 字段级来源清单行推导（buildFieldImpactRows 的 UPSTREAM 镜像版）。
+ * 从起点沿血缘反向传播：入边 OUTPUT_TO 进入链路 Transform，其每个 INPUT_TO 输入字段
+ * 为来源候选；入边 DERIVED_FROM 的源字段为来源候选。标签规则与下游一致——
+ * 边带角色时跳变为该角色（JOIN/WHERE 条件），否则继承下游字段的标签。
+ * level = 反向最长路径的非透明跳数（临时表/Transform 穿透）。
+ * 行 key=(procName, 来源字段) 去重，reasons 聚合；仅产临时来源的 proc 补临时行。
+ * @return [{ procName, table, field, reasons: string[], level, targetId, temp, upstream: true }]
+ */
+export function buildFieldSourceRows(nodes, edges, startFieldId) {
+  const nodeMap = new Map(nodes.map(n => [n.id, n]))
+  // 反向图最长深度：层级 = 距起点的上游跳数
+  const revEdges = edges.map(e => ({ ...e, source: e.target, target: e.source }))
+  const depth = computeLongestDepth(nodes, revEdges, startFieldId,
+    n => n.nodeLevel === 'TRANSFORM' || isTempFieldName(n.id))
+
+  // 入边索引 + Transform 输入索引
+  const inEdges = new Map()
+  for (const e of edges) {
+    if (!inEdges.has(e.target)) inEdges.set(e.target, [])
+    inEdges.get(e.target).push(e)
+  }
+  const transformInputs = new Map()
+  for (const e of edges) {
+    if (e.edgeType !== 'INPUT_TO') continue
+    if (!transformInputs.has(e.target)) transformInputs.set(e.target, [])
+    transformInputs.get(e.target).push({ colKey: e.source, role: e.role })
+  }
+
+  const chainTransforms = new Set() // 位于起点上游链路上的 Transform
+  const reasonMap = new Map()
+  const visited = new Set()
+  const queue = []
+  const push = (fieldId, reason) => {
+    if (fieldId === startFieldId) return
+    const key = `${fieldId}|${reason}`
+    if (visited.has(key)) return
+    visited.add(key)
+    if (!reasonMap.has(fieldId)) reasonMap.set(fieldId, new Set())
+    reasonMap.get(fieldId).add(reason)
+    queue.push([fieldId, reason])
+  }
+  // 初始：起点的入边（OUTPUT_TO 来自链路 Transform；DERIVED_FROM 来自直接下游…上游字段）
+  for (const e of (inEdges.get(startFieldId) || [])) {
+    if (e.edgeType === 'OUTPUT_TO') {
+      chainTransforms.add(e.source)
+      for (const inp of (transformInputs.get(e.source) || [])) {
+        if (nodeMap.has(inp.colKey)) push(inp.colKey, ROLE_TO_REASON[inp.role] || '直接来源')
+      }
+    } else if (e.edgeType === 'DERIVED_FROM') {
+      const s = nodeMap.get(e.source)
+      if (s && s.nodeLevel === 'FIELD') push(e.source, ROLE_TO_REASON[e.role] || '直接来源')
+    }
+  }
+  // 继承传播：沿入边继续向上游
+  while (queue.length) {
+    const [cur, reason] = queue.shift()
+    for (const e of (inEdges.get(cur) || [])) {
+      if (e.edgeType === 'OUTPUT_TO') {
+        chainTransforms.add(e.source)
+        for (const inp of (transformInputs.get(e.source) || [])) {
+          push(inp.colKey, ROLE_TO_REASON[inp.role] || reason)
+        }
+      } else if (e.edgeType === 'DERIVED_FROM') {
+        const s = nodeMap.get(e.source)
+        if (s && s.nodeLevel === 'FIELD') push(e.source, ROLE_TO_REASON[e.role] || reason)
+      }
+    }
+  }
+
+  // 行生成：到达边 = INPUT_TO（来源字段进入链路 Transform）或 DERIVED_FROM（直连链路字段）
+  // 虚拟字面量节点（__literal__.<transformId>）不是真实来源字段，排除
+  const rows = []
+  const seen = new Set()
+  for (const e of edges) {
+    if (e.edgeType !== 'INPUT_TO' && e.edgeType !== 'DERIVED_FROM') continue
+    const s = nodeMap.get(e.source)
+    if (!s || s.nodeLevel !== 'FIELD' || s.id === startFieldId) continue
+    if (s.id.startsWith('__literal__.')) continue
+    if (!reasonMap.has(s.id)) continue // 不在起点的上游闭包内
+    if (e.edgeType === 'INPUT_TO' && !chainTransforms.has(e.target)) continue
+    if (e.edgeType === 'DERIVED_FROM' && e.target !== startFieldId && !reasonMap.has(e.target)) continue
+    if (isTempFieldName(s.id)) continue
+    const key = `${e.procName || '-'}|${s.id}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const parts = s.id.split('.')
+    rows.push({
+      procName: e.procName || '-',
+      table: parts.length >= 2 ? `${parts[0]}.${parts[1]}` : s.id,
+      field: parts[parts.length - 1],
+      reasons: REASON_ORDER.filter(r => reasonMap.get(s.id).has(r)),
+      level: depth.get(s.id),
+      targetId: s.id,
+      temp: false,
+      upstream: true
+    })
+  }
+  // 补充行：仅临时表来源的 proc
+  const procsWithRows = new Set(rows.map(r => r.procName))
+  if (rows.length) {
+    const rawDepth = computeLongestDepth(nodes, revEdges, startFieldId, () => false)
+    for (const e of edges) {
+      if (e.edgeType !== 'INPUT_TO' && e.edgeType !== 'DERIVED_FROM') continue
+      const procName = e.procName || '-'
+      if (procsWithRows.has(procName)) continue
+      const s = nodeMap.get(e.source)
+      if (!s || s.nodeLevel !== 'FIELD' || s.id === startFieldId) continue
+      if (s.id.startsWith('__literal__.')) continue
+      if (!isTempFieldName(s.id) || !reasonMap.has(s.id)) continue
+      const key = `${procName}|${s.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const parts = s.id.split('.')
+      rows.push({
+        procName,
+        table: parts.length >= 2 ? `${parts[0]}.${parts[1]}` : s.id,
+        field: parts[parts.length - 1],
+        reasons: REASON_ORDER.filter(r => reasonMap.get(s.id).has(r)),
+        level: rawDepth.get(s.id),
+        targetId: s.id,
+        temp: true,
+        upstream: true
+      })
+    }
+  }
+  rows.sort((a, b) => (a.level ?? 99) - (b.level ?? 99)
+    || a.table.localeCompare(b.table) || a.field.localeCompare(b.field))
+  return rows
+}
+
+/**
+ * 正向可达子图（traceUpstreamSubgraph 的镜像）：从 fromId 沿边正向可达，
+ * 只走 procName 匹配的边。用于 UPSTREAM 行的链路弹窗——展示来源字段在该脚本中的流向。
+ */
+export function traceDownstreamSubgraph(nodes, edges, fromId, procName) {
+  const procOk = e => !procName || !e.procName || e.procName === procName
+  const outEdges = new Map()
+  for (const e of edges) {
+    if (!procOk(e)) continue
+    if (!outEdges.has(e.source)) outEdges.set(e.source, [])
+    outEdges.get(e.source).push(e)
+  }
+  const keep = new Set([fromId])
+  const q = [fromId]
+  while (q.length) {
+    const cur = q.shift()
+    for (const e of (outEdges.get(cur) || [])) {
+      if (!keep.has(e.target)) { keep.add(e.target); q.push(e.target) }
+    }
+  }
+  return {
+    nodes: nodes.filter(n => keep.has(n.id)),
+    edges: edges.filter(e => procOk(e) && keep.has(e.source) && keep.has(e.target))
+  }
+}
+
+/**
  * 链路回溯（规格 §5.1）：从 targetId 沿边反向可达子图，只走 procName 匹配的边
  * （procName 为空的边保留，避免链路断裂；procName 非空且不等于指定值的跳过）。
  * @return { nodes, edges } 反向可达子图

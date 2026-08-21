@@ -55,8 +55,6 @@ public class LineageExtractor {
     @Autowired
     private FieldMappingExtractor fieldMappingExtractor;
 
-    private static final int MAX_SUBQUERY_DEPTH = 5;
-
     /**
      * 解析血缘派生关系
      *
@@ -200,7 +198,7 @@ public class LineageExtractor {
         // 提取 aliasMap（用于字段映射归属）
         Map<String, String> aliasMap = analyzer.extractAliasMap(sourceSelect);
         if ("INSERT SELECT".equals(operation)) {
-            log.info("parseBlock aliasMap: blockSeq={}, target={}, aliasMap={}", blockSeq, targetTableLower, aliasMap);
+            log.debug("parseBlock aliasMap: blockSeq={}, target={}, aliasMap={}", blockSeq, targetTableLower, aliasMap);
         }
 
         // 提取 JOIN ON 和 WHERE filter

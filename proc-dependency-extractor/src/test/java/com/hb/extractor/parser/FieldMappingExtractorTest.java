@@ -425,7 +425,7 @@ class FieldMappingExtractorTest {
         assertTrue(result.get(2).getInputs().isEmpty());
     }
 
-    // ===== ON/WHERE 条件字段 INPUT_TO 增强 =====
+    // ===== ON/WHERE 条件字段（行血缘独立通道） =====
 
     @Test
     void testConditionFields_ExcludedFromValueInputs() {

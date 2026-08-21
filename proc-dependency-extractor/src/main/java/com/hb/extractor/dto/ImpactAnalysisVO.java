@@ -22,6 +22,8 @@ public class ImpactAnalysisVO {
     private List<String> propagationChains;
     /** 报表影响（勾选"分析报表影响"后返回）：链路上各表被哪些报表引用 */
     private List<ReportImpact> reportImpacts;
+    /** 上游模式：目标列所在表的行血缘条件分区（该表行集受哪些条件控制） */
+    private List<RowFilterVO> rowFilters;
 
     @Data
     public static class ReportImpact {
@@ -51,6 +53,8 @@ public class ImpactAnalysisVO {
         private String label;
         private String type;           // SOURCE / TEMP / TARGET
         private String nodeLevel;      // TABLE / FIELD / TRANSFORM
+        /** 数据层级 FDM/ODM/CDM/TDM/PID（用于前端节点着色） */
+        private String layer;
         private String tableFullName;
         private Integer depth;
         private Boolean isTemp;        // 是否临时表（用于统计时排除）
@@ -84,6 +88,10 @@ public class ImpactAnalysisVO {
         private String role;
         /** OUTPUT_TO 边的表达式(冗余自 Transform 节点) */
         private String expression;
+        /** 影响通道: VALUE(值派生) / ROW(行过滤) */
+        private String impactKind;
+        /** FILTERS 边的条件原文 */
+        private String clause;
     }
 
     @Data
@@ -101,6 +109,22 @@ public class ImpactAnalysisVO {
     public static class ConditionClause {
         private String clause;
         private List<String> fields;
+    }
+
+    @Data
+    public static class RowFilterVO {
+        /** 条件字段 col_key（schema.table.field） */
+        private String fieldColKey;
+        /** 条件字段名 */
+        private String fieldName;
+        /** join_condition / where_condition */
+        private String role;
+        /** 条件原文 */
+        private String clause;
+        /** 所属存储过程 */
+        private String procName;
+        /** SQL块序号 */
+        private Integer sqlBlockSeq;
     }
 
     @Data

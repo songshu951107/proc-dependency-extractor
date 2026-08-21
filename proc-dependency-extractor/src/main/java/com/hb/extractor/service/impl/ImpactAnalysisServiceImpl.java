@@ -185,6 +185,10 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         if (isFieldLevel) {
             String fieldFullName = tableFullName + "." + request.getFieldName().toLowerCase();
             analyzeFieldLevel(fieldFullName, direction, depth, nodes, edges);
+            // 上游/双向：附加条件分区（目标列所在表行集受哪些条件控制）
+            if (!"DOWNSTREAM".equals(direction)) {
+                vo.setRowFilters(queryRowFilters(fieldFullName));
+            }
         } else {
             analyzeTableLevel(tableFullName, direction, depth, nodes, edges);
         }
@@ -694,12 +698,17 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             Set<String> seenTransforms = new HashSet<>();
             List<Map<String, Object>> transformRows = new ArrayList<>();
 
+            // 行影响通道（仅下游方向）：FILTERS 1 跳 + 表内列展开，展开列并入值通道 BFS
+            Map<Integer, Set<String>> rowSeeds = expandRowImpactChannel(fieldFullName, depth, nodeIds, nodes, edges);
+
             for (String dir : dirs) {
                 boolean downstream = "DOWNSTREAM".equals(dir);
                 String cypher = downstream ? expandDownstream : expandUpstream;
                 Set<String> frontier = new LinkedHashSet<>();
                 frontier.add(fieldFullName);
                 for (int layer = 1; layer <= depth; layer++) {
+                    Set<String> seedCols = downstream ? rowSeeds.get(layer) : null;
+                    if (seedCols != null && !seedCols.isEmpty()) frontier.addAll(seedCols);
                     if (frontier.isEmpty()) break;
                     // 安全阀：防真闭包爆炸把 API 打死
                     if (nodes.size() > MAX_FIELD_GRAPH_NODES) {
@@ -761,18 +770,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                             for (Map<String, Object> input : directInputs) {
                                 String colKey = (String) input.get("colKey");
                                 if (colKey == null) continue;
-                                String role = (String) input.get("role");
-                                boolean isCondition = "join_condition".equals(role) || "where_condition".equals(role);
-
-                                if (!nodeIds.contains(colKey)) {
-                                    if (isCondition) {
-                                        // 条件字段: 补全节点, 创建 DERIVED_FROM 边
-                                        ensureFieldNode(colKey, nodeIds, nodes);
-                                    } else {
-                                        // SELECT 列辅助字段: 跳过
-                                        continue;
-                                    }
-                                }
+                                // SELECT 列辅助字段（不在路径上）: 跳过（条件字段已走行血缘 FILTERS 通道）
+                                if (!nodeIds.contains(colKey)) continue;
 
                                 ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
                                 edge.setSource(colKey);
@@ -780,9 +779,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                                 edge.setEdgeType("DERIVED_FROM");
                                 edge.setSourceAlias((String) input.get("alias"));
                                 edge.setProcName(procName);
-                                if (isCondition) {
-                                    edge.setRole(role);
-                                }
+                                edge.setImpactKind("VALUE");
                                 edges.add(edge);
                             }
                         }
@@ -825,6 +822,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                         edge.setRole((String) input.get("role"));
                         edge.setSourceAlias((String) input.get("alias"));
                         edge.setProcName(procName);
+                        edge.setImpactKind("VALUE");
                         edges.add(edge);
                     }
                 }
@@ -843,6 +841,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                         edge.setEdgeType("OUTPUT_TO");
                         edge.setExpression((String) row.get("expression"));
                         edge.setProcName(procName);
+                        edge.setImpactKind("VALUE");
                         edges.add(edge);
                     }
                 }
@@ -850,6 +849,118 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         } catch (Exception e) {
             log.error("字段级影响查询失败: {}", e.getMessage());
         }
+    }
+
+    /**
+     * 行影响通道（下游）：起点列 --FILTERS--> 受影响表(1跳) → 表内所有列打行影响标签(2跳, 查询期展开)
+     * 展开列作为 layer=2 种子返回，由值通道 BFS 继续向下游传播（标签保持行影响，前端聚合）。
+     * 不二次经过 FILTERS：仅展开起点列的直接 FILTERS 边；起点自身所在表不重复展开。
+     */
+    private Map<Integer, Set<String>> expandRowImpactChannel(String startColKey, int maxDepth,
+                                                             Set<String> nodeIds,
+                                                             List<ImpactAnalysisVO.NodeVO> nodes,
+                                                             List<ImpactAnalysisVO.EdgeVO> edges) {
+        Map<Integer, Set<String>> seeds = new HashMap<>();
+        if (maxDepth < 2) return seeds;
+        String startTable = extractTableFromId(startColKey);
+        Collection<Map<String, Object>> filterRows;
+        try {
+            filterRows = neo4jClient.query(
+                            "MATCH (c:Column {col_key: $ck})-[f:FILTERS]->(t:Table) " +
+                            "RETURN t.name AS tableName, t.short_name AS shortName, " +
+                            "  f.role AS role, f.clause AS clause, f.proc_name AS procName, " +
+                            "  f.sql_block_seq AS seq")
+                    .bind(startColKey).to("ck").fetch().all();
+        } catch (Exception e) {
+            log.error("行影响通道 FILTERS 查询失败: {}", e.getMessage());
+            return seeds;
+        }
+        Set<String> nextLayerCols = new LinkedHashSet<>();
+        for (Map<String, Object> fr : filterRows) {
+            String tableName = (String) fr.get("tableName");
+            if (tableName == null || tableName.equals(startTable)) continue;
+            String role = (String) fr.get("role");
+            String procName = (String) fr.get("procName");
+            // 表节点（depth=1）
+            if (nodeIds.add(tableName)) {
+                ImpactAnalysisVO.NodeVO tNode = new ImpactAnalysisVO.NodeVO();
+                tNode.setId(tableName);
+                Object shortName = fr.get("shortName");
+                tNode.setLabel(shortName != null ? shortName.toString() : tableName);
+                tNode.setNodeLevel("TABLE");
+                tNode.setLayer(extractLayerFromId(tableName));
+                tNode.setTableFullName(tableName);
+                tNode.setDepth(1);
+                nodes.add(tNode);
+            }
+            // FILTERS 边（起点列 → 表）
+            ImpactAnalysisVO.EdgeVO fEdge = new ImpactAnalysisVO.EdgeVO();
+            fEdge.setSource(startColKey);
+            fEdge.setTarget(tableName);
+            fEdge.setEdgeType("FILTERS");
+            fEdge.setRole(role);
+            fEdge.setClause((String) fr.get("clause"));
+            fEdge.setProcName(procName);
+            fEdge.setSqlBlockSeq(fr.get("seq") != null ? ((Number) fr.get("seq")).intValue() : null);
+            fEdge.setImpactKind("ROW");
+            edges.add(fEdge);
+            // 表内所有列：行影响展开（depth=2）+ ROW_IMPACT 边（表→列，不落库、仅查询期）
+            Collection<Map<String, Object>> cols;
+            try {
+                cols = neo4jClient.query(
+                                "MATCH (col:Column)-[:BELONGS_TO]->(t:Table {name: $tn}) " +
+                                "RETURN col.col_key AS colKey, col.name AS name, col.table_full_name AS tableFullName")
+                        .bind(tableName).to("tn").fetch().all();
+            } catch (Exception e) {
+                log.warn("行影响列展开失败 table={}: {}", tableName, e.getMessage());
+                continue;
+            }
+            for (Map<String, Object> col : cols) {
+                String colKey = (String) col.get("colKey");
+                if (colKey == null || colKey.equals(startColKey)) continue;
+                if (nodeIds.add(colKey)) {
+                    nodes.add(buildFieldNode(col, colKey, 2));
+                }
+                ImpactAnalysisVO.EdgeVO rEdge = new ImpactAnalysisVO.EdgeVO();
+                rEdge.setSource(tableName);
+                rEdge.setTarget(colKey);
+                rEdge.setEdgeType("ROW_IMPACT");
+                rEdge.setRole(role);
+                rEdge.setProcName(procName);
+                rEdge.setImpactKind("ROW");
+                edges.add(rEdge);
+                nextLayerCols.add(colKey);
+            }
+        }
+        if (!nextLayerCols.isEmpty()) seeds.put(2, nextLayerCols);
+        return seeds;
+    }
+
+    /** 上游条件分区：目标列所在表的全部反向 FILTERS 边 */
+    private List<ImpactAnalysisVO.RowFilterVO> queryRowFilters(String fieldColKey) {
+        String table = extractTableFromId(fieldColKey);
+        List<ImpactAnalysisVO.RowFilterVO> result = new ArrayList<>();
+        try {
+            Collection<Map<String, Object>> rows = neo4jClient.query(
+                            "MATCH (c:Column)-[f:FILTERS]->(t:Table {name: $tn}) " +
+                            "RETURN c.col_key AS colKey, c.name AS name, f.role AS role, f.clause AS clause, " +
+                            "  f.proc_name AS procName, f.sql_block_seq AS seq " +
+                            "ORDER BY f.proc_name, c.col_key")
+                    .bind(table).to("tn").fetch().all();
+            for (Map<String, Object> r : rows) {
+                ImpactAnalysisVO.RowFilterVO rf = new ImpactAnalysisVO.RowFilterVO();
+                rf.setFieldColKey((String) r.get("colKey"));
+                rf.setFieldName((String) r.get("name"));
+                rf.setRole((String) r.get("role"));
+                rf.setClause((String) r.get("clause"));
+                rf.setProcName((String) r.get("procName"));
+                rf.setSqlBlockSeq(r.get("seq") != null ? ((Number) r.get("seq")).intValue() : null);
+                result.add(rf);
+            }
+        } catch (Exception e) {
+            log.error("rowFilters 查询失败: {}", e.getMessage());
+        }
+        return result;
     }
 
     /**

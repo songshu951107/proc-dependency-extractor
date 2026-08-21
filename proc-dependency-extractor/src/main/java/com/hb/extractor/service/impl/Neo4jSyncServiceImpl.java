@@ -568,7 +568,7 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                                            Integer sqlBlockSeq, String clause, String sourceAlias) {
         Map<String, Object> params = new HashMap<>();
         params.put("colKey", sourceColKey);
-        params.put("tableName", targetTableName);
+        params.put("tableName", targetTableName.toLowerCase());
         params.put("role", role);
         params.put("procName", procName);
         params.put("seq", sqlBlockSeq);

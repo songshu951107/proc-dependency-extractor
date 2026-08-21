@@ -9,6 +9,7 @@ import com.hb.extractor.dto.ScriptVO;
 import com.hb.extractor.entity.ProcInfo;
 import com.hb.extractor.entity.ProcTableDependency;
 import com.hb.extractor.entity.SqlBlockInfo;
+import com.hb.extractor.entity.TableBlockCondition;
 import com.hb.extractor.entity.TableFieldMapping;
 import com.hb.extractor.entity.TableLineage;
 import com.hb.extractor.entity.TableLineageFilter;
@@ -16,11 +17,13 @@ import com.hb.extractor.entity.TableTransformInput;
 import com.hb.extractor.mapper.ProcInfoMapper;
 import com.hb.extractor.mapper.ProcTableDependencyMapper;
 import com.hb.extractor.mapper.SqlBlockInfoMapper;
+import com.hb.extractor.mapper.TableBlockConditionMapper;
 import com.hb.extractor.mapper.TableFieldMappingMapper;
 import com.hb.extractor.mapper.TableLineageFilterMapper;
 import com.hb.extractor.mapper.TableLineageMapper;
 import com.hb.extractor.mapper.TableTransformInputMapper;
 import com.hb.extractor.parser.PyProcParser;
+import com.hb.extractor.parser.dto.ConditionField;
 import com.hb.extractor.parser.dto.FieldMapping;
 import com.hb.extractor.parser.dto.LineageEdge;
 import com.hb.extractor.parser.dto.TransformInput;
@@ -74,6 +77,9 @@ public class ProcExtractServiceImpl implements ProcExtractService {
     private TableTransformInputMapper tableTransformInputMapper;
 
     @Autowired
+    private TableBlockConditionMapper tableBlockConditionMapper;
+
+    @Autowired
     private SqlBlockInfoMapper sqlBlockInfoMapper;
 
     @Override
@@ -113,6 +119,7 @@ public class ProcExtractServiceImpl implements ProcExtractService {
             List<Path> pyFiles = stream
                     .filter(Files::isRegularFile)
                     .filter(p -> p.toString().endsWith(".py"))
+                    .filter(p -> !isBackupOrTestFile(p.getFileName().toString()))
                     .collect(Collectors.toList());
 
             result.setTotalCount(pyFiles.size());
@@ -139,6 +146,25 @@ public class ProcExtractServiceImpl implements ProcExtractService {
         result.setFailures(failures);
         result.setSuccessProcNames(successProcNames);
         return result;
+    }
+
+    /**
+     * 识别备份/测试脚本，避免污染正式数据。
+     * 仅排除文件名（去 .py 扩展名）以 _bak/_bakN/_temp/_tempN/_sjpttest/_test/_old 结尾的文件；
+     * 中间含 test 的正式脚本（如 fi_test_servi_staff_attendance_inf）不排除。
+     */
+    private static boolean isBackupOrTestFile(String fileName) {
+        String base = fileName.toLowerCase();
+        if (base.endsWith(".py")) {
+            base = base.substring(0, base.length() - 3);
+        }
+        return base.endsWith("_bak")
+                || base.matches(".*_bak\\d+")
+                || base.endsWith("_temp")
+                || base.matches(".*_temp\\d+")
+                || base.endsWith("_sjpttest")
+                || base.endsWith("_test")
+                || base.endsWith("_old");
     }
 
     @Override
@@ -292,6 +318,8 @@ public class ProcExtractServiceImpl implements ProcExtractService {
         // 删除 Transform 输入字段
         tableTransformInputMapper.delete(new LambdaQueryWrapper<TableTransformInput>()
                 .eq(TableTransformInput::getProcName, procName));
+        tableBlockConditionMapper.delete(new LambdaQueryWrapper<TableBlockCondition>()
+                .eq(TableBlockCondition::getProcName, procName));
         sqlBlockInfoMapper.delete(new LambdaQueryWrapper<SqlBlockInfo>()
                 .eq(SqlBlockInfo::getProcName, procName));
 
@@ -406,6 +434,8 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                     .eq(TableFieldMapping::getProcName, procName));
             tableTransformInputMapper.delete(new LambdaQueryWrapper<TableTransformInput>()
                     .eq(TableTransformInput::getProcName, procName));
+            tableBlockConditionMapper.delete(new LambdaQueryWrapper<TableBlockCondition>()
+                    .eq(TableBlockCondition::getProcName, procName));
             sqlBlockInfoMapper.delete(new LambdaQueryWrapper<SqlBlockInfo>()
                     .eq(SqlBlockInfo::getProcName, procName));
 
@@ -426,6 +456,25 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                 record.setExtractTime(now);
                 tableLineageMapper.insert(record);
                 lineageRecords.add(record);
+            }
+
+            // 插入 SQL 块条件字段（行血缘）：行数=条件字段数，与目标列数无关（消除 N×M）
+            for (int i = 0; i < lineageResult.getEdges().size(); i++) {
+                LineageEdge edge = lineageResult.getEdges().get(i);
+                if (edge.getConditionFields() == null || edge.getConditionFields().isEmpty()) continue;
+                for (ConditionField cf : edge.getConditionFields()) {
+                    TableBlockCondition record = new TableBlockCondition();
+                    record.setLineageId(lineageRecords.get(i).getId());
+                    record.setProcName(procName);
+                    record.setSqlBlockSeq(edge.getSqlBlockSeq());
+                    record.setSourceTableShort(cf.getSourceTableShort());
+                    record.setSourceAlias(cf.getSourceAlias());
+                    record.setSourceField(cf.getSourceField());
+                    record.setRole(cf.getRole());
+                    record.setClause(cf.getClause());
+                    record.setExtractTime(now);
+                    tableBlockConditionMapper.insert(record);
+                }
             }
 
             // 插入 filters

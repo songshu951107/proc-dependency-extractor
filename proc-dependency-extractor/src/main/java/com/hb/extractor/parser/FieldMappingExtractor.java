@@ -1,5 +1,6 @@
 package com.hb.extractor.parser;
 
+import com.hb.extractor.parser.dto.ConditionField;
 import com.hb.extractor.parser.dto.FieldMapping;
 import com.hb.extractor.parser.dto.TransformInput;
 import lombok.extern.slf4j.Slf4j;
@@ -164,57 +165,64 @@ public class FieldMappingExtractor {
         // 子查询字段穿透解析: TAA.field / 裸字段 → 沿 UNION 各分支 SELECT 项解析到底层表字段
         applySubqueryColumnPassthrough(select, result);
 
-        // 【新增】为每个 FieldMapping 添加 ON/WHERE 条件字段的 TransformInput
-        if (select != null && !result.isEmpty()) {
-            List<JsqlSqlAnalyzer.ColumnRef> conditionFields = analyzer.extractConditionFields(select);
-            if (!conditionFields.isEmpty()) {
-                // 预建 DDL 缓存（多表无 alias 场景）
-                java.util.Map<String, java.util.Set<String>> ddlCache = null;
-                for (FieldMapping fm : result) {
-                    int inputOrder = fm.getInputs().size() + 1;
-                    java.util.Map<String, TransformInput> dedup = new java.util.LinkedHashMap<>();
-                    for (TransformInput ti : fm.getInputs()) {
-                        String key = (ti.getSourceAlias() != null ? ti.getSourceAlias() + "." : "")
-                                   + ti.getSourceField() + "/" + ti.getRole();
-                        dedup.put(key, ti);
-                    }
-                    for (JsqlSqlAnalyzer.ColumnRef ref : conditionFields) {
-                        if (ref.field == null) continue;
-                        if (SQL_KEYWORDS.contains(ref.field.toUpperCase())) continue;
-                        if (ref.field.matches("\\d+")) continue;
-                        String key = (ref.alias != null ? ref.alias + "." : "")
-                                   + ref.field + "/" + ref.role;
-                        if (dedup.containsKey(key)) continue;
-                        TransformInput ti = new TransformInput();
-                        ti.setSourceAlias(ref.alias);
-                        ti.setSourceField(ref.field);
-                        ti.setRole(ref.role);
-                        ti.setInputOrder(inputOrder++);
-                        // sourceTableShort 赋值
-                        if (ref.alias != null && aliasMap.containsKey(ref.alias)) {
-                            ti.setSourceTableShort(aliasMap.get(ref.alias));
-                        } else if (aliasMap.size() == 1) {
-                            String onlyTable = aliasMap.values().iterator().next();
-                            if (onlyTable != null) {
-                                ti.setSourceTableShort(onlyTable);
-                            }
-                        } else if (aliasMap.size() > 1) {
-                            // 多表无 alias: DDL 字段匹配
-                            if (ddlCache == null) {
-                                ddlCache = buildDdlCache(aliasMap.values());
-                            }
-                            String matched = matchFieldToTable(ref.field, ddlCache);
-                            if (matched != null) {
-                                ti.setSourceTableShort(matched);
-                            }
-                        }
-                        fm.getInputs().add(ti);
-                        dedup.put(key, ti);
-                    }
+        return result;
+    }
+
+    /**
+     * 提取 SQL 块的 ON/WHERE 条件字段（行血缘，独立于 FieldMapping 值输入）。
+     * 归属解析策略与值输入一致：alias 命中 > 单表兜底 > DDL 字段唯一匹配；
+     * 归属失败（多重/无匹配）sourceTableShort=null：落库保留、Neo4j 同步跳过。
+     * key=(alias, field, role) 去重，同键多条件 clause 分号拼接、截断 512 字符。
+     */
+    public List<ConditionField> extractConditionFields(PlainSelect select,
+                                                       Map<String, String> aliasMap) {
+        List<ConditionField> result = new ArrayList<>();
+        if (select == null || aliasMap == null || aliasMap.isEmpty()) return result;
+
+        // 复用 FilterInfo（携带 clause 原文），JOIN → join_condition / WHERE → where_condition
+        List<JsqlSqlAnalyzer.FilterInfo> filters = new ArrayList<>();
+        filters.addAll(analyzer.extractJoinFilters(select));
+        filters.addAll(analyzer.extractWhereFilters(select));
+        if (filters.isEmpty()) return result;
+
+        java.util.Map<String, java.util.Set<String>> ddlCache = null;
+        java.util.Map<String, ConditionField> dedup = new java.util.LinkedHashMap<>();
+        for (JsqlSqlAnalyzer.FilterInfo fi : filters) {
+            if (fi == null || fi.fields == null) continue;
+            String role = "JOIN".equalsIgnoreCase(fi.filterType) ? "join_condition" : "where_condition";
+            for (JsqlSqlAnalyzer.ColumnRef ref : fi.fields) {
+                if (ref.field == null) continue;
+                if (SQL_KEYWORDS.contains(ref.field.toUpperCase())) continue;
+                if (ref.field.matches("\\d+")) continue;
+                String key = (ref.alias != null ? ref.alias + "." : "") + ref.field + "/" + role;
+                ConditionField cf = dedup.get(key);
+                if (cf == null) {
+                    cf = new ConditionField();
+                    cf.setSourceAlias(ref.alias);
+                    cf.setSourceField(ref.field);
+                    cf.setRole(role);
+                    dedup.put(key, cf);
+                }
+                if (fi.clause != null && !fi.clause.isEmpty()) {
+                    cf.setClause(cf.getClause() == null ? fi.clause : cf.getClause() + ";" + fi.clause);
                 }
             }
         }
-
+        for (ConditionField cf : dedup.values()) {
+            if (cf.getClause() != null && cf.getClause().length() > 512) {
+                cf.setClause(cf.getClause().substring(0, 512));
+            }
+            if (cf.getSourceAlias() != null && aliasMap.containsKey(cf.getSourceAlias())) {
+                cf.setSourceTableShort(aliasMap.get(cf.getSourceAlias()));
+            } else if (aliasMap.size() == 1) {
+                String onlyTable = aliasMap.values().iterator().next();
+                if (onlyTable != null) cf.setSourceTableShort(onlyTable);
+            } else if (aliasMap.size() > 1) {
+                if (ddlCache == null) ddlCache = buildDdlCache(aliasMap.values());
+                cf.setSourceTableShort(matchFieldToTable(cf.getSourceField(), ddlCache));
+            }
+            result.add(cf);
+        }
         return result;
     }
 

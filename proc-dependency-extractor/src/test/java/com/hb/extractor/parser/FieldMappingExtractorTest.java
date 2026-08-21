@@ -1,10 +1,13 @@
 package com.hb.extractor.parser;
 
+import com.hb.extractor.parser.dto.ConditionField;
 import com.hb.extractor.parser.dto.FieldMapping;
 import com.hb.extractor.parser.dto.TransformInput;
 import net.sf.jsqlparser.statement.Statement;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
@@ -13,12 +16,24 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 class FieldMappingExtractorTest {
 
     private FieldMappingExtractor extractor;
     private JsqlSqlAnalyzer analyzer;
     private SqlPlaceholderReplacer placeholderReplacer;
+
+    @BeforeAll
+    static void initMybatisPlusLambdaCache() {
+        // MyBatis-Plus 3.5.7 LambdaQueryWrapper 列解析依赖 TableInfo lambda cache（生产由 Spring 启动初始化）；
+        // 单测环境需手动初始化，否则 getSqlSegment() 抛 "can not find lambda cache for this entity"
+        com.baomidou.mybatisplus.core.metadata.TableInfoHelper.initTableInfo(
+                new org.apache.ibatis.builder.MapperBuilderAssistant(
+                        new com.baomidou.mybatisplus.core.MybatisConfiguration(), ""),
+                com.hb.extractor.entity.TableColumnMeta.class);
+    }
 
     @BeforeEach
     void setUp() throws Exception {
@@ -413,31 +428,130 @@ class FieldMappingExtractorTest {
     // ===== ON/WHERE 条件字段 INPUT_TO 增强 =====
 
     @Test
-    void testConditionFields_JoinOnAddedToInputs() throws Exception {
-        FieldMappingExtractor extractor = createExtractor();
-        String sql = "INSERT INTO cdm.target_tbl SELECT t1.a, t1.b FROM tab1 t1 LEFT JOIN tab2 t2 ON t1.a = t2.b";
+    void testConditionFields_ExcludedFromValueInputs() {
+        // 双通道重构后：ON/WHERE 条件字段不再附加到 FieldMapping.inputs（行血缘独立通道）
+        String sql = "INSERT INTO cdm.target_tbl SELECT t1.a, t1.b FROM tab1 t1 LEFT JOIN tab2 t2 ON t1.a = t2.b WHERE t2.balance > 0";
         java.util.Map<String, String> aliasMap = new java.util.HashMap<>();
         aliasMap.put("T1", "tab1");
         aliasMap.put("T2", "tab2");
 
-        List<com.hb.extractor.parser.dto.FieldMapping> result = extractor.extract(
+        List<FieldMapping> result = extractor.extract(
             sql, "target_tbl", aliasMap, java.util.Arrays.asList("a", "b"));
 
-        // 应有 2 个 FieldMapping (a, b)
         assertEquals(2, result.size());
-        // 每个 FieldMapping 应有条件字段的 TransformInput
-        for (com.hb.extractor.parser.dto.FieldMapping fm : result) {
-            boolean hasJoinCondition = fm.getInputs().stream()
-                .anyMatch(ti -> "join_condition".equals(ti.getRole()));
-            assertTrue(hasJoinCondition, "FieldMapping " + fm.getTargetField() + " 应包含 join_condition 输入");
+        for (FieldMapping fm : result) {
+            // 值输入仅 SELECT 表达式自身字段，无任何 join_condition/where_condition
+            assertTrue(fm.getInputs().stream().noneMatch(ti ->
+                            "join_condition".equals(ti.getRole()) || "where_condition".equals(ti.getRole())),
+                    "FieldMapping " + fm.getTargetField() + " 的值输入不应包含条件字段");
+            assertEquals(1, fm.getInputs().size(), "t1.a / t1.b 各只有 1 个值输入");
         }
-        // 验证 T2.b 条件字段的 sourceTableShort 正确解析
-        boolean hasT2B = result.get(0).getInputs().stream()
-            .anyMatch(ti -> "T2".equals(ti.getSourceAlias())
-                         && "b".equals(ti.getSourceField())
-                         && "tab2".equals(ti.getSourceTableShort())
-                         && "join_condition".equals(ti.getRole()));
-        assertTrue(hasT2B, "应有 T2.b 的 join_condition 输入, sourceTableShort=tab2");
+    }
+
+    @Test
+    void testExtractConditionFields_JoinAndWhereWithAttribution() throws Exception {
+        String sql = "INSERT INTO cdm.target_tbl SELECT t1.a FROM tab1 t1 LEFT JOIN tab2 t2 ON t1.a = t2.b WHERE t2.balance > 0";
+        Map<String, String> aliasMap = buildAliasMapByAnalyzer(sql);
+        Statement stmt = analyzer.parse(sql);
+        var ins = (net.sf.jsqlparser.statement.insert.Insert) stmt;
+        var select = (net.sf.jsqlparser.statement.select.PlainSelect) ins.getSelect().getSelectBody();
+
+        List<ConditionField> cfs = extractor.extractConditionFields(select, aliasMap);
+
+        // t1.a / t2.b 为 join_condition，t2.balance 为 where_condition
+        assertEquals(3, cfs.size());
+        ConditionField t2b = cfs.stream()
+                .filter(c -> "b".equals(c.getSourceField()) && "join_condition".equals(c.getRole()))
+                .findFirst().orElseThrow();
+        assertEquals("T2", t2b.getSourceAlias());
+        assertEquals("tab2", t2b.getSourceTableShort());
+        assertNotNull(t2b.getClause(), "join 条件应携带条件原文");
+
+        ConditionField balance = cfs.stream()
+                .filter(c -> "balance".equals(c.getSourceField()))
+                .findFirst().orElseThrow();
+        assertEquals("where_condition", balance.getRole());
+        assertEquals("tab2", balance.getSourceTableShort());
+        assertTrue(balance.getClause().replace(" ", "").toUpperCase().contains("BALANCE>0"));
+    }
+
+    @Test
+    void testExtractConditionFields_SingleTableNoAliasFallback() throws Exception {
+        String sql = "INSERT INTO tgt SELECT a FROM tab1 WHERE balance > 0";
+        Map<String, String> aliasMap = buildAliasMapByAnalyzer(sql);
+        Statement stmt = analyzer.parse(sql);
+        var ins = (net.sf.jsqlparser.statement.insert.Insert) stmt;
+        var select = (net.sf.jsqlparser.statement.select.PlainSelect) ins.getSelect().getSelectBody();
+
+        List<ConditionField> cfs = extractor.extractConditionFields(select, aliasMap);
+
+        assertEquals(1, cfs.size());
+        assertEquals("where_condition", cfs.get(0).getRole());
+        assertEquals("balance", cfs.get(0).getSourceField());
+        // 无 alias 单表兜底：归属唯一源表
+        assertEquals("tab1", cfs.get(0).getSourceTableShort());
+    }
+
+    @Test
+    void testExtractConditionFields_MultiTableNoAlias_DdlUniqueMatch() throws Exception {
+        // 多表无 alias：按 table_column_meta DDL 字段唯一匹配归属
+        com.hb.extractor.mapper.TableColumnMetaMapper metaMapper =
+                Mockito.mock(com.hb.extractor.mapper.TableColumnMetaMapper.class);
+        when(metaMapper.selectList(any())).thenAnswer(inv -> {
+            com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<?> w = inv.getArgument(0);
+            // MyBatis-Plus 3.5.7: paramNameValuePairs 惰性填充，需先触发 SQL 段求值再取参值
+            w.getSqlSegment();
+            String tableName = String.valueOf(w.getParamNameValuePairs().values().iterator().next());
+            if ("tab1".equals(tableName)) {
+                com.hb.extractor.entity.TableColumnMeta m = new com.hb.extractor.entity.TableColumnMeta();
+                m.setTableName("tab1"); m.setColumnName("K");
+                return java.util.List.of(m);
+            }
+            if ("tab2".equals(tableName)) {
+                com.hb.extractor.entity.TableColumnMeta m = new com.hb.extractor.entity.TableColumnMeta();
+                m.setTableName("tab2"); m.setColumnName("BALANCE");
+                return java.util.List.of(m);
+            }
+            return java.util.Collections.emptyList();
+        });
+        setField(extractor, "tableColumnMetaMapper", metaMapper);
+
+        String sql = "INSERT INTO tgt SELECT a FROM tab1 JOIN tab2 ON k = k WHERE balance > 0";
+        Map<String, String> aliasMap = buildAliasMapByAnalyzer(sql);
+        Statement stmt = analyzer.parse(sql);
+        var ins = (net.sf.jsqlparser.statement.insert.Insert) stmt;
+        var select = (net.sf.jsqlparser.statement.select.PlainSelect) ins.getSelect().getSelectBody();
+
+        List<ConditionField> cfs = extractor.extractConditionFields(select, aliasMap);
+
+        // balance 仅 tab2 有 → 唯一匹配；k 仅 tab1 有 → 唯一匹配
+        ConditionField balance = cfs.stream().filter(c -> "balance".equals(c.getSourceField())).findFirst().orElseThrow();
+        assertEquals("tab2", balance.getSourceTableShort());
+        ConditionField k = cfs.stream().filter(c -> "k".equals(c.getSourceField())).findFirst().orElseThrow();
+        assertEquals("tab1", k.getSourceTableShort());
+    }
+
+    @Test
+    void testExtractConditionFields_MultiMatchUnowned() throws Exception {
+        // DDL 多重匹配：sourceTableShort=null（落库保留、同步跳过）
+        com.hb.extractor.mapper.TableColumnMetaMapper metaMapper =
+                Mockito.mock(com.hb.extractor.mapper.TableColumnMetaMapper.class);
+        when(metaMapper.selectList(any())).thenAnswer(inv -> {
+            com.hb.extractor.entity.TableColumnMeta m = new com.hb.extractor.entity.TableColumnMeta();
+            m.setTableName("both"); m.setColumnName("BALANCE");
+            return java.util.List.of(m);
+        });
+        setField(extractor, "tableColumnMetaMapper", metaMapper);
+
+        String sql = "INSERT INTO tgt SELECT a FROM tab1 JOIN tab2 ON k = k WHERE balance > 0";
+        Map<String, String> aliasMap = buildAliasMapByAnalyzer(sql);
+        Statement stmt = analyzer.parse(sql);
+        var ins = (net.sf.jsqlparser.statement.insert.Insert) stmt;
+        var select = (net.sf.jsqlparser.statement.select.PlainSelect) ins.getSelect().getSelectBody();
+
+        List<ConditionField> cfs = extractor.extractConditionFields(select, aliasMap);
+        ConditionField balance = cfs.stream().filter(c -> "balance".equals(c.getSourceField())).findFirst().orElseThrow();
+        assertNull(balance.getSourceTableShort(), "DDL 多重匹配应不归属");
     }
 
     // ===== 修复 A / C: 无别名表字段归属 + UNION 子查询字段穿透 =====

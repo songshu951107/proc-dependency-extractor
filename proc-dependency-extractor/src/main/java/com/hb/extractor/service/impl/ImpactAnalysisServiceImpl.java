@@ -698,8 +698,10 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             Set<String> seenTransforms = new HashSet<>();
             List<Map<String, Object>> transformRows = new ArrayList<>();
 
-            // 行影响通道（仅下游方向）：FILTERS 1 跳 + 表内列展开，展开列并入值通道 BFS
-            Map<Integer, Set<String>> rowSeeds = expandRowImpactChannel(fieldFullName, depth, nodeIds, nodes, edges);
+            // 行影响通道（仅下游方向，设计 §8：上游只走值边）：FILTERS 1 跳 + 表内列展开，展开列并入值通道 BFS
+            Map<Integer, Set<String>> rowSeeds = dirs.contains("DOWNSTREAM")
+                    ? expandRowImpactChannel(fieldFullName, depth, nodeIds, nodes, edges)
+                    : Collections.emptyMap();
 
             for (String dir : dirs) {
                 boolean downstream = "DOWNSTREAM".equals(dir);

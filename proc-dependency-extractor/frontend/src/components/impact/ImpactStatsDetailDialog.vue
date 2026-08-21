@@ -30,7 +30,7 @@
         <el-table-column prop="field" :label="upstream ? '来源字段' : '受影响字段'" min-width="140" show-overflow-tooltip />
         <el-table-column :label="upstream ? '关联原因' : '影响原因'" width="170" align="center">
           <template #default="{ row }">
-            <el-tag v-for="r in row.reasons" :key="r" :type="r === '直接来源' ? 'success' : 'warning'" size="small" style="margin: 2px">{{ r }}</el-tag>
+            <el-tag v-for="r in row.reasons" :key="r" :type="r === '值影响' ? 'success' : 'warning'" size="small" style="margin: 2px">{{ r }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="涉及脚本数" width="110" align="center">

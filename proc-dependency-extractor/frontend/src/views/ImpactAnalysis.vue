@@ -33,6 +33,26 @@
       @viewPath="pathDialogVisible = true; pathDialogRow = $event"
     />
 
+    <div class="propagation-section" v-if="isUpstream && result?.rowFilters?.length">
+      <div class="section-header">
+        <span class="section-title">关联 / 过滤条件（行血缘）</span>
+        <span class="report-tip">目标表行集受以下条件控制；条件字段不参与列值计算</span>
+      </div>
+      <el-table :data="result.rowFilters" border size="small" style="width: 100%">
+        <el-table-column prop="fieldName" label="条件字段" min-width="140" />
+        <el-table-column label="角色" width="110" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.role === 'join_condition' ? 'warning' : 'danger'" size="small">
+              {{ row.role === 'join_condition' ? 'ON 条件' : 'WHERE 条件' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="clause" label="条件原文" min-width="260" show-overflow-tooltip />
+        <el-table-column prop="procName" label="存储过程" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="sqlBlockSeq" label="SQL块" width="80" align="center" />
+      </el-table>
+    </div>
+
     <div class="propagation-section" v-if="result?.reportImpacts?.length">
       <div class="section-header">
         <span class="section-title">报表影响（跨链分析）</span>

@@ -1,10 +1,11 @@
 // 影响分析清单化展示的纯函数工具：层级计算（最长路径+临时表/Transform穿透）、清单行推导、链路回溯
 
-const REASON_ORDER = ['直接来源', 'JOIN 条件', 'WHERE 条件']
-const ROLE_TO_REASON = {
-  join_condition: 'JOIN 条件',
-  where_condition: 'WHERE 条件'
+const REASON_ORDER = ['值影响', '行过滤·JOIN', '行过滤·WHERE']
+const FILTERS_ROLE_TO_REASON = {
+  join_condition: '行过滤·JOIN',
+  where_condition: '行过滤·WHERE'
 }
+const VALUE_REASON = '值影响'
 
 // 字段 id（schema.table.field）的表名部分是否临时表（vt_ 前缀，与解析器建临时表命名一致）
 export function isTempFieldName(nodeId) {
@@ -69,14 +70,12 @@ function bfsShallowDepth(nodeMap, edges, startId, isTransparent) {
 }
 
 /**
- * 字段级清单行推导（根因标签传播）。
- * 标签 = 起点进入链路那一跳的身份：起点出边无 role/未知 role → 直接来源，
- * join_condition → JOIN 条件，where_condition → WHERE 条件；
- * 起点→Transform（INPUT_TO）时标签授予该 Transform 的所有 OUTPUT_TO 目标字段。
- * BFS 继承传播：标签沿出边传给下游（经 Transform 穿透到其输出、经 DERIVED_FROM 直达），
- * 经过带角色的边（role=join_condition/where_condition）时标签跳变为该角色，无边角色
- * 的边继承当前标签——影响方式由路径上最近一次角色跳变决定；字段自身标签不变，起点不标记。
- * 行生成：到达边（DERIVED_FROM/OUTPUT_TO）触发行，行 key=(procName, targetId) 去重，
+ * 字段级清单行推导（双通道标签传播）。
+ * 值通道标签 = 值影响：起点→Transform（INPUT_TO）时授予该 Transform 的所有 OUTPUT_TO
+ * 目标字段，经 DERIVED_FROM 直达的字段继承当前标签（值边 INPUT_TO 的 role 恒为 value）。
+ * 行通道标签 = 行过滤·JOIN / 行过滤·WHERE：起点出边 FILTERS（角色取自边 role）经
+ * ROW_IMPACT 展开到受影响表的所有列；下游继续传播时再遇 FILTERS 按角色重新打标。
+ * 行生成：到达边（DERIVED_FROM/OUTPUT_TO/ROW_IMPACT）触发行，行 key=(procName, targetId) 去重，
  * reasons = 字段标签集合（按 REASON_ORDER 排序），同一字段多原因聚合一行；
  * 无标签字段不生成行（可达判据）。level 仍取最长路径层级。
  * 补充行：仅产临时表的 proc（非临时交付物字段级血缘缺失）补临时表行（temp=true，
@@ -101,7 +100,7 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
       transformOutputs.get(e.source).push(e.target)
     }
   }
-  const reasonOf = (e) => ROLE_TO_REASON[e.role] || '直接来源'
+  const reasonOf = (e) => FILTERS_ROLE_TO_REASON[e.role] || VALUE_REASON
 
   const reasonMap = new Map() // fieldId -> Set<reason>
   const visited = new Set()   // `${fieldId}|${reason}`
@@ -115,9 +114,14 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
     reasonMap.get(fieldId).add(reason)
     queue.push([fieldId, reason])
   }
-  // 初始标签：起点出边
+  // 初始标签：起点出边（FILTERS 行通道 + 值通道）
   for (const e of (outEdges.get(startFieldId) || [])) {
-    if (e.edgeType === 'INPUT_TO') {
+    if (e.edgeType === 'FILTERS') {
+      const reason = FILTERS_ROLE_TO_REASON[e.role] || '行过滤·WHERE'
+      for (const re of (outEdges.get(e.target) || [])) {
+        if (re.edgeType === 'ROW_IMPACT') push(re.target, reason)
+      }
+    } else if (e.edgeType === 'INPUT_TO') {
       const t = nodeMap.get(e.target)
       if (!t || t.nodeLevel !== 'TRANSFORM') continue
       for (const out of (transformOutputs.get(e.target) || [])) push(out, reasonOf(e))
@@ -127,16 +131,20 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
       push(e.target, reasonOf(e))
     }
   }
-  // 继承传播：边带角色时标签跳变为该角色（影响方式由最近一次角色跳变决定），无边角色时继承
+  // 继承传播：FILTERS 行通道按角色打标；值边继承当前标签
   while (queue.length) {
     const [cur, reason] = queue.shift()
     for (const e of (outEdges.get(cur) || [])) {
-      const nextReason = ROLE_TO_REASON[e.role] || reason
-      if (e.edgeType === 'INPUT_TO') {
-        for (const out of (transformOutputs.get(e.target) || [])) push(out, nextReason)
+      if (e.edgeType === 'FILTERS') {
+        const rowReason = FILTERS_ROLE_TO_REASON[e.role] || reason
+        for (const re of (outEdges.get(e.target) || [])) {
+          if (re.edgeType === 'ROW_IMPACT') push(re.target, rowReason)
+        }
+      } else if (e.edgeType === 'INPUT_TO') {
+        for (const out of (transformOutputs.get(e.target) || [])) push(out, reason)
       } else if (e.edgeType === 'DERIVED_FROM' || !e.edgeType) {
         const t = nodeMap.get(e.target)
-        if (t && t.nodeLevel === 'FIELD') push(e.target, nextReason)
+        if (t && t.nodeLevel === 'FIELD') push(e.target, reason)
       }
     }
   }
@@ -145,7 +153,7 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
   const rows = []
   const seen = new Set()
   for (const e of edges) {
-    if (e.edgeType !== 'DERIVED_FROM' && e.edgeType !== 'OUTPUT_TO') continue
+    if (e.edgeType !== 'DERIVED_FROM' && e.edgeType !== 'OUTPUT_TO' && e.edgeType !== 'ROW_IMPACT') continue
     const t = nodeMap.get(e.target)
     if (!t || t.nodeLevel !== 'FIELD' || t.id === startFieldId) continue
     if (isTempFieldName(t.id) || !reasonMap.has(t.id)) continue
@@ -169,7 +177,7 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
   if (rows.length) {
     const rawDepth = computeLongestDepth(nodes, edges, startFieldId, () => false)
     for (const e of edges) {
-      if (e.edgeType !== 'DERIVED_FROM' && e.edgeType !== 'OUTPUT_TO') continue
+      if (e.edgeType !== 'DERIVED_FROM' && e.edgeType !== 'OUTPUT_TO' && e.edgeType !== 'ROW_IMPACT') continue
       const procName = e.procName || '-'
       if (procsWithRows.has(procName)) continue
       const t = nodeMap.get(e.target)
@@ -255,8 +263,8 @@ export function buildTableImpactData(sourceTable, impactedByDepth, sourceLayer) 
 /**
  * 字段级来源清单行推导（buildFieldImpactRows 的 UPSTREAM 镜像版）。
  * 从起点沿血缘反向传播：入边 OUTPUT_TO 进入链路 Transform，其每个 INPUT_TO 输入字段
- * 为来源候选；入边 DERIVED_FROM 的源字段为来源候选。标签规则与下游一致——
- * 边带角色时跳变为该角色（JOIN/WHERE 条件），否则继承下游字段的标签。
+ * 为来源候选；入边 DERIVED_FROM 的源字段为来源候选。值来源恒标"值影响"——
+ * 条件字段已走行血缘 FILTERS 通道，不混入值溯源清单。
  * level = 反向最长路径的非透明跳数（临时表/Transform 穿透）。
  * 行 key=(procName, 来源字段) 去重，reasons 聚合；仅产临时来源的 proc 补临时行。
  * @return [{ procName, table, field, reasons: string[], level, targetId, temp, upstream: true }]
@@ -299,11 +307,11 @@ export function buildFieldSourceRows(nodes, edges, startFieldId) {
     if (e.edgeType === 'OUTPUT_TO') {
       chainTransforms.add(e.source)
       for (const inp of (transformInputs.get(e.source) || [])) {
-        if (nodeMap.has(inp.colKey)) push(inp.colKey, ROLE_TO_REASON[inp.role] || '直接来源')
+        if (nodeMap.has(inp.colKey)) push(inp.colKey, VALUE_REASON)
       }
     } else if (e.edgeType === 'DERIVED_FROM') {
       const s = nodeMap.get(e.source)
-      if (s && s.nodeLevel === 'FIELD') push(e.source, ROLE_TO_REASON[e.role] || '直接来源')
+      if (s && s.nodeLevel === 'FIELD') push(e.source, VALUE_REASON)
     }
   }
   // 继承传播：沿入边继续向上游
@@ -313,11 +321,11 @@ export function buildFieldSourceRows(nodes, edges, startFieldId) {
       if (e.edgeType === 'OUTPUT_TO') {
         chainTransforms.add(e.source)
         for (const inp of (transformInputs.get(e.source) || [])) {
-          push(inp.colKey, ROLE_TO_REASON[inp.role] || reason)
+          push(inp.colKey, reason)
         }
       } else if (e.edgeType === 'DERIVED_FROM') {
         const s = nodeMap.get(e.source)
-        if (s && s.nodeLevel === 'FIELD') push(e.source, ROLE_TO_REASON[e.role] || reason)
+        if (s && s.nodeLevel === 'FIELD') push(e.source, reason)
       }
     }
   }

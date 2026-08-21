@@ -7,10 +7,11 @@
         <el-tag :type="edgeTypeTag(edge.edgeType)" size="small">{{ edge.edgeType }}</el-tag>
       </el-descriptions-item>
       <el-descriptions-item label="角色" v-if="edge.role">
-        <el-tag :type="edge.role === 'condition' ? 'warning' : 'success'" size="small">
-          {{ edge.role }}
+        <el-tag :type="edge.role === 'join_condition' || edge.role === 'where_condition' ? 'warning' : 'success'" size="small">
+          {{ edge.role === 'join_condition' ? 'ON 条件' : edge.role === 'where_condition' ? 'WHERE 条件' : '取值' }}
         </el-tag>
       </el-descriptions-item>
+      <el-descriptions-item label="条件原文" v-if="edge.clause">{{ edge.clause }}</el-descriptions-item>
       <el-descriptions-item label="操作" v-if="edge.operation">{{ edge.operation }}</el-descriptions-item>
       <el-descriptions-item label="SQL块序号" v-if="edge.sqlBlockSeq">{{ edge.sqlBlockSeq }}</el-descriptions-item>
       <el-descriptions-item label="主表" v-if="edge.mainTable">{{ edge.mainTable }}</el-descriptions-item>
@@ -49,6 +50,7 @@ defineProps({ edge: Object })
 const edgeTypeTag = (type) => {
   if (type === 'INPUT_TO') return 'warning'
   if (type === 'OUTPUT_TO') return 'primary'
+  if (type === 'DERIVED_FROM') return 'success'
   if (type === 'READS') return 'info'
   return ''
 }

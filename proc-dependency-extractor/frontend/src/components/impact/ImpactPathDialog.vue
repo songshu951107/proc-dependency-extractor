@@ -25,7 +25,7 @@
         <span class="legend-item"><i class="dot temp"></i>临时表</span>
         <span class="legend-item"><i class="dot transform"></i>Transform</span>
         <span class="legend-item"><span class="line-solid">——</span> 直接派生</span>
-        <span class="legend-item"><span class="line-dashed">- - -</span> 条件影响(ON/WHERE)</span>
+        <span class="legend-item"><span class="line-dashed">- - -</span> 行影响(FILTERS: ON/WHERE)</span>
       </div>
       <div class="canvas-container">
         <div ref="canvasRef" class="path-canvas"></div>
@@ -78,6 +78,7 @@ const LAYER_COLORS = {
 }
 
 function nodeColor(n) {
+  if (n.nodeLevel === 'TABLE') return '#b37feb'
   if (n.nodeLevel === 'TRANSFORM') return '#909399'
   if (n.temp || (n.id && n.id.split('.').length >= 2 && n.id.split('.')[1].toLowerCase().startsWith('vt_'))) return LAYER_COLORS.TEMP
   return LAYER_COLORS[n.layer] || '#409eff'
@@ -140,7 +141,8 @@ function toG6Data(sg) {
     },
     labelCfg: { style: { fill: '#303133', fontSize: 11 } }
   }))
-  const edges = sg.edges.map((e, i) => {
+  // ROW_IMPACT（表→列）不逐列画边：行影响通过 FILTERS 边 + 列清单标签表达
+  const edges = sg.edges.filter(e => e.edgeType !== 'ROW_IMPACT').map((e, i) => {
     const isCond = e.role === 'join_condition' || e.role === 'where_condition'
     return {
       id: `pe-${i}`,
@@ -200,7 +202,8 @@ async function initGraph() {
   graph.value.on('edge:click', evt => {
     if (!evt.item || evt.item.destroyed) return
     const idx = Number(String(evt.item.getID()).replace('pe-', ''))
-    const edge = subgraph.value?.edges[idx]
+    // 与 toG6Data 一致：先过滤 ROW_IMPACT 再编号，保证索引对齐
+    const edge = (subgraph.value?.edges || []).filter(e => e.edgeType !== 'ROW_IMPACT')[idx]
     if (edge && edge.procName) emit('viewScript', edge)
   })
 }

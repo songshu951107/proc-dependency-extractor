@@ -5,7 +5,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hb.extractor.dto.SyncResult;
 import com.hb.extractor.entity.*;
+import com.hb.extractor.entity.TableBlockCondition;
 import com.hb.extractor.mapper.*;
+import com.hb.extractor.mapper.TableBlockConditionMapper;
 import com.hb.extractor.parser.DdlParser;
 import com.hb.extractor.service.Neo4jSyncService;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +43,9 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
 
     @Autowired
     private TableTransformInputMapper tableTransformInputMapper;
+
+    @Autowired
+    private TableBlockConditionMapper tableBlockConditionMapper;
 
     @Autowired
     private SqlBlockInfoMapper sqlBlockInfoMapper;
@@ -230,6 +235,27 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                 }
             }
 
+            // 写入 FILTERS 关系（行血缘）：条件列 → 目标表（每块每字段 1 条，M 而非 N×M）
+            List<TableBlockCondition> blockConditions = tableBlockConditionMapper.selectList(
+                    new LambdaQueryWrapper<TableBlockCondition>()
+                            .eq(TableBlockCondition::getProcName, procName)
+                            .isNotNull(TableBlockCondition::getSourceTableShort));
+            for (TableBlockCondition bc : blockConditions) {
+                TableLineage edge = findEdgeById(edges, bc.getLineageId());
+                if (edge == null) continue;
+                String sourceTableFull = findTableFullName(edges, bc.getSourceTableShort());
+                if (sourceTableFull == null) {
+                    log.warn("FILTERS 跳过: 源表 {} 不在本 proc 血缘边中 proc={} field={}",
+                            bc.getSourceTableShort(), procName, bc.getSourceField());
+                    continue;
+                }
+                String sourceColKey = toColKey(sourceTableFull, bc.getSourceField());
+                mergeColumnNode(sourceColKey, bc.getSourceField(), sourceTableFull);
+                mergeBelongsRelationship(sourceColKey, sourceTableFull);
+                createFiltersRelationship(sourceColKey, edge.getTargetTable(), bc.getRole(),
+                        procName, bc.getSqlBlockSeq(), bc.getClause(), bc.getSourceAlias());
+            }
+
             // 更新 SOURCE 类型
             updateSourceTableTypes();
 
@@ -270,9 +296,18 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
             neo4jClient.query("MATCH ()-[r:MAPS_TO {proc_name: $procName}]->() DELETE r")
                     .bind(procName).to("procName").run();
 
+            // 2.5 删除该 proc 的 FILTERS 关系（行血缘，重建）
+            neo4jClient.query("MATCH ()-[r:FILTERS {proc_name: $procName}]->() DELETE r")
+                    .bind(procName).to("procName").run();
+
             // 3. 删除该 proc 的 Transform 节点（DETACH DELETE 清除 INPUT_TO/OUTPUT_TO）
             neo4jClient.query("MATCH (t:Transform {proc_name: $procName}) DETACH DELETE t")
                     .bind(procName).to("procName").run();
+
+            // 3.5 删除该 proc 产出的临时表 Column（含 BELONGS_TO 边）
+            // 临时表只被该 proc 创建，可安全删；防止 MERGE 追加导致旧字段名（如 EXPR_N）残留
+            neo4jClient.query("MATCH (c:Column)-[:BELONGS_TO]->(t:Table {script_file: $scriptFile, is_temp: true}) DETACH DELETE c")
+                    .bind(scriptFile).to("scriptFile").run();
 
             // 4. 删除 Script 节点及其关系（不变）
             neo4jClient.query("MATCH (s:Script {file: $scriptFile})-[r]->() DELETE r")
@@ -522,6 +557,28 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                 "MERGE (c)-[r:INPUT_TO {role: $role}]->(t) " +
                 (sourceAlias != null ? "SET r.source_alias = $sourceAlias" : "");
         neo4jClient.query(cypher).bindAll(params).run();
+    }
+
+    /**
+     * 创建 FILTERS 关系: Column -[:FILTERS {proc_name, sql_block_seq, role}]-> Table
+     * MERGE 键 = (源列, 目标表, proc_name, sql_block_seq, role)，同键重建不重复
+     */
+    private void createFiltersRelationship(String sourceColKey, String targetTableName,
+                                           String role, String procName,
+                                           Integer sqlBlockSeq, String clause, String sourceAlias) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("colKey", sourceColKey);
+        params.put("tableName", targetTableName);
+        params.put("role", role);
+        params.put("procName", procName);
+        params.put("seq", sqlBlockSeq);
+        params.put("clause", clause);
+        params.put("sourceAlias", sourceAlias);
+        neo4jClient.query(
+                        "MATCH (c:Column {col_key: $colKey}), (t:Table {name: $tableName}) " +
+                        "MERGE (c)-[r:FILTERS {proc_name: $procName, sql_block_seq: $seq, role: $role}]->(t) " +
+                        "SET r.clause = $clause, r.source_alias = $sourceAlias")
+                .bindAll(params).run();
     }
 
     /**

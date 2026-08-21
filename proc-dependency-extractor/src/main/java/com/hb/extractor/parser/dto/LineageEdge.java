@@ -23,4 +23,6 @@ public class LineageEdge {
     private int sqlBlockSeq;
     /** FROM 后的主表短名 */
     private String mainTable;
+    /** 本块 ON/WHERE 条件字段（行血缘；按 sourceTableShort 归属到本边，未归属挂块内第一条边） */
+    private java.util.List<ConditionField> conditionFields = new java.util.ArrayList<>();
 }

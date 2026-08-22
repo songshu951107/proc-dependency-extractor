@@ -10,12 +10,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.neo4j.core.Neo4jClient;
 
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -37,6 +39,8 @@ class Neo4jSyncServiceTest {
     private TableFieldMappingMapper tableFieldMappingMapper;
     @Mock
     private TableTransformInputMapper tableTransformInputMapper;
+    @Mock
+    private TableBlockConditionMapper tableBlockConditionMapper;
     @Mock
     private SqlBlockInfoMapper sqlBlockInfoMapper;
     @Mock
@@ -60,6 +64,8 @@ class Neo4jSyncServiceTest {
         when(unboundRunnableSpec.bind(any())).thenReturn(ongoingBindSpec);
         when(ongoingBindSpec.to(anyString())).thenReturn(unboundRunnableSpec);
         when(unboundRunnableSpec.run()).thenReturn(null);
+        // 行血缘条件：默认无记录（各测试按需覆盖）
+        when(tableBlockConditionMapper.selectList(any())).thenReturn(Collections.emptyList());
     }
 
     @Test
@@ -94,6 +100,27 @@ class Neo4jSyncServiceTest {
         when(neo4jClient.query(anyString())).thenThrow(new RuntimeException("Neo4j 不可用"));
 
         assertDoesNotThrow(() -> syncService.deleteProcData("test_proc"));
+    }
+
+    /**
+     * 验证 deleteProcData 会删除该 proc 产出的临时表 Column 节点（含 BELONGS_TO 边）。
+     * 修复背景：syncProc 是 MERGE 追加，deleteProcData 原先只删 Transform + 孤儿节点，
+     * 但临时表 Column 有 BELONGS_TO 边指向 Table，不算孤儿 → EXPR_* 等旧列名残留。
+     * 期望：deleteProcData 应包含删除该 proc script_file 关联临时表 Column 的 Cypher。
+     */
+    @Test
+    void testDeleteProcData_RemovesTempTableColumns_WithBelongsToEdges() {
+        syncService.deleteProcData("test_proc");
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(neo4jClient, atLeast(4)).query(captor.capture());
+        List<String> queries = captor.getAllValues();
+
+        // 应包含删除该 proc 产出的临时表 Column 的语句（带 BELONGS_TO 或 script_file 过滤）
+        boolean hasTempColumnCleanup = queries.stream().anyMatch(q ->
+                q.contains("Column") && (q.contains("script_file") || q.contains("is_temp")));
+        assertTrue(hasTempColumnCleanup,
+                "deleteProcData 应删除该 proc 临时表 Column 节点, 实际 queries=" + queries);
     }
 
     /**

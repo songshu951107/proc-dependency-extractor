@@ -878,6 +878,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             return seeds;
         }
         Set<String> nextLayerCols = new LinkedHashSet<>();
+        Set<String> expandedTables = new HashSet<>();
         for (Map<String, Object> fr : filterRows) {
             String tableName = (String) fr.get("tableName");
             if (tableName == null || tableName.equals(startTable)) continue;
@@ -895,7 +896,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                 tNode.setDepth(1);
                 nodes.add(tNode);
             }
-            // FILTERS 边（起点列 → 表）
+            // FILTERS 边（起点列 → 表）：每条边各保留（携带各自 proc/block 信息）
             ImpactAnalysisVO.EdgeVO fEdge = new ImpactAnalysisVO.EdgeVO();
             fEdge.setSource(startColKey);
             fEdge.setTarget(tableName);
@@ -906,6 +907,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             fEdge.setSqlBlockSeq(fr.get("seq") != null ? ((Number) fr.get("seq")).intValue() : null);
             fEdge.setImpactKind("ROW");
             edges.add(fEdge);
+            // 表内列展开按表去重：同一表多条 FILTERS 边（多 proc/多块过滤同一表）只展开一次，避免 ROW_IMPACT 边重复
+            if (!expandedTables.add(tableName)) continue;
             // 表内所有列：行影响展开（depth=2）+ ROW_IMPACT 边（表→列，不落库、仅查询期）
             Collection<Map<String, Object>> cols;
             try {

@@ -665,24 +665,28 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                     "MATCH (c:Column {col_key: ck})-[:INPUT_TO]->(t:Transform) " +
                     "OPTIONAL MATCH (in:Column)-[rIn:INPUT_TO]->(t) " +
                     "OPTIONAL MATCH (t)-[:OUTPUT_TO]->(out:Column) " +
+                    "OPTIONAL MATCH (in)-[:BELONGS_TO]->(tblIn:Table) " +
+                    "OPTIONAL MATCH (out)-[:BELONGS_TO]->(tblOut:Table) " +
                     "RETURN t.id AS transformId, t.expression AS expression, " +
                     "  t.logic_type AS logicType, t.sql_hint AS sqlHint, " +
                     "  t.proc_name AS procName, t.script_file AS scriptFile, " +
                     "  collect(DISTINCT {colKey: in.col_key, role: rIn.role, alias: rIn.source_alias, " +
-                    "    name: in.name, tableFullName: in.table_full_name}) AS inputs, " +
+                    "    name: in.name, tableFullName: in.table_full_name, temp: tblIn.is_temp}) AS inputs, " +
                     "  collect(DISTINCT {colKey: out.col_key, name: out.name, " +
-                    "    tableFullName: out.table_full_name}) AS outputs";
+                    "    tableFullName: out.table_full_name, temp: tblOut.is_temp}) AS outputs";
             String expandUpstream = "UNWIND $frontier AS ck " +
                     "MATCH (c:Column {col_key: ck})<-[:OUTPUT_TO]-(t:Transform) " +
                     "OPTIONAL MATCH (in:Column)-[rIn:INPUT_TO]->(t) " +
                     "OPTIONAL MATCH (t)-[:OUTPUT_TO]->(out:Column) " +
+                    "OPTIONAL MATCH (in)-[:BELONGS_TO]->(tblIn:Table) " +
+                    "OPTIONAL MATCH (out)-[:BELONGS_TO]->(tblOut:Table) " +
                     "RETURN t.id AS transformId, t.expression AS expression, " +
                     "  t.logic_type AS logicType, t.sql_hint AS sqlHint, " +
                     "  t.proc_name AS procName, t.script_file AS scriptFile, " +
                     "  collect(DISTINCT {colKey: in.col_key, role: rIn.role, alias: rIn.source_alias, " +
-                    "    name: in.name, tableFullName: in.table_full_name}) AS inputs, " +
+                    "    name: in.name, tableFullName: in.table_full_name, temp: tblIn.is_temp}) AS inputs, " +
                     "  collect(DISTINCT {colKey: out.col_key, name: out.name, " +
-                    "    tableFullName: out.table_full_name}) AS outputs";
+                    "    tableFullName: out.table_full_name, temp: tblOut.is_temp}) AS outputs";
 
             List<String> dirs = new ArrayList<>();
             if ("UPSTREAM".equals(direction)) {
@@ -918,7 +922,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             try {
                 cols = neo4jClient.query(
                                 "MATCH (col:Column)-[:BELONGS_TO]->(t:Table {name: $tn}) " +
-                                "RETURN col.col_key AS colKey, col.name AS name, col.table_full_name AS tableFullName")
+                                "RETURN col.col_key AS colKey, col.name AS name, " +
+                                "  col.table_full_name AS tableFullName, t.is_temp AS temp")
                         .bind(tableName).to("tn").fetch().all();
             } catch (Exception e) {
                 log.warn("行影响列展开失败 table={}: {}", tableName, e.getMessage());
@@ -991,6 +996,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         String[] p = colKey.split("\\.");
         String name = (String) col.get("name");
         n.setLabel(name != null ? name : (p.length >= 3 ? p[2] : colKey));
+        // 临时表标记来自所属 Table 节点（权威：MySQL target_is_temp 同步），前端据此判定临时表
+        n.setIsTemp(Boolean.TRUE.equals(col.get("temp")));
         n.setNodeLevel("FIELD");
         n.setLayer(extractLayerFromId(colKey));
         String tableFullName = (String) col.get("tableFullName");

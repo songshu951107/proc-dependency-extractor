@@ -34,7 +34,21 @@
           </el-table>
         </el-tab-pane>
       </el-tabs>
-      <el-button size="small" type="success" plain class="export-btn" @click="exportAll">导出 Excel</el-button>
+      <div class="tabs-toolbar">
+        <el-select
+          v-if="isFieldLevel && !upstream"
+          v-model="reasonFilter"
+          size="small"
+          class="reason-filter"
+          title="按影响原因筛选清单：值影响=参与列值计算；行过滤=ON/WHERE 条件只影响行集"
+        >
+          <el-option label="值影响" value="值影响" />
+          <el-option label="行过滤·JOIN" value="行过滤·JOIN" />
+          <el-option label="行过滤·WHERE" value="行过滤·WHERE" />
+          <el-option label="全部原因" value="" />
+        </el-select>
+        <el-button size="small" type="success" plain class="export-btn" @click="exportAll">导出 Excel</el-button>
+      </div>
     </div>
   </div>
 </template>
@@ -53,9 +67,16 @@ const props = defineProps({
 })
 defineEmits(['viewScript', 'viewPath'])
 
+// 影响原因筛选：默认只看值影响（纯净值血缘）；空串=全部。仅下游字段级清单有此维度
+const reasonFilter = ref('值影响')
+const filteredRows = computed(() => {
+  if (!props.isFieldLevel || props.upstream || !reasonFilter.value) return props.rows
+  return props.rows.filter(r => (r.reasons || []).includes(reasonFilter.value))
+})
+
 const rowsByLevel = computed(() => {
   const map = {}
-  for (const r of props.rows) {
+  for (const r of filteredRows.value) {
     const lv = r.level ?? 0
     if (!map[lv]) map[lv] = []
     map[lv].push(r)
@@ -71,13 +92,13 @@ watch(levels, (lvs) => {
 }, { immediate: true })
 
 function exportAll() {
-  if (!props.rows.length) return
+  if (!filteredRows.value.length) return
   const header = props.isFieldLevel
     ? (props.upstream
         ? ['层级', '关联脚本', '来源表', '来源字段', '关联原因']
         : ['层级', '受影响脚本', '受影响表', '受影响字段', '影响原因'])
     : ['层级', '受影响脚本', '受影响表']
-  const data = props.rows.map(r => {
+  const data = filteredRows.value.map(r => {
     const table = r.temp ? `${r.table}(临时表)` : r.table
     return props.isFieldLevel
       ? [`第${levelLabel(r.level ?? 0)}层级`, r.procName, table, r.field, r.reasons.join('+')]
@@ -88,11 +109,12 @@ function exportAll() {
   XLSX.utils.book_append_sheet(wb, ws, props.upstream ? '来源清单' : '受影响清单')
   const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
   XLSX.writeFile(wb, `${props.exportFileName || '影响分析'}_${stamp}.xlsx`)
-  ElMessage.success(`已导出 ${props.rows.length} 行`)
+  ElMessage.success(`已导出 ${filteredRows.value.length} 行（当前筛选：${reasonFilter.value || '全部'}）`)
 }
 </script>
 
 <style scoped>
 .tabs-bar { position: relative; }
-.export-btn { position: absolute; right: 0; top: 2px; z-index: 1; }
+.tabs-toolbar { position: absolute; right: 0; top: 2px; z-index: 1; display: flex; align-items: center; gap: 8px; }
+.reason-filter { width: 130px; }
 </style>

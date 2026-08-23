@@ -13,6 +13,13 @@ export function isTempFieldName(nodeId) {
   return parts.length >= 2 && parts[1].toLowerCase().startsWith('vt_')
 }
 
+// 临时表判定（优先后端下发的权威标记 node.isTemp——来自 MySQL target_is_temp，
+// 覆盖不带 vt_ 前缀的 proc 内 CREATE 临时表；标记缺失时回退名字前缀兜底）
+export function isTempNode(node) {
+  if (!node) return false
+  return node.isTemp === true || isTempFieldName(node.id)
+}
+
 /**
  * 最长路径层级计算（规格 §3.2）。
  * 松弛 depth[t] = max(depth[t], depth[s] + inc(t))，inc: 透明节点(临时表/Transform)=0，其余=1。
@@ -85,7 +92,7 @@ function bfsShallowDepth(nodeMap, edges, startId, isTransparent) {
 export function buildFieldImpactRows(nodes, edges, startFieldId) {
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
   const depth = computeLongestDepth(nodes, edges, startFieldId,
-    n => n.nodeLevel === 'TRANSFORM' || isTempFieldName(n.id))
+    n => n.nodeLevel === 'TRANSFORM' || isTempNode(n))
 
   // 出边索引 + Transform 输出索引
   const outEdges = new Map()
@@ -156,7 +163,7 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
     if (e.edgeType !== 'DERIVED_FROM' && e.edgeType !== 'OUTPUT_TO' && e.edgeType !== 'ROW_IMPACT') continue
     const t = nodeMap.get(e.target)
     if (!t || t.nodeLevel !== 'FIELD' || t.id === startFieldId) continue
-    if (isTempFieldName(t.id) || !reasonMap.has(t.id)) continue
+    if (isTempNode(t) || !reasonMap.has(t.id)) continue
     const key = `${e.procName || '-'}|${t.id}`
     if (seen.has(key)) continue
     seen.add(key)
@@ -182,7 +189,7 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
       if (procsWithRows.has(procName)) continue
       const t = nodeMap.get(e.target)
       if (!t || t.nodeLevel !== 'FIELD' || t.id === startFieldId) continue
-      if (!isTempFieldName(t.id) || !reasonMap.has(t.id)) continue
+      if (!isTempNode(t) || !reasonMap.has(t.id)) continue
       const key = `${procName}|${t.id}`
       if (seen.has(key)) continue
       seen.add(key)
@@ -274,7 +281,7 @@ export function buildFieldSourceRows(nodes, edges, startFieldId) {
   // 反向图最长深度：层级 = 距起点的上游跳数
   const revEdges = edges.map(e => ({ ...e, source: e.target, target: e.source }))
   const depth = computeLongestDepth(nodes, revEdges, startFieldId,
-    n => n.nodeLevel === 'TRANSFORM' || isTempFieldName(n.id))
+    n => n.nodeLevel === 'TRANSFORM' || isTempNode(n))
 
   // 入边索引 + Transform 输入索引
   const inEdges = new Map()
@@ -369,7 +376,7 @@ export function buildFieldSourceRows(nodes, edges, startFieldId) {
       const s = nodeMap.get(e.source)
       if (!s || s.nodeLevel !== 'FIELD' || s.id === startFieldId) continue
       if (s.id.startsWith('__literal__.')) continue
-      if (!isTempFieldName(s.id) || !reasonMap.has(s.id)) continue
+      if (!isTempNode(s) || !reasonMap.has(s.id)) continue
       const key = `${procName}|${s.id}`
       if (seen.has(key)) continue
       seen.add(key)

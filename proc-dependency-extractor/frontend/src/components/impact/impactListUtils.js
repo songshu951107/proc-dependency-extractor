@@ -494,10 +494,12 @@ export function traceDownstreamSubgraph(nodes, edges, fromId, procName) {
  * @param {string} targetId 目标列 id
  * @param {string} sourceId 起点列 id
  * @param {number} maxSteps 单路径物理步上限（防异常环/爆炸）
+ * @param {number} preferLevel 优先展示的跳数（=清单行 level）：该行归入第 N 层级
+ *        的依据是 N 跳路径，须优先展示；短路径过多时按行数升序会将其截掉
  * @return {Array<Array<{hop, from, to, type, procName?, expression?, role?, clause?, expanded?, dF, dT}>>}
- *         路径数组（≤5 条，按步数升序），每条按起点→目标排列；type: FILTERS/VALUE/DIRECT
+ *         路径数组（≤5 条，优先 preferLevel 跳，其余按行数升序），每条按起点→目标排列；type: FILTERS/VALUE/DIRECT
  */
-export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16) {
+export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16, preferLevel) {
   if (!targetId || !sourceId || targetId === sourceId) return []
   const nodeById = new Map(nodes.map(n => [n.id, n]))
   const inByTarget = new Map()
@@ -506,10 +508,13 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16) {
     inByTarget.get(e.target).push(e)
   }
   const MAX_PATHS = 5
+  // 收集上限须大于展示条数：短路径数量超过展示上限时会截断更长（更深层级）的路径，
+  // 导致路径表最大跳数 < 层级（先收集全部再按折叠后行数排序截取）
+  const COLLECT_LIMIT = 100
   const paths = []
 
   function dfs(nodeId, steps, visited) {
-    if (paths.length >= MAX_PATHS) return
+    if (paths.length >= COLLECT_LIMIT) return
     if (nodeId === sourceId) {
       paths.push(steps.slice().reverse())
       return
@@ -569,49 +574,60 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16) {
   //      clause 承条件、expression 合并值表达式。
   // 跳号 = 折叠后步序号，与层级 tab 对齐。
   const isTempMid = id => id !== targetId && isTempNode(nodeById.get(id))
-  return paths
-    .sort((a, b) => a.length - b.length)
-    .map(p => {
-      const folded = []
-      for (const s of p) {
-        const last = folded[folded.length - 1]
-        if (last && last.type === 'FILTERS' && s.type === 'ROW_IMPACT') {
-          // 行影响一段：条件列→表→表内列 合并为一行（表节点不出现在路径表中）
-          folded[folded.length - 1] = {
-            ...s,
-            from: last.from,
-            dF: last.dF,
-            type: 'FILTERS',
-            role: last.role || s.role,
-            clause: last.clause || s.clause,
-            procName: last.procName || s.procName,
-            expanded: true
-          }
-        } else if (last && isTempMid(last.to)) {
-          const exprs = [...new Set([last.expression, s.expression].filter(Boolean))]
-          if (!exprs.length && (last.type === 'DIRECT' || s.type === 'DIRECT')) exprs.push('直接取值')
-          const procs = [...new Set([last.procName, s.procName].filter(Boolean))]
-          folded[folded.length - 1] = {
-            ...s,
-            from: last.from,
-            dF: last.dF,
-            type: last.type === 'FILTERS' ? 'FILTERS' : s.type,
-            role: last.role || s.role,
-            clause: last.clause || s.clause,
-            expression: exprs.join('；') || null,
-            procName: procs.join('；') || null
-          }
-        } else {
-          folded.push({ ...s })
+  const folded = paths.map(p => {
+    const folded = []
+    for (const s of p) {
+      const last = folded[folded.length - 1]
+      if (last && last.type === 'FILTERS' && s.type === 'ROW_IMPACT') {
+        // 行影响一段：条件列→表→表内列 合并为一行（表节点不出现在路径表中）
+        folded[folded.length - 1] = {
+          ...s,
+          from: last.from,
+          dF: last.dF,
+          type: 'FILTERS',
+          role: last.role || s.role,
+          clause: last.clause || s.clause,
+          procName: last.procName || s.procName,
+          expanded: true
         }
+      } else if (last && isTempMid(last.to)) {
+        const exprs = [...new Set([last.expression, s.expression].filter(Boolean))]
+        if (!exprs.length && (last.type === 'DIRECT' || s.type === 'DIRECT')) exprs.push('直接取值')
+        const procs = [...new Set([last.procName, s.procName].filter(Boolean))]
+        folded[folded.length - 1] = {
+          ...s,
+          from: last.from,
+          dF: last.dF,
+          type: last.type === 'FILTERS' ? 'FILTERS' : s.type,
+          role: last.role || s.role,
+          clause: last.clause || s.clause,
+          expression: exprs.join('；') || null,
+          procName: procs.join('；') || null
+        }
+      } else {
+        folded.push({ ...s })
       }
-      // 兜底：孤立 ROW_IMPACT 步（前驱非 FILTERS，理论不出现）改写为行过滤行
-      return folded.map((s, i) => {
-        const hop = i + 1
-        if (s.type !== 'ROW_IMPACT') return { ...s, hop }
-        return { ...s, from: sourceId, type: 'FILTERS', expanded: true, hop }
-      })
+    }
+    // 兜底：孤立 ROW_IMPACT 步（前驱非 FILTERS，理论不出现）改写为行过滤行
+    return folded.map((s, i) => {
+      const hop = i + 1
+      if (s.type !== 'ROW_IMPACT') return { ...s, hop }
+      return { ...s, from: sourceId, type: 'FILTERS', expanded: true, hop }
     })
+  })
+  // 先折叠再排序截取：优先展示跳数 == preferLevel（清单行 level）的路径——
+  // 该行归入第 N 层级的依据是 N 跳路径；短路径过多时纯升序会将其截掉，
+  // 造成"3 跳直达却归第 4 层"的困惑。无匹配时回退按行数升序。
+  return folded
+    .sort((a, b) => {
+      if (preferLevel != null) {
+        const am = a.length === preferLevel ? 0 : 1
+        const bm = b.length === preferLevel ? 0 : 1
+        if (am !== bm) return am - bm
+      }
+      return a.length - b.length
+    })
+    .slice(0, MAX_PATHS)
 }
 
 /**

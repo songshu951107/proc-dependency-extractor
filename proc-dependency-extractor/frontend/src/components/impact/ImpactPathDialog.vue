@@ -120,7 +120,7 @@ async function handleOpen() {
   if (!props.row) return
   // 逐跳路径回溯（方案A）：仅下游字段级行；双通道（值+行），跨 proc 完整展示
   if (!props.row.upstream && props.row.targetId && props.row.field) {
-    hopPaths.value = traceHopPaths(props.nodes, props.edges, props.row.targetId, props.sourceId)
+    hopPaths.value = traceHopPaths(props.nodes, props.edges, props.row.targetId, props.sourceId, 16, props.row.level)
   }
   // UPSTREAM 行: 来源字段在该行脚本中的正向流向（traceUpstream 的镜像）;
   // DOWNSTREAM 行: 目标字段在该行脚本中的反向回溯

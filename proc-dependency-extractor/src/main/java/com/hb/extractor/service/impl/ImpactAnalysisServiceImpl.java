@@ -878,6 +878,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             filterRows = neo4jClient.query(
                             "MATCH (c:Column {col_key: $ck})-[f:FILTERS]->(t:Table) " +
                             "RETURN t.name AS tableName, t.short_name AS shortName, " +
+                            "  t.is_temp AS tableTemp, " +
                             "  f.role AS role, f.clause AS clause, f.proc_name AS procName, " +
                             "  f.sql_block_seq AS seq")
                     .bind(startColKey).to("ck").fetch().all();
@@ -905,6 +906,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                 tNode.setNodeLevel("TABLE");
                 tNode.setLayer(extractLayerFromId(tableName));
                 tNode.setTableFullName(tableName);
+                tNode.setIsTemp(Boolean.TRUE.equals(tableFilters.get(0).get("tableTemp")));
                 tNode.setDepth(1);
                 nodes.add(tNode);
             }
@@ -1087,7 +1089,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                         "MATCH (src:%s {name: $startId})-[:%s*1..%d]->(downstream:%s) " +
                         "WITH DISTINCT downstream " +
                         "MATCH (src2)-[r:%s]->(downstream) " +
-                        "RETURN src2.name AS source, downstream.name AS target, " +
+                        "RETURN src2.name AS source, src2.is_temp AS srcTemp, " +
+                        "downstream.name AS target, downstream.is_temp AS dstTemp, " +
                         "r.operation AS operation, r.proc_name AS procName, " +
                         "r.join_conditions AS joins, r.where_conditions AS wheres",
                         nodeLabel, relType, depth, nodeLabel, relType);
@@ -1096,7 +1099,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                         "MATCH (src:%s {name: $startId})<-[:%s*1..%d]-(upstream:%s) " +
                         "WITH DISTINCT upstream " +
                         "MATCH (upstream)-[r:%s]->(dst) " +
-                        "RETURN upstream.name AS source, dst.name AS target, " +
+                        "RETURN upstream.name AS source, upstream.is_temp AS srcTemp, " +
+                        "dst.name AS target, dst.is_temp AS dstTemp, " +
                         "r.operation AS operation, r.proc_name AS procName, " +
                         "r.join_conditions AS joins, r.where_conditions AS wheres",
                         nodeLabel, relType, depth, nodeLabel, relType);
@@ -1120,6 +1124,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                                 n.setLabel(extractShortName(sourceId));
                                 n.setNodeLevel("TABLE");
                                 n.setLayer(extractLayerFromId(sourceId));
+                                n.setIsTemp(record.get("srcTemp").isNull() ? false : record.get("srcTemp").asBoolean());
                                 nodes.add(n);
                             }
                             if (!nodeIds.contains(targetId)) {
@@ -1129,6 +1134,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                                 n.setLabel(extractShortName(targetId));
                                 n.setNodeLevel("TABLE");
                                 n.setLayer(extractLayerFromId(targetId));
+                                n.setIsTemp(record.get("dstTemp").isNull() ? false : record.get("dstTemp").asBoolean());
                                 nodes.add(n);
                             }
 
@@ -1290,6 +1296,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                             n.setLabel(record.get("label").isNull() ? record.get("id").asString() : record.get("label").asString());
                             n.setNodeLevel("TABLE");
                             n.setLayer(record.get("layer").isNull() ? extractLayerFromId(n.getId()) : record.get("layer").asString());
+                            n.setIsTemp(record.get("isTemp").isNull() ? false : record.get("isTemp").asBoolean());
                             n.setDepth((int) record.get("depth").asLong());
                             return n;
                         })

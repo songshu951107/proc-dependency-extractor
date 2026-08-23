@@ -34,14 +34,14 @@
                 <el-tag size="small" :type="stepTagType(s)">{{ stepTypeLabel(s) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="源 → 到达" min-width="300">
+            <el-table-column label="源 → 到达" min-width="220" show-overflow-tooltip>
               <template #default="{ row: s }">
                 <span class="hop-node">{{ shortId(s.from) }}</span>
                 <span class="hop-arrow"> → </span>
                 <span class="hop-node" :class="{ 'hop-final': s.to === row?.targetId }">{{ shortId(s.to) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="加工（存储过程 · 明细）" min-width="320" show-overflow-tooltip>
+            <el-table-column label="加工（存储过程 · 明细）" min-width="260" show-overflow-tooltip>
               <template #default="{ row: s }">{{ stepDetail(s) }}</template>
             </el-table-column>
           </el-table>
@@ -274,7 +274,8 @@ onBeforeUnmount(destroyGraph)
 .summary { display: flex; align-items: center; gap: 10px; padding: 2px 0 8px; }
 .summary-text { font-size: 13px; color: #303133; }
 .summary .meta { color: #909399; font-size: 12px; margin-left: auto; }
-.hop-paths { max-height: 240px; overflow: auto; margin-bottom: 8px; border-bottom: 1px dashed #ebeef5; }
+/* flex-shrink:0 防止路径区被 canvas 的 min-height 挤压（窄窗口下曾压到 14px 触发滚动条） */
+.hop-paths { flex-shrink: 0; max-height: 240px; overflow: auto; margin-bottom: 8px; border-bottom: 1px dashed #ebeef5; }
 .hop-path { margin-bottom: 10px; }
 .hop-path-title { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .hop-tip { font-size: 12px; color: #909399; }
@@ -287,7 +288,7 @@ onBeforeUnmount(destroyGraph)
 .dot.fdm { background: #67c23a; } .dot.cdm { background: #409eff; }
 .dot.temp { background: #e6a23c; } .dot.transform { background: #909399; }
 .line-solid { color: #909399; } .line-dashed { color: #e6a23c; }
-.canvas-container { flex: 1; position: relative; overflow: hidden; min-height: 380px; border: 1px solid #ebeef5; }
+.canvas-container { flex: 1; position: relative; overflow: hidden; min-height: 300px; border: 1px solid #ebeef5; }
 .path-canvas { width: 100%; height: 100%; }
 .node-panel { padding-top: 8px; }
 </style>

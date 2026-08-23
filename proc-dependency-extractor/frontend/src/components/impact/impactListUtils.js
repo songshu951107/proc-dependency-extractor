@@ -21,45 +21,92 @@ export function isTempNode(node) {
 }
 
 /**
- * 最长路径层级计算（规格 §3.2）。
- * 松弛 depth[t] = max(depth[t], depth[s] + inc(t))，inc: 透明节点(临时表/Transform)=0，其余=1。
- * 环防护：自环边（列派生自自身）不参与松弛；正权环（如 proc 读写同表形成的 列↔Transform 环）
- * 会使松弛不收敛——仅将深度超过节点数（简单路径深度上限，必为环污染）的节点回退 BFS 最浅深度，
- * 未污染节点保留最长路径深度。整体回退会使多通道行的层级与路径表跳数不一致。
+ * 最长路径层级计算（规格 §3.2）。跳数口径 = 跨表传播段数：
+ * 条件列 -FILTERS-> 表 -ROW_IMPACT-> 表内列 是 1 段行影响传播（表内列深度=表深度，不另计跳）；
+ * 值边（Transform 链/列直连）每段 1 跳；临时表/Transform 节点穿透（+0）。
+ * 环处理（Tarjan SCC + 缩点）：proc 读写同表等自引用模式形成正权环（列↔Transform），
+ * 直接松弛不收敛。将每个强连通分量缩为超节点后在 DAG 上求最长路径：
+ * 影响可经入口边进入环节点（深度=进入环的外部链深度），经出口边离开，不在环内绕圈；
+ * 环成员同深度，传播链不被切断（与路径表回溯的简单路径跳数一致）。
  * @param nodes [{id, nodeLevel, temp?}]  @param edges [{source, target}]  @param startId 起点id
  * @param isTransparent (node) => bool  @return Map<id, depth>（不可达节点不在 Map 中）
  */
 export function computeLongestDepth(nodes, edges, startId, isTransparent) {
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
-  const depth = new Map([[startId, 0]])
-  const maxRounds = edges.length + 1
-  let round = 0
+  // 起点可达子图（出边索引）
+  const outEdges = new Map()
+  for (const e of edges) {
+    if (!outEdges.has(e.source)) outEdges.set(e.source, [])
+    outEdges.get(e.source).push(e)
+  }
+  const reachable = new Set([startId])
+  const queue = [startId]
+  while (queue.length) {
+    const cur = queue.shift()
+    for (const e of (outEdges.get(cur) || [])) {
+      if (nodeMap.has(e.target) && !reachable.has(e.target)) { reachable.add(e.target); queue.push(e.target) }
+    }
+  }
+  // Tarjan SCC（仅可达子图）
+  let index = 0
+  const idx = new Map(), low = new Map(), onStack = new Set(), stack = []
+  const sccOf = new Map()
+  const strongconnect = v => {
+    idx.set(v, index); low.set(v, index); index++
+    stack.push(v); onStack.add(v)
+    for (const e of (outEdges.get(v) || [])) {
+      const w = e.target
+      if (!reachable.has(w)) continue
+      if (!idx.has(w)) { strongconnect(w); low.set(v, Math.min(low.get(v), low.get(w))) }
+      else if (onStack.has(w)) low.set(v, Math.min(low.get(v), idx.get(w)))
+    }
+    if (low.get(v) === idx.get(v)) {
+      let w
+      do { w = stack.pop(); onStack.delete(w); sccOf.set(w, v) } while (w !== v)
+    }
+  }
+  for (const v of reachable) if (!idx.has(v)) strongconnect(v)
+
+  // 缩点 DAG：超节点 id = 代表元；入边代价 = 分量内含非透明节点 ? 1 : 0（全透明分量穿透 +0）
+  const sccOpaque = new Map() // sccId -> bool（含非透明节点）
+  for (const id of reachable) {
+    const s = sccOf.get(id)
+    if (!sccOpaque.has(s)) sccOpaque.set(s, false)
+    if (!isTransparent(nodeMap.get(id))) sccOpaque.set(s, true)
+  }
+  const sccOut = new Map() // sccId -> [{to, inc}]
+  for (const e of edges) {
+    if (!reachable.has(e.source) || !nodeMap.has(e.target) || !reachable.has(e.target)) continue
+    const su = sccOf.get(e.source), sv = sccOf.get(e.target)
+    if (su === sv) continue // 环内边（含自环）：缩点后丢弃，不绕圈
+    if (!sccOut.has(su)) sccOut.set(su, [])
+    const inc = e.edgeType === 'ROW_IMPACT' ? 0 : (sccOpaque.get(sv) ? 1 : 0)
+    sccOut.get(su).push({ to: sv, inc })
+  }
+  // 缩点 DAG 最长路径（无环，松弛必收敛）
+  const sccDepth = new Map([[sccOf.get(startId), 0]])
   let changed = true
+  let round = 0
+  const maxRounds = reachable.size + 1
   while (changed && round < maxRounds) {
     changed = false
     round++
-    for (const e of edges) {
-      if (e.source === e.target) continue // 自环：列派生自自身，不增加跳数
-      const ds = depth.get(e.source)
+    for (const [su, outs] of sccOut) {
+      const ds = sccDepth.get(su)
       if (ds === undefined) continue
-      const tNode = nodeMap.get(e.target)
-      if (!tNode) continue
-      const candidate = ds + (isTransparent(tNode) ? 0 : 1)
-      if (candidate > (depth.get(e.target) ?? -1)) {
-        depth.set(e.target, candidate)
-        changed = true
+      for (const { to, inc } of outs) {
+        const cand = ds + inc
+        if (cand > (sccDepth.get(to) ?? -1)) { sccDepth.set(to, cand); changed = true }
       }
     }
   }
-  // 正权环污染：深度 > 节点数不可能来自无环简单路径，环上及环下游节点回退 BFS 最浅深度
-  const polluted = [...depth.entries()].filter(([, d]) => d > nodes.length)
-  if (polluted.length) {
-    const shallow = bfsShallowDepth(nodeMap, edges, startId, isTransparent)
-    for (const [id] of polluted) {
-      const s = shallow.get(id)
-      if (s !== undefined) depth.set(id, s)
-    }
+  if (round >= maxRounds && changed) {
+    // 安全阀：缩点后理论无环；若仍不收敛（异常数据）回退 BFS 最浅深度
+    return bfsShallowDepth(nodeMap, edges, startId, isTransparent)
   }
+  // 展开：环成员同深度
+  const depth = new Map()
+  for (const id of reachable) depth.set(id, sccDepth.get(sccOf.get(id)) ?? 0)
   return depth
 }
 
@@ -77,7 +124,8 @@ function bfsShallowDepth(nodeMap, edges, startId, isTransparent) {
       if (depth.has(e.target)) continue
       const tNode = nodeMap.get(e.target)
       if (!tNode) continue
-      depth.set(e.target, depth.get(cur) + (isTransparent(tNode) ? 0 : 1))
+      const inc = e.edgeType === 'ROW_IMPACT' ? 0 : (isTransparent(tNode) ? 0 : 1)
+      depth.set(e.target, depth.get(cur) + inc)
       queue.push(e.target)
     }
   }
@@ -510,13 +558,16 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16) {
   }
 
   dfs(targetId, [], new Set())
-  // 展示形态：每跳恰好一行，仅 行过滤 / 值传播 两类标签，不展示临时表列，
-  // 且跳数与清单层级 tab 同口径（穿透临时表计算）。
-  // 穿透合并：到达临时节点（非终点）的步不独立成行，与后继步合并——
-  //   值穿透（值步→临时列→值步）折叠为 物理列→物理列；
-  //   行通道穿透（FILTERS→临时表→表内列展开→值穿透）整体折叠为 起点列→首个物理到达列 的一步，
-  //   clause 承 JOIN/WHERE 条件、expression 合并值表达式（与清单行层级口径一致）。
-  // 跳号 = 折叠后步序号（每步均到达物理实体或终点），与层级 tab 对齐。
+  // 展示形态：每跳恰好一行（= 跨表传播一段），仅 行过滤 / 值传播 两类标签，不展示临时表列，
+  // 跳数与清单层级 tab 同口径（穿透临时表 + 行展开不占跳）。
+  // 合并规则：
+  //   1) 行影响一段：FILTERS（到物理表）+ 后继 ROW_IMPACT（表内列展开）合并为
+  //      起点列→表内列 的一行（clause 承 JOIN/WHERE 条件）——行影响从条件列到达表内列是一段传播；
+  //   2) 临时表穿透：到达临时节点（非终点）的步并入后继步——
+  //      值穿透（值步→临时列→值步）折叠为 物理列→物理列；
+  //      行通道穿透（FILTERS→临时表→展开→值穿透）整体折叠为 起点列→首个物理到达列，
+  //      clause 承条件、expression 合并值表达式。
+  // 跳号 = 折叠后步序号，与层级 tab 对齐。
   const isTempMid = id => id !== targetId && isTempNode(nodeById.get(id))
   return paths
     .sort((a, b) => a.length - b.length)
@@ -524,7 +575,19 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16) {
       const folded = []
       for (const s of p) {
         const last = folded[folded.length - 1]
-        if (last && isTempMid(last.to)) {
+        if (last && last.type === 'FILTERS' && s.type === 'ROW_IMPACT') {
+          // 行影响一段：条件列→表→表内列 合并为一行（表节点不出现在路径表中）
+          folded[folded.length - 1] = {
+            ...s,
+            from: last.from,
+            dF: last.dF,
+            type: 'FILTERS',
+            role: last.role || s.role,
+            clause: last.clause || s.clause,
+            procName: last.procName || s.procName,
+            expanded: true
+          }
+        } else if (last && isTempMid(last.to)) {
           const exprs = [...new Set([last.expression, s.expression].filter(Boolean))]
           if (!exprs.length && (last.type === 'DIRECT' || s.type === 'DIRECT')) exprs.push('直接取值')
           const procs = [...new Set([last.procName, s.procName].filter(Boolean))]
@@ -542,18 +605,11 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16) {
           folded.push({ ...s })
         }
       }
+      // 兜底：孤立 ROW_IMPACT 步（前驱非 FILTERS，理论不出现）改写为行过滤行
       return folded.map((s, i) => {
         const hop = i + 1
         if (s.type !== 'ROW_IMPACT') return { ...s, hop }
-        const prev = folded[i - 1]
-        return {
-          ...s,
-          from: sourceId,
-          type: 'FILTERS',
-          clause: prev && prev.type === 'FILTERS' ? prev.clause : s.clause,
-          expanded: true,
-          hop
-        }
+        return { ...s, from: sourceId, type: 'FILTERS', expanded: true, hop }
       })
     })
 }

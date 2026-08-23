@@ -220,7 +220,11 @@ function stepTagType(s) {
 }
 function stepDetail(s) {
   if (s.type === 'FILTERS') {
-    if (s.expanded) return `${s.procName || '-'} · 表内列行集受${s.role === 'where_condition' ? 'WHERE' : 'JOIN'}条件影响`
+    if (s.expanded) {
+      const cond = s.role === 'where_condition' ? 'WHERE' : 'JOIN'
+      const base = s.clause ? `${s.procName || '-'} · ${s.clause}` : `${s.procName || '-'} · 表内列行集受${cond}条件影响`
+      return s.expression ? `${base} · 值经 ${s.expression}` : base
+    }
     const base = `${s.procName || '-'} · ${s.clause || '-'}`
     return s.expression ? `${base} · 值经 ${s.expression}` : base
   }

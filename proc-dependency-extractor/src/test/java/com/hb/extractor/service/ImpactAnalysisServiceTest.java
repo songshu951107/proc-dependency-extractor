@@ -129,8 +129,10 @@ class ImpactAnalysisServiceTest {
     }
 
     /**
-     * 行影响通道去重：同一目标表被多条 FILTERS 边指向（如多个 proc / 同 proc 多块过滤同一表）时，
-     * 表内列只应展开一次——ROW_IMPACT 边数 = 表内列数，不随 FILTERS 边数翻倍；
+     * 行影响通道去重（按 表×proc×role 组）：同一目标表被多条 FILTERS 边指向时，
+     * - 同组重复（同 proc 同角色，如同 proc 多块 INSERT 过滤同一表）→ ROW_IMPACT 只发一组；
+     * - 不同组（不同 proc，或同 proc 的 WHERE+JOIN 双角色）→ 每组各发一组，保留 proc 归属
+     *   （前端行清单 key = procName|field，丢组即丢行）。
      * FILTERS 边本身各保留一条（携带各自 proc/block 信息）。
      */
     @Test
@@ -147,7 +149,8 @@ class ImpactAnalysisServiceTest {
         req.setDirection("DOWNSTREAM");
         req.setMaxDepth(3);
 
-        // 两条 FILTERS 边（不同 proc）指向同一目标表 cdm.tgt
+        // 三条 FILTERS 边指向同一目标表 cdm.tgt：
+        // f1/f2 同组（proc_a + where，不同块）；f3 异组（proc_b + join）
         Map<String, Object> f1 = new HashMap<>();
         f1.put("tableName", "cdm.tgt");
         f1.put("shortName", "TGT");
@@ -158,10 +161,17 @@ class ImpactAnalysisServiceTest {
         Map<String, Object> f2 = new HashMap<>();
         f2.put("tableName", "cdm.tgt");
         f2.put("shortName", "TGT");
-        f2.put("role", "join_condition");
-        f2.put("clause", "id = id");
-        f2.put("procName", "proc_b");
+        f2.put("role", "where_condition");
+        f2.put("clause", "balance > 0");
+        f2.put("procName", "proc_a");
         f2.put("seq", 2);
+        Map<String, Object> f3 = new HashMap<>();
+        f3.put("tableName", "cdm.tgt");
+        f3.put("shortName", "TGT");
+        f3.put("role", "join_condition");
+        f3.put("clause", "id = id");
+        f3.put("procName", "proc_b");
+        f3.put("seq", 1);
 
         Map<String, Object> colA = new HashMap<>();
         colA.put("colKey", "cdm.tgt.a");
@@ -174,7 +184,7 @@ class ImpactAnalysisServiceTest {
 
         // 兜底先注册（LIFO 匹配），具体 matcher 后注册优先生效
         stubNeo4jQuery("", Collections.emptyList());
-        stubNeo4jQuery(")-[f:FILTERS]->", Arrays.asList(f1, f2));
+        stubNeo4jQuery(")-[f:FILTERS]->", Arrays.asList(f1, f2, f3));
         stubNeo4jQuery("BELONGS_TO", Arrays.asList(colA, colB));
 
         ImpactAnalysisVO vo = impactService.analyze(req);
@@ -183,8 +193,15 @@ class ImpactAnalysisServiceTest {
                 .filter(e -> "FILTERS".equals(e.getEdgeType())).count();
         long rowImpactEdges = vo.getEdges().stream()
                 .filter(e -> "ROW_IMPACT".equals(e.getEdgeType())).count();
-        assertEquals(2, filtersEdges, "两条 FILTERS 边（不同 proc）应各保留一条");
-        assertEquals(2, rowImpactEdges, "同一表被过滤两次时 ROW_IMPACT 边不应翻倍（修复前为 4）");
+        long groupAEdges = vo.getEdges().stream()
+                .filter(e -> "ROW_IMPACT".equals(e.getEdgeType()) && "proc_a".equals(e.getProcName())).count();
+        long groupBEdges = vo.getEdges().stream()
+                .filter(e -> "ROW_IMPACT".equals(e.getEdgeType()) && "proc_b".equals(e.getProcName())).count();
+        assertEquals(3, filtersEdges, "三条 FILTERS 边应各保留一条");
+        // 2 组（proc_a/where 去重后 1 组 + proc_b/join 1 组）× 2 列 = 4；同组 f1/f2 不得翻倍成 6
+        assertEquals(4, rowImpactEdges, "ROW_IMPACT 按 (表,proc,role) 组去重：2 组 × 2 列 = 4，同组重复不翻倍");
+        assertEquals(2, groupAEdges, "proc_a 组（f1/f2 去重）应有 2 条");
+        assertEquals(2, groupBEdges, "proc_b 组应有 2 条（跨 proc 不得丢行）");
     }
 
     /**

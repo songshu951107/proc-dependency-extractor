@@ -878,17 +878,21 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             return seeds;
         }
         Set<String> nextLayerCols = new LinkedHashSet<>();
-        Set<String> expandedTables = new HashSet<>();
+        // 按表分组：同表多条 FILTERS 边（多 proc/多块 INSERT 过滤同一表）只查一次列
+        Map<String, List<Map<String, Object>>> filtersByTable = new LinkedHashMap<>();
         for (Map<String, Object> fr : filterRows) {
             String tableName = (String) fr.get("tableName");
             if (tableName == null || tableName.equals(startTable)) continue;
-            String role = (String) fr.get("role");
-            String procName = (String) fr.get("procName");
+            filtersByTable.computeIfAbsent(tableName, k -> new ArrayList<>()).add(fr);
+        }
+        for (Map.Entry<String, List<Map<String, Object>>> tableEntry : filtersByTable.entrySet()) {
+            String tableName = tableEntry.getKey();
+            List<Map<String, Object>> tableFilters = tableEntry.getValue();
             // 表节点（depth=1）
             if (nodeIds.add(tableName)) {
                 ImpactAnalysisVO.NodeVO tNode = new ImpactAnalysisVO.NodeVO();
                 tNode.setId(tableName);
-                Object shortName = fr.get("shortName");
+                Object shortName = tableFilters.get(0).get("shortName");
                 tNode.setLabel(shortName != null ? shortName.toString() : tableName);
                 tNode.setNodeLevel("TABLE");
                 tNode.setLayer(extractLayerFromId(tableName));
@@ -896,20 +900,20 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                 tNode.setDepth(1);
                 nodes.add(tNode);
             }
-            // FILTERS 边（起点列 → 表）：每条边各保留（携带各自 proc/block 信息）
-            ImpactAnalysisVO.EdgeVO fEdge = new ImpactAnalysisVO.EdgeVO();
-            fEdge.setSource(startColKey);
-            fEdge.setTarget(tableName);
-            fEdge.setEdgeType("FILTERS");
-            fEdge.setRole(role);
-            fEdge.setClause((String) fr.get("clause"));
-            fEdge.setProcName(procName);
-            fEdge.setSqlBlockSeq(fr.get("seq") != null ? ((Number) fr.get("seq")).intValue() : null);
-            fEdge.setImpactKind("ROW");
-            edges.add(fEdge);
-            // 表内列展开按表去重：同一表多条 FILTERS 边（多 proc/多块过滤同一表）只展开一次，避免 ROW_IMPACT 边重复
-            if (!expandedTables.add(tableName)) continue;
-            // 表内所有列：行影响展开（depth=2）+ ROW_IMPACT 边（表→列，不落库、仅查询期）
+            // FILTERS 边（起点列 → 表）：每条各保留（携带各自 proc/block 信息）
+            for (Map<String, Object> fr : tableFilters) {
+                ImpactAnalysisVO.EdgeVO fEdge = new ImpactAnalysisVO.EdgeVO();
+                fEdge.setSource(startColKey);
+                fEdge.setTarget(tableName);
+                fEdge.setEdgeType("FILTERS");
+                fEdge.setRole((String) fr.get("role"));
+                fEdge.setClause((String) fr.get("clause"));
+                fEdge.setProcName((String) fr.get("procName"));
+                fEdge.setSqlBlockSeq(fr.get("seq") != null ? ((Number) fr.get("seq")).intValue() : null);
+                fEdge.setImpactKind("ROW");
+                edges.add(fEdge);
+            }
+            // 表内所有列：行影响展开（depth=2），列查询每表一次
             Collection<Map<String, Object>> cols;
             try {
                 cols = neo4jClient.query(
@@ -920,21 +924,30 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                 log.warn("行影响列展开失败 table={}: {}", tableName, e.getMessage());
                 continue;
             }
-            for (Map<String, Object> col : cols) {
-                String colKey = (String) col.get("colKey");
-                if (colKey == null || colKey.equals(startColKey)) continue;
-                if (nodeIds.add(colKey)) {
-                    nodes.add(buildFieldNode(col, colKey, 2));
+            // ROW_IMPACT 边按 (proc, role) 组去重：同组重复（同 proc 多块）只发一组；
+            // 跨组（不同 proc / WHERE+JOIN 双角色）各发一组，保留 proc 归属（前端行清单 key=procName|field）
+            Set<String> emittedGroups = new HashSet<>();
+            for (Map<String, Object> fr : tableFilters) {
+                String groupKey = fr.get("procName") + "|" + fr.get("role");
+                if (!emittedGroups.add(groupKey)) continue;
+                String role = (String) fr.get("role");
+                String procName = (String) fr.get("procName");
+                for (Map<String, Object> col : cols) {
+                    String colKey = (String) col.get("colKey");
+                    if (colKey == null || colKey.equals(startColKey)) continue;
+                    if (nodeIds.add(colKey)) {
+                        nodes.add(buildFieldNode(col, colKey, 2));
+                    }
+                    ImpactAnalysisVO.EdgeVO rEdge = new ImpactAnalysisVO.EdgeVO();
+                    rEdge.setSource(tableName);
+                    rEdge.setTarget(colKey);
+                    rEdge.setEdgeType("ROW_IMPACT");
+                    rEdge.setRole(role);
+                    rEdge.setProcName(procName);
+                    rEdge.setImpactKind("ROW");
+                    edges.add(rEdge);
+                    nextLayerCols.add(colKey);
                 }
-                ImpactAnalysisVO.EdgeVO rEdge = new ImpactAnalysisVO.EdgeVO();
-                rEdge.setSource(tableName);
-                rEdge.setTarget(colKey);
-                rEdge.setEdgeType("ROW_IMPACT");
-                rEdge.setRole(role);
-                rEdge.setProcName(procName);
-                rEdge.setImpactKind("ROW");
-                edges.add(rEdge);
-                nextLayerCols.add(colKey);
             }
         }
         if (!nextLayerCols.isEmpty()) seeds.put(2, nextLayerCols);

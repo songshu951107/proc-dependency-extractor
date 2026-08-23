@@ -1,6 +1,7 @@
 <template>
   <div class="flow-graph-container">
     <VueFlow
+      ref="vueFlowRef"
       :nodes="nodes"
       :edges="edges"
       :fit-view-on-init="true"
@@ -21,7 +22,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, nextTick } from 'vue'
 import { VueFlow } from '@vue-flow/core'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -46,6 +47,9 @@ const emit = defineEmits(['nodeClick', 'edgeClick'])
 
 const nodes = ref([])
 const edges = ref([])
+
+// VueFlow 实例引用，用于节点异步加载后主动 fitView（fit-view-on-init 仅在初始化时空视图生效）
+const vueFlowRef = ref(null)
 
 const graphStore = reactive({
   nodeMap: new Map(),
@@ -122,22 +126,28 @@ function rebuildGraph() {
     const edgeData = graphStore.edgeMap.get(`${e.v}-${e.w}`) || {}
     const isInputTo = edgeData.edgeType === 'INPUT_TO'
     const isOutputTo = edgeData.edgeType === 'OUTPUT_TO'
+    const isDerivedFrom = edgeData.edgeType === 'DERIVED_FROM'
     return {
       id: `${e.v}-${e.w}`,
       source: e.v,
       target: e.w,
       type: 'smoothstep',
-      animated: filtering ? bothMatched : !isInputTo,
+      animated: filtering ? bothMatched : true,
       classed: filtering ? (bothMatched ? 'edge-highlight' : 'edge-dim') : '',
       style: {
         stroke: filtering
           ? (bothMatched ? '#1890ff' : '#64748b')
-          : (isInputTo ? '#94a3b8' : (isOutputTo ? '#3b82f6' : '#64748b')),
+          : (isInputTo ? '#94a3b8' : (isOutputTo ? '#3b82f6' : (isDerivedFrom ? '#10b981' : '#64748b'))),
         strokeWidth: filtering && bothMatched ? 2 : 1.5,
         opacity: filtering ? (bothMatched ? 1 : 0.15) : 1,
-        strokeDasharray: isInputTo ? '5,5' : 'none'
+        strokeDasharray: isInputTo ? '5,5' : undefined
       }
     }
+  })
+
+  // 节点异步赋值后，fit-view-on-init 已失效，需主动 fitView 使图谱居中
+  nextTick(() => {
+    vueFlowRef.value?.fitView({ padding: 0.1, duration: 200 })
   })
 }
 
@@ -163,7 +173,9 @@ async function expandNode(nodeId) {
           expression: n.expression,
           logicType: n.logicType,
           sqlHint: n.sqlHint,
-          procName: n.procName
+          procName: n.procName,
+          tableFullName: n.tableFullName,
+          scriptFile: n.scriptFile
         })
         changed = true
       }
@@ -208,7 +220,9 @@ function loadInitial(initialNodes, initialEdges) {
       expression: n.expression,
       logicType: n.logicType,
       sqlHint: n.sqlHint,
-      procName: n.procName
+      procName: n.procName,
+      tableFullName: n.tableFullName,
+      scriptFile: n.scriptFile
     })
   })
   initialEdges.forEach(e => {

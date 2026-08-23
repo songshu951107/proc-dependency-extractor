@@ -15,6 +15,7 @@
     <div class="layer-badge" :style="{ background: color }">{{ layer || '?' }}</div>
     <div class="node-body">
       <div class="node-label">{{ label }}</div>
+      <div v-if="tableFullName" class="node-table-name" :title="tableFullName">{{ tableShortName }}</div>
       <div v-if="matchedColumns && matchedColumns.length" class="matched-fields">
         <span v-for="col in matchedColumns" :key="col" class="field-tag">{{ col }}</span>
       </div>
@@ -55,6 +56,12 @@ const LOGIC_BADGES = {
 const label = computed(() => props.data.label || props.id)
 const layer = computed(() => props.data.layer || 'UNKNOWN')
 const matchedColumns = computed(() => props.data.matchedColumns || [])
+const tableFullName = computed(() => props.data.tableFullName || '')
+const tableShortName = computed(() => {
+  const fn = props.data.tableFullName || ''
+  const idx = fn.indexOf('.')
+  return idx > 0 ? fn.substring(idx + 1) : fn
+})
 
 const color = computed(() => {
   if (props.data.isTemp) return '#faad14'
@@ -105,6 +112,16 @@ const expressionShort = computed(() => {
   color: #1f1f1f;
   word-break: break-all;
   line-height: 1.3;
+}
+.node-table-name {
+  margin-top: 2px;
+  font-size: 10px;
+  color: #64748b;
+  word-break: break-all;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .matched-fields {
   margin-top: 4px;

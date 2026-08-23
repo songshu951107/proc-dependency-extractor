@@ -23,7 +23,9 @@ export function isTempNode(node) {
 /**
  * 最长路径层级计算（规格 §3.2）。
  * 松弛 depth[t] = max(depth[t], depth[s] + inc(t))，inc: 透明节点(临时表/Transform)=0，其余=1。
- * 环防护：松弛轮次上限 edges.length + 1，超限整体回退 BFS 最浅深度。
+ * 环防护：自环边（列派生自自身）不参与松弛；正权环（如 proc 读写同表形成的 列↔Transform 环）
+ * 会使松弛不收敛——仅将深度超过节点数（简单路径深度上限，必为环污染）的节点回退 BFS 最浅深度，
+ * 未污染节点保留最长路径深度。整体回退会使多通道行的层级与路径表跳数不一致。
  * @param nodes [{id, nodeLevel, temp?}]  @param edges [{source, target}]  @param startId 起点id
  * @param isTransparent (node) => bool  @return Map<id, depth>（不可达节点不在 Map 中）
  */
@@ -37,6 +39,7 @@ export function computeLongestDepth(nodes, edges, startId, isTransparent) {
     changed = false
     round++
     for (const e of edges) {
+      if (e.source === e.target) continue // 自环：列派生自自身，不增加跳数
       const ds = depth.get(e.source)
       if (ds === undefined) continue
       const tNode = nodeMap.get(e.target)
@@ -48,9 +51,14 @@ export function computeLongestDepth(nodes, edges, startId, isTransparent) {
       }
     }
   }
-  if (round >= maxRounds && changed) {
-    // 存在环：回退 BFS 最浅深度（临时节点 inc 同样为 0），保证所有节点有确定层级
-    return bfsShallowDepth(nodeMap, edges, startId, isTransparent)
+  // 正权环污染：深度 > 节点数不可能来自无环简单路径，环上及环下游节点回退 BFS 最浅深度
+  const polluted = [...depth.entries()].filter(([, d]) => d > nodes.length)
+  if (polluted.length) {
+    const shallow = bfsShallowDepth(nodeMap, edges, startId, isTransparent)
+    for (const [id] of polluted) {
+      const s = shallow.get(id)
+      if (s !== undefined) depth.set(id, s)
+    }
   }
   return depth
 }

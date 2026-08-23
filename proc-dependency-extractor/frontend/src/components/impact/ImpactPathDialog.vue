@@ -27,7 +27,7 @@
             </el-tag>
             <span class="hop-tip">每跳一行；临时表中转已折叠，跳数与层级对齐</span>
           </div>
-          <el-table :data="p" border size="small">
+          <el-table :data="p" border size="small" :max-height="96">
             <el-table-column prop="hop" label="跳" width="52" align="center" />
             <el-table-column label="类型" width="110" align="center">
               <template #default="{ row: s }">

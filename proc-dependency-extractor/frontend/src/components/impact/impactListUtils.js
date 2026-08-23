@@ -425,6 +425,94 @@ export function traceDownstreamSubgraph(nodes, edges, fromId, procName) {
 }
 
 /**
+ * 逐跳路径回溯（方案A·跨跳明细，双通道）：从目标列回溯到起点列的物理步序列，
+ * 支持 值通道（Column←Transform←Column / DERIVED_FROM 列直连，临时表列穿透 d+0）
+ * 与 行通道（Column←ROW_IMPACT←Table←FILTERS←条件列）。不按 procName 过滤——跨 proc 跳完整展示。
+ * 跳号按 depth 推进编：depth 递增的步闭合一跳，穿透步（d 不变）归入下一跳，
+ * 与结果区"第 N 层级"对齐（如 0→1 行过滤、1→2 行影响展开、2→3 值传播）。
+ * @param {Array} nodes 全量节点（FIELD 带 depth；TABLE 节点 depth=1）
+ * @param {Array} edges 全量边
+ * @param {string} targetId 目标列 id
+ * @param {string} sourceId 起点列 id
+ * @param {number} maxSteps 单路径物理步上限（防异常环/爆炸）
+ * @return {Array<Array<{hop, from, to, type, procName?, expression?, role?, clause?, dF, dT}>>}
+ *         路径数组（≤5 条，按步数升序），每条按起点→目标排列；type: FILTERS/ROW_IMPACT/VALUE/DIRECT
+ */
+export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16) {
+  if (!targetId || !sourceId || targetId === sourceId) return []
+  const nodeById = new Map(nodes.map(n => [n.id, n]))
+  const inByTarget = new Map()
+  for (const e of edges) {
+    if (!inByTarget.has(e.target)) inByTarget.set(e.target, [])
+    inByTarget.get(e.target).push(e)
+  }
+  const MAX_PATHS = 5
+  const paths = []
+
+  function dfs(nodeId, steps, visited) {
+    if (paths.length >= MAX_PATHS) return
+    if (nodeId === sourceId) {
+      paths.push(steps.slice().reverse())
+      return
+    }
+    if (steps.length >= maxSteps || visited.has(nodeId)) return
+    const n = nodeById.get(nodeId)
+    if (!n) return
+    visited.add(nodeId)
+    const dT = n.depth
+    const push = (from, type, extra) => {
+      const dF = nodeById.get(from)?.depth
+      // 前驱深度校验：递减（dT-1，含 行链条件列→表）/ 穿透（dT，临时表列中转）；null 宽松放行（由成功条件裁剪）
+      const ok = dF == null || dT == null || dF === dT - 1 || dF === dT
+      if (!ok) return
+      steps.push({ from, to: nodeId, type, dF: dF ?? null, dT: dT ?? null, ...extra })
+      dfs(from, steps, visited)
+      steps.pop()
+    }
+    if (n.nodeLevel === 'TABLE') {
+      // 表只走 FILTERS 入边（条件列）
+      for (const fe of (inByTarget.get(nodeId) || [])) {
+        if (fe.edgeType !== 'FILTERS') continue
+        if (nodeById.get(fe.source)?.nodeLevel === 'FIELD') {
+          push(fe.source, 'FILTERS', { role: fe.role, clause: fe.clause, procName: fe.procName })
+        }
+      }
+    } else {
+      // 列：值前驱（Transform 中转 / 列直连）+ 行前驱（ROW_IMPACT←表）
+      for (const e of (inByTarget.get(nodeId) || [])) {
+        const sn = nodeById.get(e.source)
+        if (!sn) continue
+        if (sn.nodeLevel === 'TRANSFORM') {
+          for (const te of (inByTarget.get(e.source) || [])) {
+            if (nodeById.get(te.source)?.nodeLevel === 'FIELD') {
+              push(te.source, 'VALUE', { procName: sn.procName || e.procName, expression: sn.expression || sn.label })
+            }
+          }
+        } else if (sn.nodeLevel === 'FIELD') {
+          push(e.source, 'DIRECT', { procName: e.procName })
+        } else if (sn.nodeLevel === 'TABLE' && e.edgeType === 'ROW_IMPACT') {
+          push(e.source, 'ROW_IMPACT', { role: e.role, procName: e.procName })
+        }
+      }
+    }
+    visited.delete(nodeId)
+  }
+
+  dfs(targetId, [], new Set())
+  // 跳号：depth 推进（dT > dF）的步闭合一跳；穿透步（dT == dF）沿用后继跳号
+  return paths
+    .sort((a, b) => a.length - b.length)
+    .map(p => {
+      let hop = 0
+      let lastClose = -1
+      return p.map(s => {
+        if (s.dF != null && s.dT != null && s.dT > s.dF && s.dT > lastClose) { hop++; lastClose = s.dT }
+        return { ...s, hop: Math.max(hop, 1) }
+      })
+    })
+}
+
+/**
  * 链路回溯（规格 §5.1）：从 targetId 沿边反向可达子图，只走 procName 匹配的边
  * （procName 为空的边保留，避免链路断裂；procName 非空且不等于指定值的跳过）。
  * @return { nodes, edges } 反向可达子图

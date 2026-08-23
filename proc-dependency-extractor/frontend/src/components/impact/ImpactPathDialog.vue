@@ -19,6 +19,34 @@
         </span>
         <span class="meta" v-if="subgraph">节点 {{ subgraph.nodes.length }} · 边 {{ subgraph.edges.length }}</span>
       </div>
+      <div class="hop-paths" v-if="hopPaths.length">
+        <div v-for="(p, pi) in hopPaths" :key="pi" class="hop-path">
+          <div class="hop-path-title">
+            <el-tag size="small" :type="hopPaths.length > 1 ? 'info' : 'success'">
+              传播路径{{ hopPaths.length > 1 ? ` ${pi + 1}` : '' }}（共 {{ p.reduce((m, s) => Math.max(m, s.hop), 0) }} 跳）
+            </el-tag>
+            <span class="hop-tip">跳号与层级对齐；临时表中转步（跳号不变）并入后续跳展示</span>
+          </div>
+          <el-table :data="p" border size="small">
+            <el-table-column prop="hop" label="跳" width="52" align="center" />
+            <el-table-column label="类型" width="110" align="center">
+              <template #default="{ row: s }">
+                <el-tag size="small" :type="stepTagType(s)">{{ stepTypeLabel(s) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="源 → 到达" min-width="300">
+              <template #default="{ row: s }">
+                <span class="hop-node">{{ shortId(s.from) }}</span>
+                <span class="hop-arrow"> → </span>
+                <span class="hop-node" :class="{ 'hop-final': s.to === row?.targetId }">{{ shortId(s.to) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="加工（存储过程 · 明细）" min-width="320" show-overflow-tooltip>
+              <template #default="{ row: s }">{{ stepDetail(s) }}</template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
       <div class="legend">
         <span class="legend-item"><i class="dot fdm"></i>FDM</span>
         <span class="legend-item"><i class="dot cdm"></i>CDM/DWD</span>
@@ -46,7 +74,7 @@
 import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import G6 from '@antv/g6'
-import { traceUpstreamSubgraph, traceDownstreamSubgraph } from './impactListUtils'
+import { traceUpstreamSubgraph, traceDownstreamSubgraph, traceHopPaths } from './impactListUtils'
 
 const props = defineProps({
   visible: Boolean,
@@ -62,6 +90,7 @@ const graph = ref(null)
 const subgraph = ref(null)
 const loaded = ref(false)
 const selectedNode = ref(null)
+const hopPaths = ref([])
 
 const dialogTitle = computed(() => {
   if (!props.row) return '影响链路'
@@ -87,7 +116,12 @@ function nodeColor(n) {
 async function handleOpen() {
   await nextTick()
   loaded.value = false
+  hopPaths.value = []
   if (!props.row) return
+  // 逐跳路径回溯（方案A）：仅下游字段级行；双通道（值+行），跨 proc 完整展示
+  if (!props.row.upstream && props.row.targetId && props.row.field) {
+    hopPaths.value = traceHopPaths(props.nodes, props.edges, props.row.targetId, props.sourceId)
+  }
   // UPSTREAM 行: 来源字段在该行脚本中的正向流向（traceUpstream 的镜像）;
   // DOWNSTREAM 行: 目标字段在该行脚本中的反向回溯
   subgraph.value = props.row.upstream
@@ -170,6 +204,31 @@ function shortLabel(n) {
 }
 function truncate(s, len) { return s && s.length > len ? s.slice(0, len) + '...' : (s || '') }
 
+// ---- 逐跳路径表辅助 ----
+// id 显示：字段取 table.field，表取 schema.table（全名 tooltip 由 show-overflow-tooltip 承担）
+function shortId(id) {
+  const parts = (id || '').split('.')
+  if (parts.length >= 3) return `${parts[1]}.${parts[2]}`
+  return id || ''
+}
+function stepTypeLabel(s) {
+  if (s.type === 'FILTERS') return s.role === 'where_condition' ? '行过滤·WHERE' : '行过滤·JOIN'
+  if (s.type === 'ROW_IMPACT') return '行影响展开'
+  if (s.type === 'VALUE') return '值传播'
+  return '直接映射'
+}
+function stepTagType(s) {
+  if (s.type === 'FILTERS') return 'danger'
+  if (s.type === 'ROW_IMPACT') return 'warning'
+  return 'success'
+}
+function stepDetail(s) {
+  if (s.type === 'FILTERS') return `${s.procName || '-'} · ${s.clause || '-'}`
+  if (s.type === 'ROW_IMPACT') return `${s.procName || '-'} · 表内列行受${s.role === 'where_condition' ? 'WHERE' : 'JOIN'}条件影响`
+  if (s.type === 'VALUE') return `${s.procName || '-'} · ${s.expression || '-'}`
+  return s.procName || '直接取值'
+}
+
 async function initGraph() {
   if (!canvasRef.value) return
   await nextTick()
@@ -216,6 +275,13 @@ onBeforeUnmount(destroyGraph)
 .summary { display: flex; align-items: center; gap: 10px; padding: 2px 0 8px; }
 .summary-text { font-size: 13px; color: #303133; }
 .summary .meta { color: #909399; font-size: 12px; margin-left: auto; }
+.hop-paths { max-height: 240px; overflow: auto; margin-bottom: 8px; border-bottom: 1px dashed #ebeef5; }
+.hop-path { margin-bottom: 10px; }
+.hop-path-title { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.hop-tip { font-size: 12px; color: #909399; }
+.hop-node { font-family: Menlo, Consolas, monospace; font-size: 12px; }
+.hop-arrow { color: #909399; }
+.hop-final { color: #f56c6c; font-weight: 600; }
 .legend { padding: 2px 0 6px; font-size: 12px; color: #606266; }
 .legend-item { margin-right: 14px; }
 .legend-item .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }

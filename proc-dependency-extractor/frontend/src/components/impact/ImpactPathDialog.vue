@@ -54,6 +54,7 @@
         <span class="legend-item"><i class="dot transform"></i>Transform</span>
         <span class="legend-item"><span class="line-solid">——</span> 直接派生</span>
         <span class="legend-item"><span class="line-dashed">- - -</span> 行影响(FILTERS: ON/WHERE)</span>
+        <span class="legend-item"><span class="line-dots">····</span> 行影响展开(表→列)</span>
       </div>
       <div class="canvas-container">
         <div ref="canvasRef" class="path-canvas"></div>
@@ -123,10 +124,12 @@ async function handleOpen() {
     hopPaths.value = traceHopPaths(props.nodes, props.edges, props.row.targetId, props.sourceId, 16, props.row.level)
   }
   // UPSTREAM 行: 来源字段在该行脚本中的正向流向（traceUpstream 的镜像）;
-  // DOWNSTREAM 行: 目标字段在该行脚本中的反向回溯
+  // DOWNSTREAM 行: 目标字段到分析起点的完整反向回溯——不按 procName 过滤：
+  // 跨 proc 多跳链路的首跳边（FILTERS/ROW_IMPACT 属上游 proc）被过滤会导致
+  // 图中只剩最后一跳、看不到分析起点，与标题/路径表的完整链路语义不一致
   subgraph.value = props.row.upstream
     ? traceDownstreamSubgraph(props.nodes, props.edges, props.row.targetId, props.row.procName)
-    : traceUpstreamSubgraph(props.nodes, props.edges, props.row.targetId, props.row.procName)
+    : traceUpstreamSubgraph(props.nodes, props.edges, props.row.targetId)
   loaded.value = true
   await renderGraph()
 }
@@ -175,18 +178,20 @@ function toG6Data(sg) {
     },
     labelCfg: { style: { fill: '#303133', fontSize: 11 } }
   }))
-  // ROW_IMPACT（表→列）不逐列画边：行影响通过 FILTERS 边 + 列清单标签表达
-  const edges = sg.edges.filter(e => e.edgeType !== 'ROW_IMPACT').map((e, i) => {
-    const isCond = e.role === 'join_condition' || e.role === 'where_condition'
+  // ROW_IMPACT（表→列）行影响展开边必须画：弹窗子图只含当前链路节点（非全表所有列），
+  // 纯行影响终点字段唯一的入边就是 ROW_IMPACT，滤掉会导致目标列节点孤立、链路断成两截
+  const edges = sg.edges.map((e, i) => {
+    const isRowImpact = e.edgeType === 'ROW_IMPACT'
+    const isCond = !isRowImpact && (e.role === 'join_condition' || e.role === 'where_condition')
     return {
       id: `pe-${i}`,
       source: e.source,
       target: e.target,
-      label: isCond ? (e.role === 'join_condition' ? 'ON' : 'WHERE') : '',
+      label: isRowImpact ? '行影响' : (isCond ? (e.role === 'join_condition' ? 'ON' : 'WHERE') : ''),
       style: {
-        stroke: isCond ? '#e6a23c' : '#909399',
+        stroke: isRowImpact || isCond ? '#e6a23c' : '#909399',
         lineWidth: 1.5,
-        lineDash: isCond ? [6, 4] : undefined,
+        lineDash: isRowImpact ? [2, 2] : (isCond ? [6, 4] : undefined),
         endArrow: true
       },
       labelCfg: { style: { fontSize: 10, fill: '#e6a23c', background: { fill: '#fff', padding: [2, 4, 2, 4] } } }
@@ -264,8 +269,8 @@ async function initGraph() {
   graph.value.on('edge:click', evt => {
     if (!evt.item || evt.item.destroyed) return
     const idx = Number(String(evt.item.getID()).replace('pe-', ''))
-    // 与 toG6Data 一致：先过滤 ROW_IMPACT 再编号，保证索引对齐
-    const edge = (subgraph.value?.edges || []).filter(e => e.edgeType !== 'ROW_IMPACT')[idx]
+    // 与 toG6Data 一致：边 id 按子图边序号编号（含 ROW_IMPACT），索引直接对齐
+    const edge = (subgraph.value?.edges || [])[idx]
     if (edge && edge.procName) emit('viewScript', edge)
   })
 }
@@ -291,7 +296,7 @@ onBeforeUnmount(destroyGraph)
 .legend-item .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
 .dot.fdm { background: #67c23a; } .dot.cdm { background: #409eff; }
 .dot.temp { background: #e6a23c; } .dot.transform { background: #909399; }
-.line-solid { color: #909399; } .line-dashed { color: #e6a23c; }
+.line-solid { color: #909399; } .line-dashed { color: #e6a23c; } .line-dots { color: #e6a23c; letter-spacing: 2px; }
 .canvas-container { flex: 1; position: relative; overflow: hidden; min-height: 300px; border: 1px solid #ebeef5; }
 .path-canvas { width: 100%; height: 100%; }
 .node-panel { padding-top: 8px; }

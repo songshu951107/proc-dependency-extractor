@@ -25,7 +25,7 @@
             <el-tag size="small" :type="hopPaths.length > 1 ? 'info' : 'success'">
               传播路径{{ hopPaths.length > 1 ? ` ${pi + 1}` : '' }}（共 {{ p.reduce((m, s) => Math.max(m, s.hop), 0) }} 跳）
             </el-tag>
-            <span class="hop-tip">每跳一行；临时表中转已折叠</span>
+            <span class="hop-tip">每跳一行；临时表中转已折叠，跳数与层级对齐</span>
           </div>
           <el-table :data="p" border size="small">
             <el-table-column prop="hop" label="跳" width="52" align="center" />
@@ -221,7 +221,8 @@ function stepTagType(s) {
 function stepDetail(s) {
   if (s.type === 'FILTERS') {
     if (s.expanded) return `${s.procName || '-'} · 表内列行集受${s.role === 'where_condition' ? 'WHERE' : 'JOIN'}条件影响`
-    return `${s.procName || '-'} · ${s.clause || '-'}`
+    const base = `${s.procName || '-'} · ${s.clause || '-'}`
+    return s.expression ? `${base} · 值经 ${s.expression}` : base
   }
   if (s.type === 'VALUE') return `${s.procName || '-'} · ${s.expression || '-'}`
   return s.procName || '直接取值'

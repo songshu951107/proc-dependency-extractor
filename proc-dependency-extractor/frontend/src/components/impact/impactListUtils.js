@@ -429,9 +429,10 @@ export function traceDownstreamSubgraph(nodes, edges, fromId, procName) {
  * 支持 值通道（Column←Transform←Column / DERIVED_FROM 列直连，临时表列穿透 d+0）
  * 与 行通道（Table←FILTERS←条件列）。不按 procName 过滤——跨 proc 跳完整展示。
  * 展示形态：每跳恰好一行，仅 行过滤 / 值传播 两类标签，不展示临时表列——
- *   值通道临时表穿透步折叠（物理表列→物理表列，表达式/proc 去重合并）；
+ *   到达临时节点（非终点）的步与后继步合并（值穿透折叠为物理列→物理列；
+ *   行通道穿透整体折叠为 起点列→首个物理到达列，clause+expression 合并）；
  *   行影响展开步改写为 起点列→表内列 的行过滤步（expanded=true，语义同清单行 reason）。
- * 跳号 = 到达节点 depth，与结果区"第 N 层级"对齐。
+ * 跳号 = 折叠后步序号（穿透临时表口径），与结果区"第 N 层级"对齐。
  * @param {Array} nodes 全量节点（FIELD 带 depth；TABLE 节点 depth=1）
  * @param {Array} edges 全量边
  * @param {string} targetId 目标列 id
@@ -501,39 +502,40 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16) {
   }
 
   dfs(targetId, [], new Set())
-  // 展示形态：每跳恰好一行，仅 行过滤 / 值传播 两类标签，且不展示临时表列。
-  // 1) 临时表穿透折叠：值通道步（VALUE/DIRECT）的到达列为临时表列时并入后继值步，
-  //    只呈现 物理表列→物理表列（起点/终点为临时表时保留——分析对象本身；表达式/proc 去重合并）。
-  // 2) 行影响展开步（ROW_IMPACT，表→表内列）改写为 起点列→表内列 的行过滤步——
-  //    与清单行 reason 语义一致（起点列经 JOIN/WHERE 条件影响该列的行集），clause 承自前驱 FILTERS 步。
-  // 3) 跳号 = 到达节点 depth（与层级 tab 对齐）；depth 缺失时沿前一步 +1 兜底。
-  const valueChan = t => t === 'VALUE' || t === 'DIRECT'
+  // 展示形态：每跳恰好一行，仅 行过滤 / 值传播 两类标签，不展示临时表列，
+  // 且跳数与清单层级 tab 同口径（穿透临时表计算）。
+  // 穿透合并：到达临时节点（非终点）的步不独立成行，与后继步合并——
+  //   值穿透（值步→临时列→值步）折叠为 物理列→物理列；
+  //   行通道穿透（FILTERS→临时表→表内列展开→值穿透）整体折叠为 起点列→首个物理到达列 的一步，
+  //   clause 承 JOIN/WHERE 条件、expression 合并值表达式（与清单行层级口径一致）。
+  // 跳号 = 折叠后步序号（每步均到达物理实体或终点），与层级 tab 对齐。
+  const isTempMid = id => id !== targetId && isTempNode(nodeById.get(id))
   return paths
     .sort((a, b) => a.length - b.length)
     .map(p => {
       const folded = []
       for (const s of p) {
         const last = folded[folded.length - 1]
-        if (last && valueChan(last.type) && valueChan(s.type)
-          && last.to !== targetId && isTempNode(nodeById.get(last.to))) {
+        if (last && isTempMid(last.to)) {
           const exprs = [...new Set([last.expression, s.expression].filter(Boolean))]
+          if (!exprs.length && (last.type === 'DIRECT' || s.type === 'DIRECT')) exprs.push('直接取值')
           const procs = [...new Set([last.procName, s.procName].filter(Boolean))]
           folded[folded.length - 1] = {
             ...s,
             from: last.from,
             dF: last.dF,
-            type: exprs.length ? 'VALUE' : 'DIRECT',
-            procName: procs.join('；') || null,
-            expression: exprs.join('；') || null
+            type: last.type === 'FILTERS' ? 'FILTERS' : s.type,
+            role: last.role || s.role,
+            clause: last.clause || s.clause,
+            expression: exprs.join('；') || null,
+            procName: procs.join('；') || null
           }
         } else {
           folded.push({ ...s })
         }
       }
-      let fallback = 0
       return folded.map((s, i) => {
-        let hop
-        if (s.dT != null) { hop = s.dT; fallback = s.dT } else { fallback++; hop = fallback }
+        const hop = i + 1
         if (s.type !== 'ROW_IMPACT') return { ...s, hop }
         const prev = folded[i - 1]
         return {

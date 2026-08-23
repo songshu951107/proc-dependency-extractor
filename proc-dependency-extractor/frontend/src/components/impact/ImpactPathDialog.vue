@@ -25,7 +25,7 @@
             <el-tag size="small" :type="hopPaths.length > 1 ? 'info' : 'success'">
               传播路径{{ hopPaths.length > 1 ? ` ${pi + 1}` : '' }}（共 {{ p.reduce((m, s) => Math.max(m, s.hop), 0) }} 跳）
             </el-tag>
-            <span class="hop-tip">每跳一行；跳号与层级对齐</span>
+            <span class="hop-tip">每跳一行；临时表中转已折叠</span>
           </div>
           <el-table :data="p" border size="small">
             <el-table-column prop="hop" label="跳" width="52" align="center" />
@@ -213,17 +213,16 @@ function shortId(id) {
 }
 function stepTypeLabel(s) {
   if (s.type === 'FILTERS') return s.role === 'where_condition' ? '行过滤·WHERE' : '行过滤·JOIN'
-  if (s.type === 'ROW_IMPACT') return '行影响展开'
   return '值传播'
 }
 function stepTagType(s) {
-  if (s.type === 'FILTERS') return 'danger'
-  if (s.type === 'ROW_IMPACT') return 'warning'
-  return 'success'
+  return s.type === 'FILTERS' ? 'danger' : 'success'
 }
 function stepDetail(s) {
-  if (s.type === 'FILTERS') return `${s.procName || '-'} · ${s.clause || '-'}`
-  if (s.type === 'ROW_IMPACT') return `${s.procName || '-'} · 表内列行受${s.role === 'where_condition' ? 'WHERE' : 'JOIN'}条件影响`
+  if (s.type === 'FILTERS') {
+    if (s.expanded) return `${s.procName || '-'} · 表内列行集受${s.role === 'where_condition' ? 'WHERE' : 'JOIN'}条件影响`
+    return `${s.procName || '-'} · ${s.clause || '-'}`
+  }
   if (s.type === 'VALUE') return `${s.procName || '-'} · ${s.expression || '-'}`
   return s.procName || '直接取值'
 }

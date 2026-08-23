@@ -428,15 +428,17 @@ export function traceDownstreamSubgraph(nodes, edges, fromId, procName) {
  * 逐跳路径回溯（方案A·跨跳明细，双通道）：从目标列回溯到起点列的物理步序列，
  * 支持 值通道（Column←Transform←Column / DERIVED_FROM 列直连，临时表列穿透 d+0）
  * 与 行通道（Table←FILTERS←条件列）。不按 procName 过滤——跨 proc 跳完整展示。
- * 展示层只保留 行过滤（FILTERS）与 值传播（VALUE/DIRECT）两类步，每跳恰好一行：
- * 跳号 = 到达节点 depth，与结果区"第 N 层级"对齐（如 0→1 行过滤、1→2/2→2 值传播、2→3 值传播）。
+ * 展示形态：每跳恰好一行，仅 行过滤 / 值传播 两类标签，不展示临时表列——
+ *   值通道临时表穿透步折叠（物理表列→物理表列，表达式/proc 去重合并）；
+ *   行影响展开步改写为 起点列→表内列 的行过滤步（expanded=true，语义同清单行 reason）。
+ * 跳号 = 到达节点 depth，与结果区"第 N 层级"对齐。
  * @param {Array} nodes 全量节点（FIELD 带 depth；TABLE 节点 depth=1）
  * @param {Array} edges 全量边
  * @param {string} targetId 目标列 id
  * @param {string} sourceId 起点列 id
  * @param {number} maxSteps 单路径物理步上限（防异常环/爆炸）
- * @return {Array<Array<{hop, from, to, type, procName?, expression?, role?, clause?, dF, dT}>>}
- *         路径数组（≤5 条，按步数升序），每条按起点→目标排列；type: FILTERS/ROW_IMPACT/VALUE/DIRECT
+ * @return {Array<Array<{hop, from, to, type, procName?, expression?, role?, clause?, expanded?, dF, dT}>>}
+ *         路径数组（≤5 条，按步数升序），每条按起点→目标排列；type: FILTERS/VALUE/DIRECT
  */
 export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16) {
   if (!targetId || !sourceId || targetId === sourceId) return []
@@ -499,21 +501,50 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16) {
   }
 
   dfs(targetId, [], new Set())
-  // 展示形态：仅保留 行过滤（FILTERS）与 值传播（VALUE/DIRECT）两类步，每跳恰好一行。
-  // 中间"行影响展开"（ROW_IMPACT，表→表内列的虚拟展开）删除——其后继值传播步从表内列自然衔接；
-  // 终达 ROW_IMPACT（目标列自身是表内展开列，即 2 层级行）保留，否则该行路径只剩 1 步。
-  // 跳号 = 到达节点 depth（与层级 tab 对齐）；depth 缺失时沿前一步 +1 兜底。
+  // 展示形态：每跳恰好一行，仅 行过滤 / 值传播 两类标签，且不展示临时表列。
+  // 1) 临时表穿透折叠：值通道步（VALUE/DIRECT）的到达列为临时表列时并入后继值步，
+  //    只呈现 物理表列→物理表列（起点/终点为临时表时保留——分析对象本身；表达式/proc 去重合并）。
+  // 2) 行影响展开步（ROW_IMPACT，表→表内列）改写为 起点列→表内列 的行过滤步——
+  //    与清单行 reason 语义一致（起点列经 JOIN/WHERE 条件影响该列的行集），clause 承自前驱 FILTERS 步。
+  // 3) 跳号 = 到达节点 depth（与层级 tab 对齐）；depth 缺失时沿前一步 +1 兜底。
+  const valueChan = t => t === 'VALUE' || t === 'DIRECT'
   return paths
     .sort((a, b) => a.length - b.length)
     .map(p => {
+      const folded = []
+      for (const s of p) {
+        const last = folded[folded.length - 1]
+        if (last && valueChan(last.type) && valueChan(s.type)
+          && last.to !== targetId && isTempNode(nodeById.get(last.to))) {
+          const exprs = [...new Set([last.expression, s.expression].filter(Boolean))]
+          const procs = [...new Set([last.procName, s.procName].filter(Boolean))]
+          folded[folded.length - 1] = {
+            ...s,
+            from: last.from,
+            dF: last.dF,
+            type: exprs.length ? 'VALUE' : 'DIRECT',
+            procName: procs.join('；') || null,
+            expression: exprs.join('；') || null
+          }
+        } else {
+          folded.push({ ...s })
+        }
+      }
       let fallback = 0
-      return p
-        .filter(s => s.type !== 'ROW_IMPACT' || s.to === targetId)
-        .map(s => {
-          if (s.dT != null) { fallback = s.dT; return { ...s, hop: s.dT } }
-          fallback++
-          return { ...s, hop: fallback }
-        })
+      return folded.map((s, i) => {
+        let hop
+        if (s.dT != null) { hop = s.dT; fallback = s.dT } else { fallback++; hop = fallback }
+        if (s.type !== 'ROW_IMPACT') return { ...s, hop }
+        const prev = folded[i - 1]
+        return {
+          ...s,
+          from: sourceId,
+          type: 'FILTERS',
+          clause: prev && prev.type === 'FILTERS' ? prev.clause : s.clause,
+          expanded: true,
+          hop
+        }
+      })
     })
 }
 

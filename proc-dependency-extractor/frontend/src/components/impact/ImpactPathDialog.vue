@@ -25,7 +25,7 @@
             <el-tag size="small" :type="hopPaths.length > 1 ? 'info' : 'success'">
               传播路径{{ hopPaths.length > 1 ? ` ${pi + 1}` : '' }}（共 {{ p.reduce((m, s) => Math.max(m, s.hop), 0) }} 跳）
             </el-tag>
-            <span class="hop-tip">跳号与层级对齐；临时表中转步（跳号不变）并入后续跳展示</span>
+            <span class="hop-tip">跳号与层级对齐；临时表中转步已折叠，只展示物理表间传播</span>
           </div>
           <el-table :data="p" border size="small">
             <el-table-column prop="hop" label="跳" width="52" align="center" />

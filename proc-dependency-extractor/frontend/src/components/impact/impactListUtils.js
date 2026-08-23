@@ -500,7 +500,7 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16) {
 
   dfs(targetId, [], new Set())
   // 跳号：depth 推进（dT > dF）的步闭合一跳；穿透步（dT == dF）沿用后继跳号
-  return paths
+  const numbered = paths
     .sort((a, b) => a.length - b.length)
     .map(p => {
       let hop = 0
@@ -510,6 +510,32 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16) {
         return { ...s, hop: Math.max(hop, 1) }
       })
     })
+  // 临时表中转折叠：值通道步（VALUE/DIRECT）的到达列为临时表列时，与后继值通道步合并，
+  // 路径表只呈现 非临时表 → 非临时表；表达式/proc 去重合并保留计算信息。
+  // 起点/终点为临时表时保留（分析对象本身）；FILTERS/ROW_IMPACT 行链步不折叠（行影响锚点）。
+  return numbered.map(p => {
+    const out = []
+    const valueChan = t => t === 'VALUE' || t === 'DIRECT'
+    for (const s of p) {
+      const last = out[out.length - 1]
+      if (last && valueChan(last.type) && valueChan(s.type)
+        && last.to !== targetId && isTempNode(nodeById.get(last.to))) {
+        const exprs = [...new Set([last.expression, s.expression].filter(Boolean))]
+        const procs = [...new Set([last.procName, s.procName].filter(Boolean))]
+        out[out.length - 1] = {
+          ...s,
+          from: last.from,
+          dF: last.dF,
+          type: last.type === 'VALUE' || s.type === 'VALUE' ? 'VALUE' : 'DIRECT',
+          procName: procs.join('；') || null,
+          expression: exprs.length ? exprs.join('；') : null
+        }
+      } else {
+        out.push(s)
+      }
+    }
+    return out
+  })
 }
 
 /**

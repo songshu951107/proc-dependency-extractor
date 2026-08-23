@@ -8,7 +8,7 @@
           :name="String(lv)"
           :label="`第${levelLabel(lv)}层级（${rowsByLevel[lv].length}）`"
         >
-          <el-table :data="rowsByLevel[lv]" border size="small" style="width: 100%">
+          <el-table :data="pagedRows(lv)" border size="small" style="width: 100%">
             <el-table-column prop="procName" :label="upstream ? '关联脚本' : '受影响脚本'" min-width="220" show-overflow-tooltip>
               <template #default="{ row }">
                 <el-link type="primary" @click="$emit('viewScript', row)">{{ row.procName }}</el-link>
@@ -32,6 +32,15 @@
               </template>
             </el-table-column>
           </el-table>
+          <div class="pager-bar" v-if="rowsByLevel[lv].length > PAGE_SIZE">
+            <el-pagination
+              :total="rowsByLevel[lv].length"
+              :page-size="PAGE_SIZE"
+              :current-page="currentPage"
+              layout="total, prev, pager, next, jumper"
+              @current-change="currentPage = $event"
+            />
+          </div>
         </el-tab-pane>
       </el-tabs>
       <div class="tabs-toolbar">
@@ -91,6 +100,16 @@ watch(levels, (lvs) => {
   activeTab.value = String(lvs[0])
 }, { immediate: true })
 
+// 分页：每层级每页 20 行；切换层级或筛选时回到第 1 页
+const PAGE_SIZE = 20
+const currentPage = ref(1)
+watch([activeTab, reasonFilter], () => { currentPage.value = 1 })
+function pagedRows(lv) {
+  const rows = rowsByLevel.value[lv] || []
+  const start = (currentPage.value - 1) * PAGE_SIZE
+  return rows.slice(start, start + PAGE_SIZE)
+}
+
 function exportAll() {
   if (!filteredRows.value.length) return
   const header = props.isFieldLevel
@@ -117,4 +136,5 @@ function exportAll() {
 .tabs-bar { position: relative; }
 .tabs-toolbar { position: absolute; right: 0; top: 2px; z-index: 1; display: flex; align-items: center; gap: 8px; }
 .reason-filter { width: 130px; }
+.pager-bar { display: flex; justify-content: flex-end; margin-top: 8px; }
 </style>

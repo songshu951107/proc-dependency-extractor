@@ -729,6 +729,10 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                     for (Map<String, Object> row : rows) {
                         String transformId = (String) row.get("transformId");
                         if (transformId == null) continue;
+                        // 字面量转换剪枝：表达式为常量（如 NVL(x,0) 的 0 / INSERT 常量列），
+                        // 其输出列值恒定、不受任何上游影响，且会引入 __literal__ 虚拟列噪音节点，
+                        // 不入 transformRows、其输出列不入 frontier（行通道的 ROW_IMPACT 不受影响）
+                        if ("LITERAL".equals(row.get("logicType"))) continue;
                         @SuppressWarnings("unchecked")
                         List<Map<String, Object>> rowInputs = (List<Map<String, Object>>) row.get("inputs");
                         @SuppressWarnings("unchecked")

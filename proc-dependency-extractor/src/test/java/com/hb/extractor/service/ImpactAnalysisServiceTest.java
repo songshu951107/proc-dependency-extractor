@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.data.neo4j.core.Neo4jClient;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -202,6 +203,53 @@ class ImpactAnalysisServiceTest {
         assertEquals(4, rowImpactEdges, "ROW_IMPACT 按 (表,proc,role) 组去重：2 组 × 2 列 = 4，同组重复不翻倍");
         assertEquals(2, groupAEdges, "proc_a 组（f1/f2 去重）应有 2 条");
         assertEquals(2, groupBEdges, "proc_b 组应有 2 条（跨 proc 不得丢行）");
+    }
+
+    /**
+     * 字面量转换剪枝：LITERAL Transform（表达式为常量，如 NVL(x,0) 的 0 / INSERT 常量列）
+     * 及其虚拟 __literal__ Column 不得进入分析结果——常量列的值不受任何上游影响，
+     * 画进链路图只会产生"label=0 的转换节点"和"hash 字符串节点"两类噪音。
+     */
+    @Test
+    void testFieldLevel_Downstream_LiteralTransformPruned() throws Exception {
+        java.lang.reflect.Field f = ImpactAnalysisServiceImpl.class.getDeclaredField("maxAllowedDepth");
+        f.setAccessible(true);
+        f.setInt(impactService, 20);
+
+        ImpactAnalysisRequest req = new ImpactAnalysisRequest();
+        req.setSchema("CDM");
+        req.setTableShortName("SRC");
+        req.setFieldName("BALANCE");
+        req.setDirection("DOWNSTREAM");
+        req.setMaxDepth(3);
+
+        Map<String, Object> literalRow = new HashMap<>();
+        literalRow.put("transformId", "lit0000000000000000000000000000");
+        literalRow.put("expression", "0");
+        literalRow.put("logicType", "LITERAL");
+        literalRow.put("procName", "proc_a");
+        Map<String, Object> litInput = new HashMap<>();
+        litInput.put("colKey", "__literal__.lit0000000000000000000000000000");
+        litInput.put("name", "0");
+        litInput.put("tableFullName", "__literal__");
+        literalRow.put("inputs", new ArrayList<>(Arrays.asList(litInput)));
+        Map<String, Object> constCol = new HashMap<>();
+        constCol.put("colKey", "cdm.tgt.flag");
+        constCol.put("name", "flag");
+        constCol.put("tableFullName", "cdm.tgt");
+        literalRow.put("outputs", new ArrayList<>(Arrays.asList(constCol)));
+
+        stubNeo4jQuery("", Collections.emptyList());
+        stubNeo4jQuery("-[:INPUT_TO]->(t:Transform)", Arrays.asList(literalRow));
+
+        ImpactAnalysisVO vo = impactService.analyze(req);
+
+        assertTrue(vo.getNodes().stream().noneMatch(n -> "TRANSFORM".equals(n.getNodeLevel())),
+                "LITERAL Transform 不应出现在节点中");
+        assertTrue(vo.getNodes().stream().noneMatch(n -> n.getId().startsWith("__literal__.")),
+                "__literal__ 虚拟列不应出现在节点中");
+        assertTrue(vo.getNodes().stream().noneMatch(n -> "cdm.tgt.flag".equals(n.getId())),
+                "常量下游列不因字面量转换入图（值恒定，不受起点影响）");
     }
 
     /**

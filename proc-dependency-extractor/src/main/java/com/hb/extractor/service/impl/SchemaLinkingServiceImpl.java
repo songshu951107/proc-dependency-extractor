@@ -86,10 +86,11 @@ public class SchemaLinkingServiceImpl implements SchemaLinkingService {
                         CandidateTable t = new CandidateTable();
                         t.setFullTableName(host);
                         t.setFields(new ArrayList<>());
-                        t.setScore(2);
+                        t.setScore(0); // 基线 0，每个 token 命中 +2，单 token 恰为 2 分
                         t.setSource("LINEAGE");
                         return t;
                     });
+                    // 仅在血缘来源上累加，避免覆盖已由 metadata 命中的表得分
                     if ("LINEAGE".equals(ct.getSource())) ct.setScore(ct.getScore() + 2);
                 }
                 if (byTable.size() >= props.getMaxCandidateTables()) break;

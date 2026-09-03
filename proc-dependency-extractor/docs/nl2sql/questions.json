@@ -1,0 +1,19 @@
+{
+  "questions": [
+    {
+      "question": "查一下账户年利息",
+      "expected_tables": ["fdm.f_ev_ftps_pub_cust_inf"],
+      "reference_sql": "SELECT acc_int_year FROM fdm.f_ev_ftps_pub_cust_inf LIMIT 100"
+    },
+    {
+      "question": "汇率表里人民币兑美元的转换价格是多少",
+      "expected_tables": ["cdm.c_com_exch_rate"],
+      "reference_sql": "SELECT dom_currcy_convt_price FROM cdm.c_com_exch_rate"
+    },
+    {
+      "question": "客户信息和汇率表怎么关联",
+      "expected_tables": ["fdm.f_ev_ftps_pub_cust_inf", "cdm.c_com_exch_rate"],
+      "reference_sql": "SELECT * FROM fdm.f_ev_ftps_pub_cust_inf t1 JOIN cdm.c_com_exch_rate t2 ON t1.currcy_cd = t2.currcy_cd"
+    }
+  ]
+}

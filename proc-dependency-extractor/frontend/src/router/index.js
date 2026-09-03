@@ -42,6 +42,12 @@ const routes = [
     name: 'ReportImpact',
     component: () => import('../views/ReportImpactView.vue'),
     meta: { title: '报表影响分析' }
+  },
+  {
+    path: '/nl2sql',
+    name: 'Nl2Sql',
+    component: () => import('../views/Nl2SqlView.vue'),
+    meta: { title: '智能查数' }
   }
 ]
 

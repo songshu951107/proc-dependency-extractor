@@ -57,7 +57,7 @@ impact:
 nl2sql:
   api-key: ${NL2SQL_API_KEY:}
   base-url: https://api.deepseek.com/v1
-  model: deepseek-chat
+  model: deepseek-v4-flash
   temperature: 0
   max-candidate-tables: 10
   max-fields-per-table: 15

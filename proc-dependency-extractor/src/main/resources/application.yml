@@ -40,6 +40,9 @@ mybatis-plus:
 extractor:
   ddl:
     dir: d:/HB/work_zuoye/jiaoben
+    # 物理表字段元数据 xlsx 来源（information_schema.columns 导出）
+    # 调用 POST /api/meta/columns/import 不传 path 时使用此默认值
+    excel-path: d:/HB/work_zuoye/jiaoben/columns0818.xlsx
 
 impact:
   analysis:
@@ -50,6 +53,16 @@ impact:
     auto-retry: true
     retry-interval: 300000
     max-retry-count: 3
+
+nl2sql:
+  api-key: ${NL2SQL_API_KEY:}
+  base-url: https://api.deepseek.com/v1
+  model: deepseek-chat
+  temperature: 0
+  max-candidate-tables: 10
+  max-fields-per-table: 15
+  max-retries: 2
+  eval-file: docs/nl2sql/questions.json
 
 scheduler:
   neo4j-retry:

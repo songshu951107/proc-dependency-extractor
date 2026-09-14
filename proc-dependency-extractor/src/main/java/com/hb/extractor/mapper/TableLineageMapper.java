@@ -15,20 +15,20 @@ import java.util.Map;
 public interface TableLineageMapper extends BaseMapper<TableLineage> {
 
     /**
-     * 递归查询上游血缘
-     * @param targetTableShort 目标表短名
+     * 递归查询上游血缘（按全名匹配，避免跨集市同名表串线）
+     * @param targetTableFull 目标表全名（schema.table）
      * @param maxDepth 最大深度
      * @return 血缘记录列表（含 depth 字段）
      */
-    List<Map<String, Object>> findUpstream(@Param("targetTableShort") String targetTableShort,
+    List<Map<String, Object>> findUpstream(@Param("targetTableFull") String targetTableFull,
                                             @Param("maxDepth") int maxDepth);
 
     /**
-     * 递归查询下游血缘
-     * @param sourceTableShort 源表短名
+     * 递归查询下游血缘（按全名匹配，避免跨集市同名表串线）
+     * @param sourceTableFull 源表全名（schema.table）
      * @param maxDepth 最大深度
      * @return 血缘记录列表（含 depth 字段）
      */
-    List<Map<String, Object>> findDownstream(@Param("sourceTableShort") String sourceTableShort,
+    List<Map<String, Object>> findDownstream(@Param("sourceTableFull") String sourceTableFull,
                                               @Param("maxDepth") int maxDepth);
 }

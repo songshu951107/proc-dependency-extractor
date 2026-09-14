@@ -46,27 +46,29 @@ public class LineageController {
 
     /**
      * 递归查询某表的上游血缘
+     * @param tableFullName 表全名（schema.table，如 PID.a_xxx）
      */
-    @GetMapping("/table/{tableName}/upstream")
-    public Result<LineageGraphVO> upstream(@PathVariable String tableName,
+    @GetMapping("/table/{tableFullName}/upstream")
+    public Result<LineageGraphVO> upstream(@PathVariable String tableFullName,
                                             @RequestParam(required = false) Integer maxDepth) {
         if (maxDepth != null && maxDepth > 10) {
             return Result.error(400, "maxDepth 不能超过 10");
         }
-        LineageGraphVO vo = lineageService.traceUpstream(tableName, maxDepth);
+        LineageGraphVO vo = lineageService.traceUpstream(tableFullName, maxDepth);
         return Result.success(vo);
     }
 
     /**
      * 递归查询某表的下游血缘
+     * @param tableFullName 表全名（schema.table，如 PID.a_xxx）
      */
-    @GetMapping("/table/{tableName}/downstream")
-    public Result<LineageGraphVO> downstream(@PathVariable String tableName,
+    @GetMapping("/table/{tableFullName}/downstream")
+    public Result<LineageGraphVO> downstream(@PathVariable String tableFullName,
                                               @RequestParam(required = false) Integer maxDepth) {
         if (maxDepth != null && maxDepth > 10) {
             return Result.error(400, "maxDepth 不能超过 10");
         }
-        LineageGraphVO vo = lineageService.traceDownstream(tableName, maxDepth);
+        LineageGraphVO vo = lineageService.traceDownstream(tableFullName, maxDepth);
         return Result.success(vo);
     }
 

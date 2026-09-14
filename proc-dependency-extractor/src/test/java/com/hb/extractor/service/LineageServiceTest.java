@@ -106,7 +106,7 @@ class LineageServiceTest {
         createTestEdge("F_A", "FDM.F_A", "VT_B", "CDM.VT_B", 1, 1, "CREATE TEMP");
         createTestEdge("VT_B", "CDM.VT_B", "TARGET_TABLE", "CDM.TARGET_TABLE", 0, 2, "INSERT SELECT");
 
-        LineageGraphVO vo = lineageService.traceUpstream("TARGET_TABLE", 5);
+        LineageGraphVO vo = lineageService.traceUpstream("CDM.TARGET_TABLE", 5);
 
         assertNotNull(vo);
         assertFalse(vo.getNodes().isEmpty());
@@ -122,7 +122,7 @@ class LineageServiceTest {
         createTestEdge("F_A", "FDM.F_A", "VT_B", "CDM.VT_B", 1, 1, "CREATE TEMP");
         createTestEdge("VT_B", "CDM.VT_B", "TARGET_TABLE", "CDM.TARGET_TABLE", 0, 2, "INSERT SELECT");
 
-        LineageGraphVO vo = lineageService.traceDownstream("F_A", 5);
+        LineageGraphVO vo = lineageService.traceDownstream("FDM.F_A", 5);
 
         assertNotNull(vo);
         assertFalse(vo.getNodes().isEmpty());

@@ -17,7 +17,7 @@
           <el-option
             v-for="t in tables"
             :key="t.fullName"
-            :label="t.shortName"
+            :label="t.shortName + ' (' + (t.schemaPrefix || t.schema || '') + ')'"
             :value="t.shortName"
           />
         </el-select>

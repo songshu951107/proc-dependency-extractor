@@ -72,9 +72,9 @@ public class LineageServiceImpl implements LineageService {
     }
 
     @Override
-    public LineageGraphVO traceUpstream(String tableName, Integer maxDepth) {
+    public LineageGraphVO traceUpstream(String tableFullName, Integer maxDepth) {
         int depth = maxDepth == null ? 5 : Math.min(maxDepth, 10);
-        List<Map<String, Object>> records = tableLineageMapper.findUpstream(tableName, depth);
+        List<Map<String, Object>> records = tableLineageMapper.findUpstream(tableFullName, depth);
 
         List<TableLineage> edges = convertRecords(records);
         List<Long> edgeIds = edges.stream().map(TableLineage::getId).collect(Collectors.toList());
@@ -97,9 +97,9 @@ public class LineageServiceImpl implements LineageService {
     }
 
     @Override
-    public LineageGraphVO traceDownstream(String tableName, Integer maxDepth) {
+    public LineageGraphVO traceDownstream(String tableFullName, Integer maxDepth) {
         int depth = maxDepth == null ? 5 : Math.min(maxDepth, 10);
-        List<Map<String, Object>> records = tableLineageMapper.findDownstream(tableName, depth);
+        List<Map<String, Object>> records = tableLineageMapper.findDownstream(tableFullName, depth);
 
         List<TableLineage> edges = convertRecords(records);
         List<Long> edgeIds = edges.stream().map(TableLineage::getId).collect(Collectors.toList());

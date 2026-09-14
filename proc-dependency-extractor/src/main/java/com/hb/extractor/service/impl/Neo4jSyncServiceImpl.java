@@ -738,21 +738,26 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
      * 表名键规范化：无 schema 前缀的表名，补全为 schema.table 完整键。
      * - 已含 '.'：视为已带前缀，原样返回（统一小写）
      * - 不含 '.'（如 INSERT INTO A_G_LN 未写 schema）按优先级判定 schema：
-     *   1. table_ddl_info 命中同短表名 → 取其 full_table_name（物理表通用）
+     *   1. table_ddl_info 命中同短表名且全 schema 唯一 → 取其 full_table_name（物理表通用）
      *   2. 同脚本其它边中出现过带前缀的同短表名 → 沿用其前缀（临时表通用，
      *      如 vt_* 在某块 target 为 PID.vt_xxx、另一块 source 为 vt_xxx 时统一为 PID.vt_xxx）
      *   3. 兜底：返回原短表名（此时以表名自身作为键）
+     * 注意：跨集市同名表（同一短名对应多个 full_table_name）不走第 1 步强取，
+     * 避免把 pid.a_xxx 的错误补成 rpt.a_xxx；交由第 2 步按脚本内实际前缀判定。
      */
     private String normalizeTableFullName(String rawName, List<TableLineage> edges) {
         if (rawName == null || rawName.isEmpty()) return rawName;
         if (rawName.contains(".")) return rawName.toLowerCase();
         String shortName = rawName.toLowerCase();
 
-        // 1. 物理表：table_ddl_info 反查
-        TableDdlInfo info = tableDdlInfoMapper.selectOne(
-                new LambdaQueryWrapper<TableDdlInfo>().eq(TableDdlInfo::getTableName, shortName).last("LIMIT 1"));
-        if (info != null && info.getFullTableName() != null && !info.getFullTableName().isEmpty()) {
-            return info.getFullTableName().toLowerCase();
+        // 1. 物理表：table_ddl_info 反查（仅当短名在全部 schema 中唯一时才补全，避免跨集市同名表取错 schema）
+        List<TableDdlInfo> infos = tableDdlInfoMapper.selectList(
+                new LambdaQueryWrapper<TableDdlInfo>().eq(TableDdlInfo::getTableName, shortName));
+        if (infos != null && infos.size() == 1) {
+            TableDdlInfo info = infos.get(0);
+            if (info.getFullTableName() != null && !info.getFullTableName().isEmpty()) {
+                return info.getFullTableName().toLowerCase();
+            }
         }
 
         // 2. 临时表：从同脚本其它边中沿用同短表名的带前缀写法

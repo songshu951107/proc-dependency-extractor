@@ -1,0 +1,297 @@
+{
+  "scriptName": "dwa_c_agt_loan_rcpt_inf_init.py",
+  "scriptDescription": "贷款借据信息初始化",
+  "updateMode": "每日全量",
+  "targetTable": "CDM.C_AGT_LOAN_RCPT_INF",
+  "extractTime": "2026-05-10T10:30:00",
+  "totalBlocks": 10,
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "blockName": "政务客户筛选",
+      "sqlCode": "SELECT F1.CORE_CUST_NO AS CUST_ID FROM F_PT_ECIF_WHOLE_BANK_CUST_INF F1 INNER JOIN F_PT_ECIF_PUB_CUST_INF F2 ON F1.CUST_NO = F2.CUST_NO AND F2.GOVERN_STRUCTURE = '1' WHERE '{ETL_TX_DT}' BETWEEN F1.start_dt AND F1.end_dt - 1 AND F1.DEL_FLAG <> 'D' AND F1.CORE_CUST_NO <> ''",
+      "businessScenario": "ECIF客户信息系统-获取政务客户的核心客户号",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["F_PT_ECIF_WHOLE_BANK_CUST_INF", "F_PT_ECIF_PUB_CUST_INF"],
+      "tableJoinLogic": "通过CUST_NO关联全行客户信息表和对公客户信息表，筛选政务客户标志为1的客户",
+      "queryDimensions": "客户号、日期",
+      "tags": ["政务客户", "客户识别", "关联查询"],
+      "synonyms": ["政务民生客户", "政府机构客户"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "政务客户判断",
+          "derivedSql": "SELECT CORE_CUST_NO FROM F_PT_ECIF_PUB_CUST_INF WHERE GOVERN_STRUCTURE = '1'",
+          "businessMeaning": "通过政务民生标志字段(GOVERN_STRUCTURE='1')筛选政务客户的核心客户号",
+          "sourceTable": "F_PT_ECIF_PUB_CUST_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "blockName": "互联网贷款识别",
+      "sqlCode": "SELECT BD.loan_rcpt_no FROM F_AC_CRMS_LOAN_BIZ_LOAN_RCPT BD LEFT JOIN F_CT_CRMS_LOAN_BIZ_CONTRACT BC ON bd.contract_no=bc.contract_no LEFT JOIN F_CT_CRMS_LOAN_BIZ_CONTRACT_EXT_INF T5 ON BD.contract_no=T5.contract_no WHERE BD.loan_type_cd ='0310' AND BD.abs_flag<>'1' AND ((NVL(TRIM(t5.itnet_loan_flag),'1')<>'0' AND BD.prod_no in ('1110240','1110250') AND substr(BD.core_org_no ,1,2) NOT in ('04','09','05','10','01','12')) OR (BC.sourc_chan_cd in ('E','M','Q') AND BD.prod_no in('1110145','1110155','1110050','1110230')))",
+      "businessScenario": "信贷管理系统-互联网渠道贷款识别",
+      "sqlFunction": "多条件组合查询",
+      "involvedTables": ["F_AC_CRMS_LOAN_BIZ_LOAN_RCPT", "F_CT_CRMS_LOAN_BIZ_CONTRACT", "F_CT_CRMS_LOAN_BIZ_CONTRACT_EXT_INF"],
+      "tableJoinLogic": "通过合同编号关联借据表、合同表和合同扩展信息表，综合判断互联网贷款",
+      "queryDimensions": "借据号、产品编号、渠道代码、机构号",
+      "tags": ["互联网贷款", "渠道识别", "产品筛选"],
+      "synonyms": ["线上贷款", "网络贷款"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "互联网贷款判断条件",
+          "derivedSql": "SELECT loan_rcpt_no FROM F_AC_CRMS_LOAN_BIZ_LOAN_RCPT WHERE loan_type_cd='0310' AND (prod_no IN ('1110240','1110250') OR prod_no IN('1110145','1110155','1110050','1110230'))",
+          "businessMeaning": "通过贷款类型代码(0310)和特定产品编号识别互联网贷款借据",
+          "sourceTable": "F_AC_CRMS_LOAN_BIZ_LOAN_RCPT"
+        },
+        {
+          "knowledgeName": "互联网渠道来源判断",
+          "derivedSql": "SELECT loan_rcpt_no FROM F_CT_CRMS_LOAN_BIZ_CONTRACT WHERE sourc_chan_cd IN ('E','M','Q')",
+          "businessMeaning": "通过来源渠道代码(E/M/Q)识别互联网渠道贷款",
+          "sourceTable": "F_CT_CRMS_LOAN_BIZ_CONTRACT"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "blockName": "首期逾期判断",
+      "sqlCode": "SELECT loan_loan_rcpt_no, CASE WHEN last_repay_day ='' THEN '1' ELSE CASE WHEN last_repay_day > expir_dt then '1' else '0' end end AS fst_term_overdue_flag FROM F_AC_CRBS_LOAN_ACCT_TERM_SUPPL WHERE sub_terms=1 AND terms=1",
+      "businessScenario": "核心贷款系统-首期还款逾期标志计算",
+      "sqlFunction": "条件判断查询",
+      "involvedTables": ["F_AC_CRBS_LOAN_ACCT_TERM_SUPPL"],
+      "tableJoinLogic": "单表查询，筛选第一期数据判断是否逾期",
+      "queryDimensions": "借据号、期数",
+      "tags": ["逾期", "首期还款", "风险指标"],
+      "synonyms": ["首期违约", "第一期逾期"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "首期逾期判断逻辑",
+          "derivedSql": "SELECT loan_loan_rcpt_no FROM F_AC_CRBS_LOAN_ACCT_TERM_SUPPL WHERE sub_terms=1 AND terms=1 AND (last_repay_day > expir_dt OR last_repay_day ='')",
+          "businessMeaning": "第一期还款时，如果上次还款日大于到期日或为空，则判定为首期逾期",
+          "sourceTable": "F_AC_CRBS_LOAN_ACCT_TERM_SUPPL"
+        }
+      ]
+    },
+    {
+      "blockIndex": 4,
+      "blockName": "进入不良日期计算",
+      "sqlCode": "SELECT loan_rcpt_no, MIN(start_dt) AS fst_enter_np_dt FROM F_AC_CRMS_LOAN_BIZ_LOAN_RCPT WHERE recen_fiveclass_class_rs_cd LIKE '03%' OR recen_fiveclass_class_rs_cd LIKE '04%' OR recen_fiveclass_class_rs_cd LIKE '05%' GROUP BY loan_rcpt_no",
+      "businessScenario": "信贷管理系统-不良贷款首次进入日期统计",
+      "sqlFunction": "分组聚合查询",
+      "involvedTables": ["F_AC_CRMS_LOAN_BIZ_LOAN_RCPT"],
+      "tableJoinLogic": "单表查询，按五级分类代码筛选不良贷款记录",
+      "queryDimensions": "借据号、五级分类代码、日期",
+      "tags": ["不良贷款", "五级分类", "风险监控"],
+      "synonyms": ["不良资产", "次级可疑损失"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "不良贷款五级分类判断",
+          "derivedSql": "SELECT loan_rcpt_no FROM F_AC_CRMS_LOAN_BIZ_LOAN_RCPT WHERE recen_fiveclass_class_rs_cd LIKE '03%' OR recen_fiveclass_class_rs_cd LIKE '04%' OR recen_fiveclass_class_rs_cd LIKE '05%'",
+          "businessMeaning": "五级分类代码03/04/05分别代表次级、可疑、损失，统称为不良贷款",
+          "sourceTable": "F_AC_CRMS_LOAN_BIZ_LOAN_RCPT"
+        }
+      ]
+    },
+    {
+      "blockIndex": 5,
+      "blockName": "历史逾期次数统计",
+      "sqlCode": "SELECT loan_rcpt_no, COUNT(1) AS his_overdue_tms FROM F_AC_CRMS_LOAN_BIZ_LOAN_RCPT WHERE overdue_days=1 GROUP BY loan_rcpt_no",
+      "businessScenario": "信贷管理系统-借据历史逾期次数统计",
+      "sqlFunction": "分组计数查询",
+      "involvedTables": ["F_AC_CRMS_LOAN_BIZ_LOAN_RCPT"],
+      "tableJoinLogic": "单表查询，统计逾期天数为1的记录数",
+      "queryDimensions": "借据号、逾期天数",
+      "tags": ["逾期统计", "风险指标", "历史数据"],
+      "synonyms": ["累计逾期次数", "逾期频率"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "历史逾期次数计算",
+          "derivedSql": "SELECT loan_rcpt_no, COUNT(*) AS his_overdue_tms FROM F_AC_CRMS_LOAN_BIZ_LOAN_RCPT WHERE overdue_days > 0 GROUP BY loan_rcpt_no",
+          "businessMeaning": "统计借据历史出现逾期的次数，用于评估客户还款行为",
+          "sourceTable": "F_AC_CRMS_LOAN_BIZ_LOAN_RCPT"
+        }
+      ]
+    },
+    {
+      "blockIndex": 6,
+      "blockName": "小企业客户关联主体识别",
+      "sqlCode": "SELECT T4.cust_no, T4.name, COALESCE(T6.GLSTLX,T60.GLSTLX) AS GLSTLX, COALESCE(T6.RELATED_CUST_NAME,T60.RELATED_CUST_NAME) AS RELATED_CUST_NAME FROM F_PT_CRMS_LOAN_BIZ_PRI_CUST_INF T4 LEFT JOIN F_PT_CRMS_LOAN_BIZ_PRI_OPERA_ACCT_RELATED T6 ON T4.cust_no = T6.cust_no LEFT JOIN F_PT_CRMS_LOAN_BIZ_PRI_OPERA_ACCT_INF T60 ON T4.cust_no = T60.cust_no",
+      "businessScenario": "信贷管理系统-小企业个人经营户关联主体信息获取",
+      "sqlFunction": "多表左关联查询",
+      "involvedTables": ["F_PT_CRMS_LOAN_BIZ_PRI_CUST_INF", "F_PT_CRMS_LOAN_BIZ_PRI_OPERA_ACCT_RELATED", "F_PT_CRMS_LOAN_BIZ_PRI_OPERA_ACCT_INF"],
+      "tableJoinLogic": "通过客户号关联个人客户信息表、个人经营户关联表和个人经营户信息表，获取用款实体信息",
+      "queryDimensions": "客户号、用款实体类型、关联客户名",
+      "tags": ["小企业", "关联主体", "用款实体"],
+      "synonyms": ["小微客户关联", "经营实体"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "用款实体类型判断",
+          "derivedSql": "SELECT cust_no, GLSTLX FROM F_PT_CRMS_LOAN_BIZ_PRI_OPERA_ACCT_RELATED WHERE VLD_FLAG='1'",
+          "businessMeaning": "用款实体类型(GLSTLX): 01001-个人经营户关联, 01002-个人经营户自身, 02001-小微企业, 02002-个体工商户, 03001-其他",
+          "sourceTable": "F_PT_CRMS_LOAN_BIZ_PRI_OPERA_ACCT_RELATED"
+        }
+      ]
+    },
+    {
+      "blockIndex": 7,
+      "blockName": "核销本金计算-传统贷款",
+      "sqlCode": "SELECT LOAN_LOAN_RCPT_NO, SUM(CASE WHEN TRIM(TXN_EVENT) = 'LN_HEXO' AND TRIM(BAL_FIELD) = 'HEXIBJ' AND TRIM(TXN_DIRECTION_CD) = '0' THEN nvl(TXN_AMT,0) END) AS ACTUAL_VRFCTN_PRINCIPAL FROM F_EV_CRBS_LOAN_ACCT_TXN_DTL WHERE TXN_EVENT IN ('LN_HEXO') AND COALESCE(REV_FLAG,'') <> '1' GROUP BY LOAN_LOAN_RCPT_NO",
+      "businessScenario": "核心贷款系统-传统贷款实际核销本金计算",
+      "sqlFunction": "条件聚合查询",
+      "involvedTables": ["F_EV_CRBS_LOAN_ACCT_TXN_DTL", "O_CRBS_BDKZR"],
+      "tableJoinLogic": "从贷款账户交易明细筛选核销交易(HEXIBJ)，计算实际核销本金，并与转让登记簿关联获取回收金额",
+      "queryDimensions": "借据号、交易事件、余额字段、交易方向",
+      "tags": ["核销", "本金计算", "传统贷款"],
+      "synonyms": ["呆账核销", "贷款核销"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "核销交易识别",
+          "derivedSql": "SELECT LOAN_LOAN_RCPT_NO, SUM(TXN_AMT) FROM F_EV_CRBS_LOAN_ACCT_TXN_DTL WHERE TXN_EVENT='LN_HEXO' AND BAL_FIELD='HEXIBJ' AND TXN_DIRECTION_CD='0' AND REV_FLAG<>'1' GROUP BY LOAN_LOAN_RCPT_NO",
+          "businessMeaning": "交易事件LN_HEXO(核销)、余额字段HEXIBJ(核销本金)、交易方向0(借方)组合识别核销本金交易",
+          "sourceTable": "F_EV_CRBS_LOAN_ACCT_TXN_DTL"
+        }
+      ]
+    },
+    {
+      "blockIndex": 8,
+      "blockName": "贷款类型代码调整",
+      "sqlCode": "CASE WHEN T2.LOAN_TYPE_CD = '0120' AND T15.ENT_SCALE_CD IN ('2','3') THEN '0110' WHEN (T1.LOAN_LOAN_RCPT_NO = '93123001' OR T2.LOAN_TYPE_CD = '0110') AND ZW.CUST_ID IS NOT NULL THEN '0130' ELSE NVL(T2.LOAN_TYPE_CD,'') END",
+      "businessScenario": "信贷管理系统-按政务条线和小企业条线需求调整贷款类型代码",
+      "sqlFunction": "复杂条件判断",
+      "involvedTables": ["F_AC_CRBS_LOAN_ACCT", "F_AC_CRMS_LOAN_BIZ_LOAN_RCPT", "F_PT_CRMS_LOAN_BIZ_BIZCUST_INF"],
+      "tableJoinLogic": "综合贷款类型、企业规模、政务客户标志等因素调整贷款类型代码",
+      "queryDimensions": "贷款类型代码、企业规模代码、政务客户标志",
+      "tags": ["贷款类型", "条线划分", "业务分类"],
+      "synonyms": ["贷款条线", "业务条线"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "贷款类型代码含义",
+          "derivedSql": "SELECT DISTINCT loan_type_cd FROM F_AC_CRMS_LOAN_BIZ_LOAN_RCPT",
+          "businessMeaning": "贷款类型代码: 0110-对公贷款, 0120-小企业贷款, 0130-政务贷款, 0310-个人贷款",
+          "sourceTable": "F_AC_CRMS_LOAN_BIZ_LOAN_RCPT"
+        },
+        {
+          "knowledgeName": "企业规模代码含义",
+          "derivedSql": "SELECT DISTINCT ent_scale_cd FROM F_PT_CRMS_LOAN_BIZ_BIZCUST_INF",
+          "businessMeaning": "企业规模代码: 2-中型, 3-大型, 4-小型, 5-微型",
+          "sourceTable": "F_PT_CRMS_LOAN_BIZ_BIZCUST_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 9,
+      "blockName": "累计放款金额计算",
+      "sqlCode": "SELECT dkjeju, SUM(jioyje) jioyje FROM O_CRBS_ADKMX WHERE joyisj IN ('LN_ZCFK','LN_TSFK') AND bchzbz='' AND chzhbz='' GROUP BY dkjeju",
+      "businessScenario": "核心贷款系统-借据累计放款金额统计",
+      "sqlFunction": "分组聚合查询",
+      "involvedTables": ["O_CRBS_ADKMX"],
+      "tableJoinLogic": "单表查询，按借据号汇总正常放款和特殊放款交易金额",
+      "queryDimensions": "借据号、交易事件",
+      "tags": ["放款金额", "累计统计", "贷款发放"],
+      "synonyms": ["累计发放金额", "放款总额"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期; {I_YB_DT}: 年初日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "放款交易事件类型",
+          "derivedSql": "SELECT dkjeju, SUM(jioyje) FROM O_CRBS_ADKMX WHERE joyisj IN ('LN_ZCFK','LN_TSFK') GROUP BY dkjeju",
+          "businessMeaning": "交易事件类型: LN_ZCFK-正常放款, LN_TSFK-特殊放款; bchzbz和chzhbz为空表示非冲正非撤回的有效交易",
+          "sourceTable": "O_CRBS_ADKMX"
+        }
+      ]
+    },
+    {
+      "blockIndex": 10,
+      "blockName": "贷款借据信息汇总",
+      "sqlCode": "INSERT INTO CDM.C_AGT_LOAN_RCPT_INF SELECT ... FROM F_AC_CRBS_LOAN_ACCT T1 LEFT JOIN F_AC_CRMS_LOAN_BIZ_LOAN_RCPT T2 ... LEFT JOIN [20+ tables] WHERE T1.acctg_class_cd <> 'scf1189'",
+      "businessScenario": "数据仓库-贷款借据信息全量汇总初始化",
+      "sqlFunction": "多表关联大宽表生成",
+      "involvedTables": [
+        "F_AC_CRBS_LOAN_ACCT",
+        "F_AC_CRMS_LOAN_BIZ_LOAN_RCPT",
+        "F_CT_CRMS_LOAN_BIZ_CONTRACT",
+        "F_EV_CRMS_LOAN_BIZ_APPRV_INF",
+        "F_AC_CRBS_LOAN_RCPT_DISTR_INF",
+        "F_AC_CRBS_LOAN_ACCT_LAST_DAY_BAL_INF",
+        "F_AC_CRBS_LOAN_ACCT_REPAY_PROCE",
+        "F_PT_CRMS_LOAN_BIZ_BIZCUST_INF",
+        "C_AGT_LOAN_RCPT_CALCU_BASE",
+        "C_AGT_LOAN_RCPT_INTST",
+        "F_CT_SCFS_LOAN_RCPT_INF"
+      ],
+      "tableJoinLogic": "以核心贷款账户表为主表，关联信贷业务借据、合同、批复、还款处理等20余张表，生成完整的贷款借据宽表",
+      "queryDimensions": "借据号、客户号、合同号、日期、金额、利率、逾期状态等100+字段",
+      "tags": ["贷款借据", "宽表汇总", "数据初始化", "全量数据"],
+      "synonyms": ["借据明细表", "贷款明细表"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期; {I_YB_DT}: 年初日期; {MIN_DATE}: 最小日期; {MAX_DATE}: 最大日期; {NULL_DATE}: 空日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "借据与合同关联",
+          "derivedSql": "SELECT T1.loan_loan_rcpt_no, T2.contract_no FROM F_AC_CRBS_LOAN_ACCT T1 LEFT JOIN F_AC_CRMS_LOAN_BIZ_LOAN_RCPT T2 ON T2.loan_rcpt_no = T1.loan_loan_rcpt_no",
+          "businessMeaning": "通过借据编号关联核心贷款账户和信贷业务借据，获取合同编号等业务信息",
+          "sourceTable": "F_AC_CRBS_LOAN_ACCT, F_AC_CRMS_LOAN_BIZ_LOAN_RCPT"
+        },
+        {
+          "knowledgeName": "供应链贷款识别",
+          "derivedSql": "SELECT * FROM F_AC_CRBS_LOAN_ACCT WHERE acctg_class_cd = 'scf1189'",
+          "businessMeaning": "会计类别代码scf1189表示供应链融资，与普通贷款分开处理",
+          "sourceTable": "F_AC_CRBS_LOAN_ACCT"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": [
+    "F_AC_CRBS_LOAN_ACCT",
+    "F_AC_CRMS_LOAN_BIZ_LOAN_RCPT",
+    "F_CT_CRMS_LOAN_BIZ_CONTRACT",
+    "F_CT_CRMS_LOAN_BIZ_CONTRACT_EXT_INF",
+    "F_EV_CRMS_LOAN_BIZ_APPRV_INF",
+    "F_AC_CRBS_LOAN_RCPT_DISTR_INF",
+    "F_AC_CRBS_LOAN_ACCT_LAST_DAY_BAL_INF",
+    "F_AC_CRBS_LOAN_ACCT_REPAY_PROCE",
+    "F_EV_CRBS_LOAN_ACCT_EXPAND_TERM_BOOK",
+    "F_AC_CRBS_LOAN_REPAY_ACCT_PROP",
+    "F_PT_ECIF_WHOLE_BANK_CUST_INF",
+    "F_PT_ECIF_PUB_CUST_INF",
+    "F_AC_CRBS_LOAN_ACCT_TERM_SUPPL",
+    "F_PT_CRMS_LOAN_BIZ_PRI_CUST_INF",
+    "F_PT_CRMS_LOAN_BIZ_PRI_OPERA_ACCT_RELATED",
+    "F_PT_CRMS_LOAN_BIZ_PRI_OPERA_ACCT_INF",
+    "F_EV_CRBS_LOAN_ACCT_TXN_DTL",
+    "F_EV_CRMS_ONLINE_PLEDG_CREDIT_APPROVE_DTL",
+    "F_EV_CRMS_CREDIT_LOAN_LINE_LEND_PLATF_APPROVE_RS_INF",
+    "F_EV_CRMS_BIDEASYLOAN_APPL_INF",
+    "F_CT_SCFS_LOAN_RCPT_INF",
+    "F_CT_CRMS_RECOMB_LOAN_ROLL_INF",
+    "F_PT_CRMS_LOAN_BIZ_BIZCUST_INF",
+    "F_PT_CRMS_LOAN_BIZ_CUST_INF",
+    "O_CRBS_ADKMX",
+    "O_CRMS_INSPECT_INFO",
+    "O_CRMS_BUSINESS_PUTOUT",
+    "O_CRMS_BUSINESS_APPLY",
+    "O_CRBS_BDKZR",
+    "O_CRMS_SBLP_FINAL_APPLY_LIST",
+    "C_CUS_UNIFI_CUST_INF_PUB",
+    "C_CUS_UNIFI_CUST_INF_PRI",
+    "C_AGT_LOAN_RCPT_CALCU_BASE",
+    "C_AGT_LOAN_RCPT_INTST",
+    "C_AGT_LOAN_APPROVE_RS_INF",
+    "C_AGT_LOAN_RCPT_INF"
+  ],
+  "businessDomain": "信贷管理",
+  "dataSource": ["CRMS-信贷管理系统", "CRBS-核心贷款系统", "ECIF-客户信息系统"],
+  "notes": [
+    "本脚本为初始化脚本，用于生成贷款借据信息的本年累计放款金额",
+    "后续日期应跑正常批量脚本",
+    "包含传统贷款（不含票据和供应链）和供应链贷款两类数据处理",
+    "贷款类型代码按政务条线和小企业条线需求进行了调整",
+    "涉及20余张源表关联，生成包含100+字段的宽表"
+  ]
+}

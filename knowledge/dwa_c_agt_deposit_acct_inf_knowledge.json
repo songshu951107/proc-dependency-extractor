@@ -1,0 +1,450 @@
+{
+  "scriptName": "dwa_c_agt_deposit_acct_inf.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-10T10:30:00",
+  "totalBlocks": 6,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_AC_CRBS_DEPOSIT_ACCT",
+      "fdmScript": "dwa_f_ac_crbs_deposit_acct.py",
+      "found": true,
+      "odmTable": "O_CRBS_ADPXX",
+      "transformLogic": "字段名称标准化，码值转换（币种、控制币种），带删除拉链处理"
+    },
+    {
+      "fdmTable": "F_EV_CRBS_AGR_DEPOSIT_BOOK",
+      "fdmScript": "dwa_f_ev_crbs_agr_deposit_book.py",
+      "found": true,
+      "odmTable": "O_CRBS_BXDCK",
+      "transformLogic": "字段名称标准化，事件表增量处理"
+    },
+    {
+      "fdmTable": "F_AC_CRBS_DEPOSIT_ACCT_INT_RATE_DEF",
+      "fdmScript": "dwa_f_ac_crbs_deposit_acct_int_rate_def.py",
+      "found": true,
+      "odmTable": "O_CRBS_ADPAI",
+      "transformLogic": "字段名称标准化，币种码值转换，无删除拉链处理"
+    },
+    {
+      "fdmTable": "F_CO_CRBS_ACTUAL_INT_RATE_PARAM",
+      "fdmScript": "dwa_f_co_crbs_actual_int_rate_param.py",
+      "found": true,
+      "odmTable": "O_CRBS_PSJLV",
+      "transformLogic": "字段名称标准化，货币代码转换，带删除拉链处理"
+    },
+    {
+      "fdmTable": "F_AC_CRBS_CUST_ACCT_NO_COMPAR_RELA",
+      "fdmScript": "dwa_f_ac_crbs_cust_acct_no_compar_rela.py",
+      "found": true,
+      "odmTable": "O_CRBS_BCAPA",
+      "transformLogic": "字段名称标准化，账户币种码值转换，带删除拉链处理"
+    },
+    {
+      "fdmTable": "F_AC_CRBS_CUST_ACCT_NO",
+      "fdmScript": "dwa_f_ac_crbs_cust_acct_no.py",
+      "found": true,
+      "odmTable": "O_CRBS_BCUAC",
+      "transformLogic": "字段名称标准化，带删除拉链处理"
+    },
+    {
+      "fdmTable": "F_AC_CRBS_ACCT_NO_ASSIS_INF",
+      "fdmScript": "dwa_f_ac_crbs_acct_no_assis_inf.py",
+      "found": true,
+      "odmTable": "O_CRBS_BZHF1",
+      "transformLogic": "字段名称标准化，带删除拉链处理"
+    },
+    {
+      "fdmTable": "F_EV_CRBS_DEPOSIT_ACCT_FROZEN_BOOK",
+      "fdmScript": "dwa_f_ev_crbs_deposit_acct_frozen_book.py",
+      "found": true,
+      "odmTable": "O_CRBS_BFRBL",
+      "transformLogic": "字段名称标准化，执法人员证件种类码值转换，事件表增量处理"
+    },
+    {
+      "fdmTable": "F_PT_ECIF_WHOLE_BANK_CUST_INF",
+      "fdmScript": "dwa_f_pt_ecif_whole_bank_cust_inf.py",
+      "found": true,
+      "odmTable": "O_ECIF_M_CI_CUSTOMER",
+      "transformLogic": "字段名称标准化，证件类型码值转换，带删除拉链处理"
+    },
+    {
+      "fdmTable": "F_PT_ECIF_PUB_CUST_INF",
+      "fdmScript": "dwa_f_pt_ecif_pub_cust_inf.py",
+      "found": true,
+      "odmTable": "O_ECIF_M_CI_PER_CUSTOMER",
+      "transformLogic": "字段名称标准化，带删除拉链处理"
+    },
+    {
+      "fdmTable": "F_AC_CTDS_LDR_ACCT",
+      "fdmScript": "dwa_f_ac_ctds_ldr_acct.py",
+      "found": true,
+      "odmTable": "O_AC_CTDS_LDR_ACCT",
+      "transformLogic": "大额存单账户，字段名称标准化"
+    },
+    {
+      "fdmTable": "F_PD_CTDS_LDR_PROD_INF",
+      "fdmScript": "dwa_f_pd_ctds_ldr_prod_inf.py",
+      "found": true,
+      "odmTable": "O_PD_CTDS_LDR_PROD_INF",
+      "transformLogic": "大额存单产品信息，字段名称标准化"
+    },
+    {
+      "fdmTable": "F_AC_CTDS_LDR_FROZEN_INF",
+      "fdmScript": "dwa_f_ac_ctds_ldr_frozen_inf.py",
+      "found": true,
+      "odmTable": "O_AC_CTDS_LDR_FROZEN_INF",
+      "transformLogic": "大额存单冻结信息，字段名称标准化"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "businessScenario": "核心系统存款业务-加工协定存款相关信息",
+      "sqlFunction": "数据汇总查询",
+      "involvedTables": ["O_CRBS_BXDCK"],
+      "originalTables": ["F_EV_CRBS_AGR_DEPOSIT_BOOK"],
+      "tableJoinLogic": "从协定存款登记簿获取最新有效的协定存款记录，按负债账号分组取最新交易",
+      "queryDimensions": "负债账号、交易日期、操作类型",
+      "tags": ["协定存款", "利率管理", "留存金额"],
+      "traceChains": [
+        {
+          "originalTable": "F_EV_CRBS_AGR_DEPOSIT_BOOK",
+          "fdmScript": "dwa_f_ev_crbs_agr_deposit_book.py",
+          "odmTable": "O_CRBS_BXDCK",
+          "fieldMappings": [
+            {"fdmField": "liabi_acct_no", "odmField": "DPACNO", "description": "负债账号"},
+            {"fdmField": "trade_dt", "odmField": "JIOYRQ", "description": "交易日期"},
+            {"fdmField": "opt_type_cd", "odmField": "OPTYPE", "description": "操作类型代码"},
+            {"fdmField": "agr_retn_amt", "odmField": "XDLCJE", "description": "协定留存金额"},
+            {"fdmField": "new_acct_exec_int_rate", "odmField": "NEWINR", "description": "新账户执行利率"}
+          ],
+          "filterConditions": "opt_type_cd = '1' 操作类型为开户/变更"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "协定存款账户最新记录",
+          "derivedSql": "SELECT DPACNO, NEWINR, XDLCJE FROM O_CRBS_BXDCK WHERE OPTYPE = '1' ORDER BY JIOYRQ DESC, JIOYSJ DESC",
+          "businessMeaning": "获取协定存款账户的最新执行利率和协定留存金额",
+          "sourceTable": "O_CRBS_BXDCK",
+          "originalTable": "F_EV_CRBS_AGR_DEPOSIT_BOOK"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "businessScenario": "核心系统存款业务-加工存款利率相关信息",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["O_CRBS_ADPAI", "O_CRBS_PSJLV"],
+      "originalTables": ["F_AC_CRBS_DEPOSIT_ACCT_INT_RATE_DEF", "F_CO_CRBS_ACTUAL_INT_RATE_PARAM"],
+      "tableJoinLogic": "通过利率编号关联存款账户利率定义表与实际利率参数表，获取账户执行利率",
+      "queryDimensions": "负债账号、利率编号、执行利率",
+      "tags": ["利率管理", "基准利率", "浮动利率"],
+      "traceChains": [
+        {
+          "originalTable": "F_AC_CRBS_DEPOSIT_ACCT_INT_RATE_DEF",
+          "fdmScript": "dwa_f_ac_crbs_deposit_acct_int_rate_def.py",
+          "odmTable": "O_CRBS_ADPAI",
+          "fieldMappings": [
+            {"fdmField": "liabi_acct_no", "odmField": "DPACNO", "description": "负债账号"},
+            {"fdmField": "base_accru_int_rate_no", "odmField": "BAAIRN", "description": "基准计提利率编号"},
+            {"fdmField": "curr_exec_int_rate", "odmField": "ACTINR", "description": "当前执行利率"},
+            {"fdmField": "acct_base_int_rate", "odmField": "ACBAIR", "description": "账户基准利率"}
+          ],
+          "filterConditions": "int_rate_cd = 'INTRAT' 利率代码为INTRAT"
+        },
+        {
+          "originalTable": "F_CO_CRBS_ACTUAL_INT_RATE_PARAM",
+          "fdmScript": "dwa_f_co_crbs_actual_int_rate_param.py",
+          "odmTable": "O_CRBS_PSJLV",
+          "fieldMappings": [
+            {"fdmField": "int_rate_no", "odmField": "LILVBH", "description": "利率编号"},
+            {"fdmField": "actual_int_rate", "odmField": "SHIJLL", "description": "实际利率"},
+            {"fdmField": "base_int_rate_no", "odmField": "JZLLBH", "description": "基准利率编号"}
+          ],
+          "filterConditions": "base_int_rate_no IN ('A06','A26') 基准利率编号为A06或A26"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "存款账户当前执行利率",
+          "derivedSql": "SELECT T1.DPACNO, T1.ACTINR, T2.SHIJLL FROM O_CRBS_ADPAI T1 LEFT JOIN O_CRBS_PSJLV T2 ON T1.BAAIRN = T2.LILVBH WHERE T1.INRTCD = 'INTRAT'",
+          "businessMeaning": "获取存款账户的当前执行利率，关联实际利率参数表获取最新利率",
+          "sourceTable": "O_CRBS_ADPAI",
+          "originalTable": "F_AC_CRBS_DEPOSIT_ACCT_INT_RATE_DEF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "businessScenario": "核心系统存款业务-加工存款账户核心信息",
+      "sqlFunction": "复杂多表关联查询",
+      "involvedTables": ["O_CRBS_ADPXX", "O_CRBS_BCAPA", "O_CRBS_BCUAC", "O_CRBS_BZHF1", "O_CRBS_BFRBL"],
+      "originalTables": ["F_AC_CRBS_DEPOSIT_ACCT", "F_AC_CRBS_CUST_ACCT_NO_COMPAR_RELA", "F_AC_CRBS_CUST_ACCT_NO", "F_AC_CRBS_ACCT_NO_ASSIS_INF", "F_EV_CRBS_DEPOSIT_ACCT_FROZEN_BOOK"],
+      "tableJoinLogic": "以存款账户表为主表，关联客户账号对照关系、客户账号、账号辅助信息、冻结登记簿，获取完整账户信息",
+      "queryDimensions": "负债账号、客户账号、账户状态、冻结状态",
+      "tags": ["存款账户", "账户信息", "冻结管理"],
+      "traceChains": [
+        {
+          "originalTable": "F_AC_CRBS_DEPOSIT_ACCT",
+          "fdmScript": "dwa_f_ac_crbs_deposit_acct.py",
+          "odmTable": "O_CRBS_ADPXX",
+          "fieldMappings": [
+            {"fdmField": "liabi_acct_no", "odmField": "DPACNO", "description": "负债账号"},
+            {"fdmField": "acct_name", "odmField": "ACTNAM", "description": "账户名称"},
+            {"fdmField": "main_cust_no", "odmField": "CUSNUM", "description": "主客户号"},
+            {"fdmField": "prod_cd", "odmField": "PRODCD", "description": "产品代码"},
+            {"fdmField": "acct_sts_cd", "odmField": "DPZHZT", "description": "账户状态"}
+          ],
+          "filterConditions": "del_flag <> 'D' 非删除记录"
+        },
+        {
+          "originalTable": "F_AC_CRBS_CUST_ACCT_NO_COMPAR_RELA",
+          "fdmScript": "dwa_f_ac_crbs_cust_acct_no_compar_rela.py",
+          "odmTable": "O_CRBS_BCAPA",
+          "fieldMappings": [
+            {"fdmField": "cust_acct_no", "odmField": "CUACNO", "description": "客户账号"},
+            {"fdmField": "sys_acct_no", "odmField": "SYSACT", "description": "系统账号"},
+            {"fdmField": "sub_acct_serial_no", "odmField": "CHISER", "description": "子账户序号"}
+          ],
+          "filterConditions": "关联条件：负债账号=系统账号"
+        },
+        {
+          "originalTable": "F_EV_CRBS_DEPOSIT_ACCT_FROZEN_BOOK",
+          "fdmScript": "dwa_f_ev_crbs_deposit_acct_frozen_book.py",
+          "odmTable": "O_CRBS_BFRBL",
+          "fieldMappings": [
+            {"fdmField": "sys_acct_no", "odmField": "DPACNO", "description": "系统账号"},
+            {"fdmField": "frozen_amt", "odmField": "FREAMT", "description": "需冻结金额"},
+            {"fdmField": "curr_frozen_amt", "odmField": "NWFZMT", "description": "现冻结金额"},
+            {"fdmField": "limit_mode_cd", "odmField": "FREETP", "description": "限制方式"}
+          ],
+          "filterConditions": "frozen_sourc_cd = '1' AND unfre_flag = '0' AND limit_mode_cd = '1' 未解冻的金额冻结记录"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "冻结账户信息",
+          "derivedSql": "SELECT DPACNO, SUM(FREAMT) as frozen_amt, SUM(NWFZMT) as curr_frozen_amt FROM O_CRBS_BFRBL WHERE FRESOU = '1' AND UFRFLG = '0' AND FREETP = '1' GROUP BY DPACNO",
+          "businessMeaning": "获取被金额冻结的存款账户及其冻结金额汇总",
+          "sourceTable": "O_CRBS_BFRBL",
+          "originalTable": "F_EV_CRBS_DEPOSIT_ACCT_FROZEN_BOOK"
+        },
+        {
+          "knowledgeName": "账户政务明细类别",
+          "derivedSql": "SELECT ZHANGH, KEYVAL FROM O_CRBS_BZHF1 WHERE FLDNAM = 'ZWMSLB'",
+          "businessMeaning": "从账号辅助信息表获取账户的政务明细类别",
+          "sourceTable": "O_CRBS_BZHF1",
+          "originalTable": "F_AC_CRBS_ACCT_NO_ASSIS_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 4,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "businessScenario": "ECIF客户信息系统-获取客户名称及政务客户标志",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["O_ECIF_M_CI_CUSTOMER", "O_ECIF_M_CI_PER_CUSTOMER"],
+      "originalTables": ["F_PT_ECIF_WHOLE_BANK_CUST_INF", "F_PT_ECIF_PUB_CUST_INF"],
+      "tableJoinLogic": "通过客户号关联全行客户信息表和对公客户信息表，获取客户名称和政务客户标志",
+      "queryDimensions": "客户号、核心客户号、政务客户标志",
+      "tags": ["客户信息", "政务客户", "ECIF"],
+      "traceChains": [
+        {
+          "originalTable": "F_PT_ECIF_WHOLE_BANK_CUST_INF",
+          "fdmScript": "dwa_f_pt_ecif_whole_bank_cust_inf.py",
+          "odmTable": "O_ECIF_M_CI_CUSTOMER",
+          "fieldMappings": [
+            {"fdmField": "cust_no", "odmField": "cust_id", "description": "客户号"},
+            {"fdmField": "core_cust_no", "odmField": "core_no", "description": "核心客户号"},
+            {"fdmField": "cust_name", "odmField": "cust_name", "description": "客户名称"}
+          ],
+          "filterConditions": "del_flag <> 'D' AND core_cust_no <> '' 非删除且有核心客户号"
+        },
+        {
+          "originalTable": "F_PT_ECIF_PUB_CUST_INF",
+          "fdmScript": "dwa_f_pt_ecif_pub_cust_inf.py",
+          "odmTable": "O_ECIF_M_CI_PER_CUSTOMER",
+          "fieldMappings": [
+            {"fdmField": "cust_no", "odmField": "cust_id", "description": "客户号"},
+            {"fdmField": "govern_structure", "odmField": "govern_structure", "description": "政务客户标志"}
+          ],
+          "filterConditions": "govern_structure = '1' 政务客户"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "政务客户识别",
+          "derivedSql": "SELECT T1.core_no, T1.cust_name FROM O_ECIF_M_CI_CUSTOMER T1 INNER JOIN O_ECIF_M_CI_PER_CUSTOMER T2 ON T1.cust_id = T2.cust_id WHERE T2.govern_structure = '1'",
+          "businessMeaning": "筛选政务客户的核心客户号和客户名称",
+          "sourceTable": "O_ECIF_M_CI_CUSTOMER",
+          "originalTable": "F_PT_ECIF_WHOLE_BANK_CUST_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 5,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "businessScenario": "核心系统存款业务-向主表插入存款业务数据",
+      "sqlFunction": "复杂多表关联查询",
+      "involvedTables": ["O_CRBS_ADPXX", "O_CRBS_BXDCK", "O_CRBS_ADPAI", "O_ECIF_M_CI_CUSTOMER"],
+      "originalTables": ["F_AC_CRBS_DEPOSIT_ACCT", "F_EV_CRBS_AGR_DEPOSIT_BOOK", "F_AC_CRBS_DEPOSIT_ACCT_INT_RATE_DEF", "F_PT_ECIF_WHOLE_BANK_CUST_INF"],
+      "tableJoinLogic": "整合临时表数据，关联会计分录配置、业务代码、协定存款信息、利率信息、客户信息，插入存款账户汇总表",
+      "queryDimensions": "账号、客户号、利率、余额、利息",
+      "tags": ["存款汇总", "账户余额", "利息计算"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "存款账户客户类型判断",
+          "derivedSql": "SELECT T1.DPACNO, CASE WHEN T1.PRCLS1 = '2' AND T2.govern_structure = '1' THEN '0202' WHEN T1.PRCLS1 = '2' AND NVL(T2.govern_structure,'') <> '1' THEN '0201' WHEN T1.PRCLS1 = '1' THEN '01' WHEN T1.PRCLS1 = '3' THEN '03' END AS cust_type FROM O_CRBS_ADPXX T1 LEFT JOIN O_ECIF_M_CI_CUSTOMER T2 ON T1.CUSNUM = T2.core_no",
+          "businessMeaning": "根据产品分类和政务客户标志判断客户类型：政务、公司、个人、同业",
+          "sourceTable": "O_CRBS_ADPXX",
+          "originalTable": "F_AC_CRBS_DEPOSIT_ACCT"
+        },
+        {
+          "knowledgeName": "存款账户业务类型计算",
+          "derivedSql": "SELECT DPACNO, CASE WHEN MOD(CAST(ACTTCD AS INT),10) = 1 AND DPZHZT IN ('I','D') THEN CASE DPZHZT WHEN 'D' THEN 'XA-DPBDHKM' WHEN 'I' THEN 'XA-DPYYWKM' END ELSE '1' || CASE SUBSTR(ACTTCD,2,1) WHEN '0' THEN TRIM(ACTCD1)||TRIM(ACTCD2) WHEN '2' THEN TRIM(ACTCD1) WHEN '3' THEN TRIM(ACTCD2) END || '-' || 'LDGBAL' END AS biz_type FROM O_CRBS_ADPXX",
+          "businessMeaning": "根据会计核算类型代码和账户分类代码计算业务类型",
+          "sourceTable": "O_CRBS_ADPXX",
+          "originalTable": "F_AC_CRBS_DEPOSIT_ACCT"
+        }
+      ]
+    },
+    {
+      "blockIndex": 6,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "businessScenario": "大额存单系统-向主表插入大额存单业务数据",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["O_AC_CTDS_LDR_ACCT", "O_PD_CTDS_LDR_PROD_INF", "O_ECIF_M_CI_CUSTOMER", "O_AC_CTDS_LDR_FROZEN_INF"],
+      "originalTables": ["F_AC_CTDS_LDR_ACCT", "F_PD_CTDS_LDR_PROD_INF", "F_PT_ECIF_WHOLE_BANK_CUST_INF", "F_AC_CTDS_LDR_FROZEN_INF"],
+      "tableJoinLogic": "以大额存单账户表为主表，关联产品信息、客户信息、冻结信息，插入存款账户汇总表",
+      "queryDimensions": "账号、客户号、存单金额、利率、到期日",
+      "tags": ["大额存单", "存单账户", "存单产品"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "大额存单科目号映射",
+          "derivedSql": "SELECT T1.ACCT_NO, CASE WHEN T2.term = '1M' AND T1.cust_type = '0' THEN '22020201' WHEN T2.term = '3M' AND T1.cust_type = '0' THEN '22020202' WHEN T2.term = '6M' AND T1.cust_type = '0' THEN '22020203' END AS subj_no FROM O_AC_CTDS_LDR_ACCT T1 LEFT JOIN O_PD_CTDS_LDR_PROD_INF T2 ON T1.prod_cd = T2.prod_no",
+          "businessMeaning": "根据存单期限和客户类型（单位/个人）映射科目号",
+          "sourceTable": "O_AC_CTDS_LDR_ACCT",
+          "originalTable": "F_AC_CTDS_LDR_ACCT"
+        },
+        {
+          "knowledgeName": "大额存单冻结金额",
+          "derivedSql": "SELECT SRC_TXN_SEQ_NO, FROZEN_PRINCIPAL FROM O_AC_CTDS_LDR_FROZEN_INF WHERE TXN_CD = '1A0400' AND VERSI_NO = '0' AND FROZEN_PRINCIPAL > 0 AND TXN_STS_CD = '2'",
+          "businessMeaning": "获取大额存单的冻结本金金额",
+          "sourceTable": "O_AC_CTDS_LDR_FROZEN_INF",
+          "originalTable": "F_AC_CTDS_LDR_FROZEN_INF"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": [
+    "O_CRBS_ADPXX",
+    "O_CRBS_BXDCK",
+    "O_CRBS_ADPAI",
+    "O_CRBS_PSJLV",
+    "O_CRBS_BCAPA",
+    "O_CRBS_BCUAC",
+    "O_CRBS_BZHF1",
+    "O_CRBS_BFRBL",
+    "O_ECIF_M_CI_CUSTOMER",
+    "O_ECIF_M_CI_PER_CUSTOMER",
+    "O_AC_CTDS_LDR_ACCT",
+    "O_PD_CTDS_LDR_PROD_INF",
+    "O_AC_CTDS_LDR_FROZEN_INF"
+  ],
+  "allOriginalTables": [
+    "F_AC_CRBS_DEPOSIT_ACCT",
+    "F_EV_CRBS_AGR_DEPOSIT_BOOK",
+    "F_AC_CRBS_DEPOSIT_ACCT_INT_RATE_DEF",
+    "F_CO_CRBS_ACTUAL_INT_RATE_PARAM",
+    "F_AC_CRBS_CUST_ACCT_NO_COMPAR_RELA",
+    "F_AC_CRBS_CUST_ACCT_NO",
+    "F_AC_CRBS_ACCT_NO_ASSIS_INF",
+    "F_EV_CRBS_DEPOSIT_ACCT_FROZEN_BOOK",
+    "F_PT_ECIF_WHOLE_BANK_CUST_INF",
+    "F_PT_ECIF_PUB_CUST_INF",
+    "F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ",
+    "F_CO_CRBS_BIZ_CD",
+    "F_AC_CTDS_LDR_ACCT",
+    "F_PD_CTDS_LDR_PROD_INF",
+    "F_AC_CTDS_LDR_FROZEN_INF"
+  ],
+  "traceSummary": {
+    "totalFdmTables": 15,
+    "scriptsFound": 13,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "odmTablesDdl": {
+    "O_CRBS_ADPXX": {
+      "layer": "odm",
+      "sysName": "核心",
+      "tabNameCn": "负债账户信息表",
+      "primaryKey": "dpacno"
+    },
+    "O_CRBS_BXDCK": {
+      "layer": "odm",
+      "sysName": "核心",
+      "tabNameCn": "协定存款登记簿",
+      "primaryKey": "dpacno, guiyls, optype"
+    },
+    "O_CRBS_ADPAI": {
+      "layer": "odm",
+      "sysName": "核心",
+      "tabNameCn": "负债账户利率定义",
+      "primaryKey": "dpacno, inrtcd"
+    },
+    "O_CRBS_PSJLV": {
+      "layer": "odm",
+      "sysName": "核心",
+      "tabNameCn": "实际利率参数表",
+      "primaryKey": "fenhdm, huobdh, lilvbh, lilvdc, llbhlx, llcqlx, shijcq, sxiorq, yngyjg"
+    },
+    "O_CRBS_BCAPA": {
+      "layer": "odm",
+      "sysName": "核心",
+      "tabNameCn": "客户账号对照表",
+      "primaryKey": "chiser, cuacno"
+    },
+    "O_CRBS_BCUAC": {
+      "layer": "odm",
+      "sysName": "核心",
+      "tabNameCn": "客户账号",
+      "primaryKey": "cuacno"
+    },
+    "O_CRBS_BZHF1": {
+      "layer": "odm",
+      "sysName": "核心",
+      "tabNameCn": "账号辅助信息1",
+      "primaryKey": "fldnam, shunxh, xuhaoo, zhangh, zhholx"
+    },
+    "O_CRBS_BFRBL": {
+      "layer": "odm",
+      "sysName": "核心",
+      "tabNameCn": "负债账户冻结登记簿",
+      "primaryKey": "frenum, xuhao1"
+    },
+    "O_ECIF_M_CI_CUSTOMER": {
+      "layer": "odm",
+      "sysName": "ECIF",
+      "tabNameCn": "客户",
+      "primaryKey": "cust_id"
+    }
+  }
+}

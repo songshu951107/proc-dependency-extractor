@@ -1,0 +1,171 @@
+{
+  "scriptName": "dwa_c_agt_loan_rcpt_subj_rela_h_init.py",
+  "extractTime": "2026-05-10T10:30:00",
+  "totalBlocks": 6,
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "CREATE",
+      "depth": 0,
+      "alias": null,
+      "sqlCode": "CREATE TABLE {CDM}.VT_C_AGT_LOAN_RCPT_SUBJ_RELA_H_01 AS SELECT DISTINCT biz_cd_rule, prod_class_cd1, prod_featu_cd, start_dt, end_dt FROM {FDM}.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ T1 WHERE T1.prod_featu_cd in ('ZHCHBJ','YUQIBJ','DZHIBJ','DAIZBJ') AND T1.belo_modl_cd = 'LN' AND T1.record_sts_cd = '0' AND T1.end_dt > DATE '{I_MATTY_DT}'",
+      "businessScenario": "数据仓库贷款业务-获取贷款会计分录配置中正常/逾期/呆滞/呆账本金的产品特征代码和业务代码规则",
+      "sqlFunction": "数据筛选与去重",
+      "involvedTables": ["F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ"],
+      "tableJoinLogic": "单表查询，通过产品特征代码、模块代码、记录状态筛选有效配置",
+      "queryDimensions": "产品特征代码、会计类别、业务代码规则、日期",
+      "tags": ["贷款配置", "会计分类", "本金类型"],
+      "synonyms": ["贷款科目配置", "本金特征代码"],
+      "parameterDescription": "{I_MATTY_DT}: 滚动年开始累积日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "贷款本金类型配置",
+          "derivedSql": "SELECT DISTINCT biz_cd_rule, prod_class_cd1, prod_featu_cd FROM {FDM}.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ WHERE prod_featu_cd IN ('ZHCHBJ','YUQIBJ','DZHIBJ','DAIZBJ') AND belo_modl_cd = 'LN' AND record_sts_cd = '0'",
+          "businessMeaning": "筛选贷款模块中正常本金(ZHCHBJ)、逾期本金(YUQIBJ)、呆滞本金(DZHIBJ)、呆账本金(DAIZBJ)四种产品特征的会计配置",
+          "sourceTable": "F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "alias": null,
+      "sqlCode": "INSERT INTO {CDM}.C_AGT_LOAN_RCPT_SUBJ_RELA_H SELECT T1.loan_loan_rcpt_no, '01' AS rela_category_cd, NVL(T3.subj_no,'') AS subj_no, NVL(T4.gl_subj_no,'') AS gl_subj_no, NVL(T2.biz_cd_rule,'') AS biz_cd_rule, '0', 'F_AC_CRBS_LOAN_ACCT' AS data_sourc_tab_name, T1.start_dt, T1.end_dt FROM {FDM}.F_AC_CRBS_LOAN_ACCT T1 LEFT JOIN {CDM}.VT_C_AGT_LOAN_RCPT_SUBJ_RELA_H_01 T2 ON T2.prod_class_cd1 = T1.acctg_class_cd AND T2.prod_featu_cd = 'ZHCHBJ' AND T2.start_dt <= T1.start_dt AND T2.end_dt > T1.start_dt LEFT JOIN {FDM}.F_CO_CRBS_BIZ_CD T3 ON T3.biz_cd = T2.biz_cd_rule AND T3.start_dt <= T1.start_dt AND T3.end_dt > T1.start_dt LEFT JOIN {FDM}.F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA T4 ON T4.biz_cd = T2.biz_cd_rule AND T4.del_flag <> 'D' AND T4.start_dt <= T1.start_dt AND T4.end_dt > T1.start_dt WHERE T1.end_dt > DATE '{I_MATTY_DT}' AND T1.del_flag <> 'D' AND T1.acctg_class_cd <> 'scf1189'",
+      "businessScenario": "数据仓库贷款业务-建立传统贷款借据与正常本金科目的对照关系，获取核心科目号和总账科目号",
+      "sqlFunction": "多表关联插入",
+      "involvedTables": ["F_AC_CRBS_LOAN_ACCT", "F_CO_CRBS_BIZ_CD", "F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA"],
+      "tableJoinLogic": "通过会计类别代码关联配置表获取业务代号，再通过业务代号关联核心业务代号表和总账科目对照表获取科目号",
+      "queryDimensions": "借据编号、关系种类代码、科目号、业务代号、日期",
+      "tags": ["借据科目关系", "正常本金", "传统贷款"],
+      "synonyms": ["贷款科目映射", "本金科目对照"],
+      "parameterDescription": "{I_MATTY_DT}: 滚动年开始累积日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "传统贷款借据",
+          "derivedSql": "SELECT loan_loan_rcpt_no FROM {FDM}.F_AC_CRBS_LOAN_ACCT WHERE del_flag <> 'D' AND acctg_class_cd <> 'scf1189'",
+          "businessMeaning": "筛选非供应链(scf1189)的核心贷款账户借据，排除已删除记录",
+          "sourceTable": "F_AC_CRBS_LOAN_ACCT"
+        },
+        {
+          "knowledgeName": "贷款正常本金科目",
+          "derivedSql": "SELECT loan_loan_rcpt_no, subj_no, gl_subj_no FROM {FDM}.F_AC_CRBS_LOAN_ACCT T1 LEFT JOIN {FDM}.F_CO_CRBS_BIZ_CD T3 ON T3.biz_cd = T1.acctg_class_cd LEFT JOIN {FDM}.F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA T4 ON T4.biz_cd = T1.acctg_class_cd WHERE T1.acctg_class_cd <> 'scf1189' AND T1.del_flag <> 'D'",
+          "businessMeaning": "获取传统贷款借据对应的核心科目号和总账科目号，用于正常本金核算",
+          "sourceTable": "F_AC_CRBS_LOAN_ACCT"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "alias": null,
+      "sqlCode": "INSERT INTO {CDM}.C_AGT_LOAN_RCPT_SUBJ_RELA_H SELECT T1.loan_loan_rcpt_no, '02' AS rela_category_cd, NVL(T3.subj_no,'') AS subj_no, NVL(T4.gl_subj_no,'') AS gl_subj_no, NVL(T2.biz_cd_rule,'') AS biz_cd_rule, '0', 'F_AC_CRBS_LOAN_ACCT' AS data_sourc_tab_name, T1.start_dt, T1.end_dt FROM {FDM}.F_AC_CRBS_LOAN_ACCT T1 LEFT JOIN {CDM}.VT_C_AGT_LOAN_RCPT_SUBJ_RELA_H_01 T2 ON T2.prod_class_cd1 = T1.acctg_class_cd AND T2.prod_featu_cd = 'YUQIBJ' AND T2.start_dt <= T1.start_dt AND T2.end_dt > T1.start_dt LEFT JOIN {FDM}.F_CO_CRBS_BIZ_CD T3 ON T3.biz_cd = T2.biz_cd_rule AND T3.start_dt <= T1.start_dt AND T3.end_dt > T1.start_dt LEFT JOIN {FDM}.F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA T4 ON T4.biz_cd = T2.biz_cd_rule AND T4.del_flag <> 'D' AND T4.start_dt <= T1.start_dt AND T4.end_dt > T1.start_dt WHERE T1.end_dt > DATE '{I_MATTY_DT}' AND T1.del_flag <> 'D' AND T1.acctg_class_cd <> 'scf1189'",
+      "businessScenario": "数据仓库贷款业务-建立传统贷款借据与逾期本金科目的对照关系，获取核心科目号和总账科目号",
+      "sqlFunction": "多表关联插入",
+      "involvedTables": ["F_AC_CRBS_LOAN_ACCT", "F_CO_CRBS_BIZ_CD", "F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA"],
+      "tableJoinLogic": "通过会计类别代码关联配置表获取逾期本金业务代号(YUQIBJ)，再关联科目对照表获取科目号",
+      "queryDimensions": "借据编号、关系种类代码(02逾期本金)、科目号、业务代号、日期",
+      "tags": ["借据科目关系", "逾期本金", "传统贷款"],
+      "synonyms": ["逾期贷款科目", "逾期本金科目对照"],
+      "parameterDescription": "{I_MATTY_DT}: 滚动年开始累积日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "逾期本金科目配置",
+          "derivedSql": "SELECT biz_cd_rule, prod_class_cd1 FROM {FDM}.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ WHERE prod_featu_cd = 'YUQIBJ' AND belo_modl_cd = 'LN' AND record_sts_cd = '0'",
+          "businessMeaning": "筛选逾期本金(YUQIBJ)产品特征的会计配置，用于确定逾期本金对应的业务代号和会计类别",
+          "sourceTable": "F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ"
+        }
+      ]
+    },
+    {
+      "blockIndex": 4,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "alias": null,
+      "sqlCode": "INSERT INTO {CDM}.C_AGT_LOAN_RCPT_SUBJ_RELA_H SELECT T1.loan_loan_rcpt_no, '03' AS rela_category_cd, NVL(T3.subj_no,'') AS subj_no, NVL(T4.gl_subj_no,'') AS gl_subj_no, NVL(T2.biz_cd_rule,'') AS biz_cd_rule, '0', 'F_AC_CRBS_LOAN_ACCT' AS data_sourc_tab_name, T1.start_dt, T1.end_dt FROM {FDM}.F_AC_CRBS_LOAN_ACCT T1 LEFT JOIN {CDM}.VT_C_AGT_LOAN_RCPT_SUBJ_RELA_H_01 T2 ON T2.prod_class_cd1 = T1.acctg_class_cd AND T2.prod_featu_cd = 'DZHIBJ' AND T2.start_dt <= T1.start_dt AND T2.end_dt > T1.start_dt LEFT JOIN {FDM}.F_CO_CRBS_BIZ_CD T3 ON T3.biz_cd = T2.biz_cd_rule AND T3.start_dt <= T1.start_dt AND T3.end_dt > T1.start_dt LEFT JOIN {FDM}.F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA T4 ON T4.biz_cd = T2.biz_cd_rule AND T4.del_flag <> 'D' AND T4.start_dt <= T1.start_dt AND T4.end_dt > T1.start_dt WHERE T1.end_dt > DATE '{I_MATTY_DT}' AND T1.del_flag <> 'D' AND T1.acctg_class_cd <> 'scf1189'",
+      "businessScenario": "数据仓库贷款业务-建立传统贷款借据与呆滞本金科目的对照关系，获取核心科目号和总账科目号",
+      "sqlFunction": "多表关联插入",
+      "involvedTables": ["F_AC_CRBS_LOAN_ACCT", "F_CO_CRBS_BIZ_CD", "F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA"],
+      "tableJoinLogic": "通过会计类别代码关联配置表获取呆滞本金业务代号(DZHIBJ)，再关联科目对照表获取科目号",
+      "queryDimensions": "借据编号、关系种类代码(03呆滞本金)、科目号、业务代号、日期",
+      "tags": ["借据科目关系", "呆滞本金", "传统贷款"],
+      "synonyms": ["呆滞贷款科目", "呆滞本金科目对照"],
+      "parameterDescription": "{I_MATTY_DT}: 滚动年开始累积日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "呆滞本金科目配置",
+          "derivedSql": "SELECT biz_cd_rule, prod_class_cd1 FROM {FDM}.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ WHERE prod_featu_cd = 'DZHIBJ' AND belo_modl_cd = 'LN' AND record_sts_cd = '0'",
+          "businessMeaning": "筛选呆滞本金(DZHIBJ)产品特征的会计配置，用于确定呆滞本金对应的业务代号和会计类别",
+          "sourceTable": "F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ"
+        }
+      ]
+    },
+    {
+      "blockIndex": 5,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "alias": null,
+      "sqlCode": "INSERT INTO {CDM}.C_AGT_LOAN_RCPT_SUBJ_RELA_H SELECT T1.loan_loan_rcpt_no, '04' AS rela_category_cd, NVL(T3.subj_no,'') AS subj_no, NVL(T4.gl_subj_no,'') AS gl_subj_no, NVL(T2.biz_cd_rule,'') AS biz_cd_rule, '0', 'F_AC_CRBS_LOAN_ACCT' AS data_sourc_tab_name, T1.start_dt, T1.end_dt FROM {FDM}.F_AC_CRBS_LOAN_ACCT T1 LEFT JOIN {CDM}.VT_C_AGT_LOAN_RCPT_SUBJ_RELA_H_01 T2 ON T2.prod_class_cd1 = T1.acctg_class_cd AND T2.prod_featu_cd = 'DAIZBJ' AND T2.start_dt <= T1.start_dt AND T2.end_dt > T1.start_dt LEFT JOIN {FDM}.F_CO_CRBS_BIZ_CD T3 ON T3.biz_cd = T2.biz_cd_rule AND T3.start_dt <= T1.start_dt AND T3.end_dt > T1.start_dt LEFT JOIN {FDM}.F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA T4 ON T4.biz_cd = T2.biz_cd_rule AND T4.del_flag <> 'D' AND T4.start_dt <= T1.start_dt AND T4.end_dt > T1.start_dt WHERE T1.end_dt > DATE '{I_MATTY_DT}' AND T1.del_flag <> 'D' AND T1.acctg_class_cd <> 'scf1189'",
+      "businessScenario": "数据仓库贷款业务-建立传统贷款借据与呆账本金科目的对照关系，获取核心科目号和总账科目号",
+      "sqlFunction": "多表关联插入",
+      "involvedTables": ["F_AC_CRBS_LOAN_ACCT", "F_CO_CRBS_BIZ_CD", "F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA"],
+      "tableJoinLogic": "通过会计类别代码关联配置表获取呆账本金业务代号(DAIZBJ)，再关联科目对照表获取科目号",
+      "queryDimensions": "借据编号、关系种类代码(04呆账本金)、科目号、业务代号、日期",
+      "tags": ["借据科目关系", "呆账本金", "传统贷款"],
+      "synonyms": ["呆账贷款科目", "呆账本金科目对照"],
+      "parameterDescription": "{I_MATTY_DT}: 滚动年开始累积日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "呆账本金科目配置",
+          "derivedSql": "SELECT biz_cd_rule, prod_class_cd1 FROM {FDM}.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ WHERE prod_featu_cd = 'DAIZBJ' AND belo_modl_cd = 'LN' AND record_sts_cd = '0'",
+          "businessMeaning": "筛选呆账本金(DAIZBJ)产品特征的会计配置，用于确定呆账本金对应的业务代号和会计类别",
+          "sourceTable": "F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ"
+        }
+      ]
+    },
+    {
+      "blockIndex": 6,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "alias": null,
+      "sqlCode": "INSERT INTO {CDM}.C_AGT_LOAN_RCPT_SUBJ_RELA_H SELECT T1.loan_rcpt_no, '06' AS rela_category_cd, NVL(T2.subj_no,'') AS subj_no, NVL(T3.gl_subj_no,'') AS gl_subj_no, CASE WHEN T1.owe_cap_bal=0 THEN '1189' WHEN T1.overdue_principal_bal<>0 THEN '1335' WHEN T1.slugg_principal_bal<>0 THEN '1336' WHEN T1.doubt_acct_principal_bal<>0 THEN '1337' ELSE '' END, '0', 'F_FI_FIGL_LOAN_SUBJ_BAL_DTL' AS data_sourc_tab_name, T1.start_dt, T1.end_dt FROM {FDM}.F_FI_FIGL_LOAN_SUBJ_BAL_DTL T1 LEFT JOIN {FDM}.F_CO_CRBS_BIZ_CD T2 ON T2.biz_cd = (CASE WHEN T1.owe_cap_bal=0 THEN '1189' WHEN T1.overdue_principal_bal<>0 THEN '1335' WHEN T1.slugg_principal_bal<>0 THEN '1336' WHEN T1.doubt_acct_principal_bal<>0 THEN '1337' ELSE '' END) AND T2.start_dt <= T1.start_dt AND T2.end_dt > T1.start_dt LEFT JOIN {FDM}.F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA T3 ON T3.biz_cd = (CASE WHEN T1.owe_cap_bal=0 THEN '1189' WHEN T1.overdue_principal_bal<>0 THEN '1335' WHEN T1.slugg_principal_bal<>0 THEN '1336' WHEN T1.doubt_acct_principal_bal<>0 THEN '1337' ELSE '' END) AND T3.del_flag <> 'D' AND T3.start_dt <= T1.start_dt AND T3.end_dt > T1.start_dt WHERE T1.end_dt > DATE '{I_MATTY_DT}' AND T1.gl_acct_no='1189' AND T1.loan_rcpt_no LIKE 'FC%'",
+      "businessScenario": "数据仓库供应链金融业务-根据贷款余额状态动态确定供应链借据的科目关系，区分正常、逾期、呆滞、呆账本金科目",
+      "sqlFunction": "条件判断与多表关联插入",
+      "involvedTables": ["F_FI_FIGL_LOAN_SUBJ_BAL_DTL", "F_CO_CRBS_BIZ_CD", "F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA"],
+      "tableJoinLogic": "通过余额状态判断业务代号(1189正常/1335逾期/1336呆滞/1337呆账)，再关联科目对照表获取科目号",
+      "queryDimensions": "借据编号、关系种类代码(06余额)、科目号、业务代号、余额状态、日期",
+      "tags": ["供应链金融", "借据科目关系", "动态科目判断"],
+      "synonyms": ["供应链贷款科目", "BUSINESS_DUEBILL科目"],
+      "parameterDescription": "{I_MATTY_DT}: 滚动年开始累积日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "供应链贷款借据",
+          "derivedSql": "SELECT loan_rcpt_no FROM {FDM}.F_FI_FIGL_LOAN_SUBJ_BAL_DTL WHERE gl_acct_no = '1189' AND loan_rcpt_no LIKE 'FC%'",
+          "businessMeaning": "筛选总账账号为1189且借据编号以FC开头的供应链金融贷款借据",
+          "sourceTable": "F_FI_FIGL_LOAN_SUBJ_BAL_DTL"
+        },
+        {
+          "knowledgeName": "贷款本金状态判断",
+          "derivedSql": "SELECT loan_rcpt_no, CASE WHEN owe_cap_bal=0 THEN '正常' WHEN overdue_principal_bal<>0 THEN '逾期' WHEN slugg_principal_bal<>0 THEN '呆滞' WHEN doubt_acct_principal_bal<>0 THEN '呆账' ELSE '未知' END AS principal_status FROM {FDM}.F_FI_FIGL_LOAN_SUBJ_BAL_DTL WHERE gl_acct_no = '1189'",
+          "businessMeaning": "根据欠本余额、逾期本金余额、呆滞本金余额、呆账本金余额判断贷款本金状态",
+          "sourceTable": "F_FI_FIGL_LOAN_SUBJ_BAL_DTL"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": [
+    "F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ",
+    "F_AC_CRBS_LOAN_ACCT",
+    "F_CO_CRBS_BIZ_CD",
+    "F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA",
+    "F_FI_FIGL_LOAN_SUBJ_BAL_DTL",
+    "C_AGT_LOAN_RCPT_SUBJ_RELA_H"
+  ]
+}

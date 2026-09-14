@@ -1,0 +1,422 @@
+{
+  "scriptName": "dwa_c_org_org_inf.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T10:00:00",
+  "businessScenario": "共性层机构信息加工（信贷机构）",
+  "updateMethod": "切片表",
+  "targetTable": "C_ORG_ORG_INF",
+  "totalBlocks": 7,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_CO_CRMS_LOAN_BIZ_ORG",
+      "fdmScript": "dwa_f_co_crms_loan_biz_org.py",
+      "found": true,
+      "transformType": "F3拉链",
+      "tdmTable": "T_CRMS_ORG_INFO_{ETL_TX_DT}",
+      "odmTable": "O_CRMS_ORG_INFO",
+      "transformLogic": "TDM层信贷机构信息表，按日期分表，从FDM贴源层拉链表获取当日数据后映射到ODM层，字段名从源系统字段(如ORGID)映射为标准化字段(如org_no)"
+    },
+    {
+      "fdmTable": "F_CO_CRBS_ORG",
+      "fdmScript": "dwa_f_co_crbs_org.py",
+      "found": true,
+      "transformType": "F3拉链",
+      "tdmTable": "T_CRBS_PJGCS_{ETL_TX_DT}",
+      "odmTable": "O_CRBS_PJGCS",
+      "transformLogic": "TDM层核心系统机构信息表，按日期分表，从FDM贴源层拉链表获取当日数据后映射到ODM层，字段名从源系统字段(如YNGYJG)映射为标准化字段(如biz_org_no)"
+    },
+    {
+      "fdmTable": "F_CO_CRBS_ORG_PARAM_ADDIT_INF",
+      "fdmScript": "dwa_f_co_crbs_org_param_addit_inf.py",
+      "found": true,
+      "transformType": "F3拉链",
+      "tdmTable": "T_CRBS_PJGFJ_{ETL_TX_DT}",
+      "odmTable": "O_CRBS_PJGFJ",
+      "transformLogic": "TDM层核心系统机构参数附加信息表，按日期分表，从FDM贴源层拉链表获取当日数据后映射到ODM层，字段名从源系统字段(如yngyjg)映射为标准化字段(如biz_org_no)"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "临时表-信贷机构与核心机构合并基础数据",
+      "depth": 0,
+      "sqlCode": "INSERT INTO VT_C_ORG_ORG_INF_01 SELECT '{ETL_TX_DT}' AS data_dt, T1.org_no, T1.org_name, NULL AS org_abre, NULL AS level_scd_org_no, NULL AS level_scd_org_name, NULL AS level_scd_org_abre, T1.org_no AS level_one_org_no, T1.org_name AS level_one_org_name, NULL AS level_one_org_abre, T1.sup_org_no AS super_org_no, NULL AS super_org_name, NULL AS super_org_abre, T1.orglevel_cd AS org_lvl_cd, 'CRMS' AS sourc_sys, '2' AS org_type, T1.org_no AS biz_org_no FROM O_CRMS_ORG_INFO T1 WHERE T1.start_dt <= '{ETL_TX_DT}' AND T1.end_dt > '{ETL_TX_DT}' AND SUBSTR(T1.org_no, 1, 2) <> '70' UNION ALL SELECT '{ETL_TX_DT}' AS data_dt, T2.biz_org_no AS org_no, T2.org_cn_name AS org_name, T2.org_abre, NULL AS level_scd_org_no, NULL AS level_scd_org_name, NULL AS level_scd_org_abre, T2.biz_org_no AS level_one_org_no, T2.org_cn_name AS level_one_org_name, T2.org_abre AS level_one_org_abre, T2.acctg_super AS super_org_no, NULL AS super_org_name, NULL AS super_org_abre, T2.org_biz_lvl_cd AS org_lvl_cd, 'CRBS' AS sourc_sys, '2' AS org_type, T2.biz_org_no FROM O_CRBS_PJGCS T2 LEFT JOIN O_CRMS_ORG_INFO T3 ON T2.biz_org_no = T3.org_no AND T3.start_dt <= '{ETL_TX_DT}' AND T3.end_dt > '{ETL_TX_DT}' WHERE T2.start_dt <= '{ETL_TX_DT}' AND T2.end_dt > '{ETL_TX_DT}' AND T2.record_sts_cd = '0' AND SUBSTR(T2.biz_org_no, 1, 2) <> '70' AND T2.org_type_cd = '2' AND T3.org_no IS NULL",
+      "tracedSqlCode": "INSERT INTO VT_C_ORG_ORG_INF_01 SELECT '{ETL_TX_DT}' AS data_dt, T1.org_no, T1.org_name, NULL AS org_abre, NULL AS level_scd_org_no, NULL AS level_scd_org_name, NULL AS level_scd_org_abre, T1.org_no AS level_one_org_no, T1.org_name AS level_one_org_name, NULL AS level_one_org_abre, T1.sup_org_no AS super_org_no, NULL AS super_org_name, NULL AS super_org_abre, T1.orglevel_cd AS org_lvl_cd, 'CRMS' AS sourc_sys, '2' AS org_type, T1.org_no AS biz_org_no FROM O_CRMS_ORG_INFO T1 WHERE T1.start_dt <= '{ETL_TX_DT}' AND T1.end_dt > '{ETL_TX_DT}' AND SUBSTR(T1.org_no, 1, 2) <> '70' UNION ALL SELECT '{ETL_TX_DT}' AS data_dt, T2.biz_org_no AS org_no, T2.org_cn_name AS org_name, T2.org_abre, NULL AS level_scd_org_no, NULL AS level_scd_org_name, NULL AS level_scd_org_abre, T2.biz_org_no AS level_one_org_no, T2.org_cn_name AS level_one_org_name, T2.org_abre AS level_one_org_abre, T2.acctg_super AS super_org_no, NULL AS super_org_name, NULL AS super_org_abre, T2.org_biz_lvl_cd AS org_lvl_cd, 'CRBS' AS sourc_sys, '2' AS org_type, T2.biz_org_no FROM O_CRBS_PJGCS T2 LEFT JOIN O_CRMS_ORG_INFO T3 ON T2.biz_org_no = T3.org_no AND T3.start_dt <= '{ETL_TX_DT}' AND T3.end_dt > '{ETL_TX_DT}' WHERE T2.start_dt <= '{ETL_TX_DT}' AND T2.end_dt > '{ETL_TX_DT}' AND T2.record_sts_cd = '0' AND SUBSTR(T2.biz_org_no, 1, 2) <> '70' AND T2.org_type_cd = '2' AND T3.org_no IS NULL",
+      "businessScenario": "信贷系统-信贷机构与核心机构基础数据合并，CRMS为主要来源，CRBS仅取信贷独有的机构作为补充",
+      "sqlFunction": "多源UNION ALL合并查询",
+      "involvedTables": ["O_CRMS_ORG_INFO", "O_CRBS_PJGCS"],
+      "originalTables": ["F_CO_CRMS_LOAN_BIZ_ORG", "F_CO_CRBS_ORG"],
+      "tableJoinLogic": "CRMS机构表为主体，UNION ALL补充CRBS中信贷独有(CRMS中不存在的)机构，通过LEFT JOIN + IS NULL实现排重补充",
+      "queryDimensions": "数据日期、机构号、机构名称、上级机构号、机构层级代码、来源系统、机构类型",
+      "tags": ["机构信息", "机构管理", "信贷机构", "数据合并", "来源系统"],
+      "synonyms": ["信贷机构信息表", "机构基础数据"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "traceChains": [
+        {
+          "originalTable": "F_CO_CRMS_LOAN_BIZ_ORG",
+          "fdmScript": "dwa_f_co_crms_loan_biz_org.py",
+          "tdmTable": "T_CRMS_ORG_INFO_{ETL_TX_DT}",
+          "odmTable": "O_CRMS_ORG_INFO",
+          "fieldMappings": [
+            {"fdmField": "org_no", "odmField": "org_no", "description": "机构编号"},
+            {"fdmField": "org_name", "odmField": "org_name", "description": "机构名称"},
+            {"fdmField": "orglevel_cd", "odmField": "orglevel_cd", "description": "机构层级代码"},
+            {"fdmField": "sup_org_no", "odmField": "sup_org_no", "description": "上级机构号"},
+            {"fdmField": "brch_org_cd", "odmField": "brch_org_cd", "description": "分支行代码"},
+            {"fdmField": "status_cd", "odmField": "status_cd", "description": "状态代码"},
+            {"fdmField": "setup_dt", "odmField": "setup_dt", "description": "成立日期"},
+            {"fdmField": "org_addr", "odmField": "org_addr", "description": "机构地址"},
+            {"fdmField": "org_tel", "odmField": "org_tel", "description": "机构电话"},
+            {"fdmField": "start_dt", "odmField": "start_dt", "description": "生效日期"},
+            {"fdmField": "end_dt", "odmField": "end_dt", "description": "失效日期"}
+          ],
+          "filterConditions": "start_dt <= 数据日期 AND end_dt > 数据日期; SUBSTR(org_no,1,2)<>'70'排除村镇银行"
+        },
+        {
+          "originalTable": "F_CO_CRBS_ORG",
+          "fdmScript": "dwa_f_co_crbs_org.py",
+          "tdmTable": "T_CRBS_PJGCS_{ETL_TX_DT}",
+          "odmTable": "O_CRBS_PJGCS",
+          "fieldMappings": [
+            {"fdmField": "biz_org_no", "odmField": "biz_org_no", "description": "业务机构号"},
+            {"fdmField": "org_cn_name", "odmField": "org_cn_name", "description": "机构中文名称"},
+            {"fdmField": "org_abre", "odmField": "org_abre", "description": "机构简称"},
+            {"fdmField": "org_type_cd", "odmField": "org_type_cd", "description": "机构类型代码"},
+            {"fdmField": "org_biz_lvl_cd", "odmField": "org_biz_lvl_cd", "description": "机构业务层级代码"},
+            {"fdmField": "acctg_super", "odmField": "acctg_super", "description": "核算上级机构"},
+            {"fdmField": "record_sts_cd", "odmField": "record_sts_cd", "description": "记录状态代码"},
+            {"fdmField": "pboc_bank_no", "odmField": "pboc_bank_no", "description": "人行银行号"},
+            {"fdmField": "zone_cd", "odmField": "zone_cd", "description": "地区代码"},
+            {"fdmField": "start_dt", "odmField": "start_dt", "description": "生效日期"},
+            {"fdmField": "end_dt", "odmField": "end_dt", "description": "失效日期"}
+          ],
+          "filterConditions": "record_sts_cd='0'(有效记录); org_type_cd='2'(信贷机构); start_dt <= 数据日期 AND end_dt > 数据日期"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "信贷机构双源合并逻辑",
+          "derivedSql": "SELECT org_no, org_name, 'CRMS' AS sourc_sys FROM O_CRMS_ORG_INFO WHERE start_dt<='{DT}' AND end_dt>'{DT}' AND SUBSTR(org_no,1,2)<>'70' UNION ALL SELECT biz_org_no, org_cn_name, 'CRBS' AS sourc_sys FROM O_CRBS_PJGCS T2 WHERE record_sts_cd='0' AND org_type_cd='2' AND start_dt<='{DT}' AND end_dt>'{DT}' AND NOT EXISTS(SELECT 1 FROM O_CRMS_ORG_INFO T3 WHERE T3.org_no=T2.biz_org_no AND T3.start_dt<='{DT}' AND T3.end_dt>'{DT}')",
+          "businessMeaning": "信贷机构以CRMS(信贷管理系统)为主数据源，CRBS(核心系统)中信贷独有的机构作为补充，两源合并覆盖全部信贷机构",
+          "sourceTable": "O_CRMS_ORG_INFO",
+          "originalTable": "F_CO_CRMS_LOAN_BIZ_ORG"
+        },
+        {
+          "knowledgeName": "村镇银行排除",
+          "derivedSql": "SELECT org_no, org_name FROM O_CRMS_ORG_INFO WHERE start_dt<='{DT}' AND end_dt>'{DT}' AND SUBSTR(org_no,1,2)<>'70'",
+          "businessMeaning": "机构号前两位为'70'的是村镇银行机构，信贷机构信息加工时需排除",
+          "sourceTable": "O_CRMS_ORG_INFO",
+          "originalTable": "F_CO_CRMS_LOAN_BIZ_ORG"
+        },
+        {
+          "knowledgeName": "有效机构记录判断",
+          "derivedSql": "SELECT biz_org_no, org_cn_name FROM O_CRBS_PJGCS WHERE record_sts_cd='0' AND start_dt<='{DT}' AND end_dt>'{DT}'",
+          "businessMeaning": "核心系统机构表通过record_sts_cd='0'筛选有效记录，结合拉链日期(start_dt/end_dt)获取当日快照",
+          "sourceTable": "O_CRBS_PJGCS",
+          "originalTable": "F_CO_CRBS_ORG"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "UPDATE",
+      "blockName": "计算机构层级-总行/分行/支行",
+      "depth": 0,
+      "sqlCode": "UPDATE VT_C_ORG_ORG_INF_01 SET org_lvl_cd = CASE WHEN LENGTH(org_no) = 3 THEN '1' WHEN LENGTH(org_no) = 6 THEN '2' WHEN LENGTH(org_no) IN (7, 9, 12) THEN '3' ELSE org_lvl_cd END, org_lvl_cd = CASE WHEN org_no IN ('260', '270', '280') THEN '1' WHEN LENGTH(org_no) = 6 AND SUBSTR(org_no, 4, 1) = '9' THEN '2' WHEN LENGTH(org_no) = 7 AND SUBSTR(org_no, 5, 1) = '9' THEN '3' ELSE org_lvl_cd END",
+      "tracedSqlCode": "UPDATE VT_C_ORG_ORG_INF_01 SET org_lvl_cd = CASE WHEN LENGTH(org_no) = 3 THEN '1' WHEN LENGTH(org_no) = 6 THEN '2' WHEN LENGTH(org_no) IN (7, 9, 12) THEN '3' ELSE org_lvl_cd END, org_lvl_cd = CASE WHEN org_no IN ('260', '270', '280') THEN '1' WHEN LENGTH(org_no) = 6 AND SUBSTR(org_no, 4, 1) = '9' THEN '2' WHEN LENGTH(org_no) = 7 AND SUBSTR(org_no, 5, 1) = '9' THEN '3' ELSE org_lvl_cd END",
+      "businessScenario": "机构信息-根据机构号长度计算机构层级（总行1级/分行2级/支行3级）",
+      "sqlFunction": "条件更新/层级计算",
+      "involvedTables": ["O_CRMS_ORG_INFO", "O_CRBS_PJGCS"],
+      "originalTables": ["F_CO_CRMS_LOAN_BIZ_ORG", "F_CO_CRBS_ORG"],
+      "tableJoinLogic": "在临时表上执行UPDATE，基于机构号长度推导机构层级",
+      "queryDimensions": "机构号长度、机构号前缀",
+      "tags": ["机构层级", "层级计算", "总行", "分行", "支行"],
+      "synonyms": ["机构级别", "机构等级"],
+      "traceChains": [],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "机构层级判断规则",
+          "derivedSql": "SELECT org_no, CASE WHEN org_no IN ('260','270','280') THEN '1' WHEN LENGTH(org_no)=3 THEN '1' WHEN LENGTH(org_no)=6 AND SUBSTR(org_no,4,1)='9' THEN '2' WHEN LENGTH(org_no)=6 THEN '2' WHEN LENGTH(org_no)=7 AND SUBSTR(org_no,5,1)='9' THEN '3' WHEN LENGTH(org_no) IN (7,9,12) THEN '3' END AS org_lvl_cd FROM O_CRMS_ORG_INFO",
+          "businessMeaning": "机构号长度3位=总行(1级)；6位且第4位非9=分行(2级)、第4位为9=大支行(2级)；7位及9/12位=支行(3级)、7位且第5位为9=分理处(3级)；260/270/280特殊机构=总行(1级)",
+          "sourceTable": "O_CRMS_ORG_INFO",
+          "originalTable": "F_CO_CRMS_LOAN_BIZ_ORG"
+        },
+        {
+          "knowledgeName": "机构层级代码含义",
+          "derivedSql": "SELECT DISTINCT org_lvl_cd, CASE org_lvl_cd WHEN '1' THEN '总行' WHEN '2' THEN '分行/大支行' WHEN '3' THEN '支行/分理处' END AS lvl_name FROM VT_C_ORG_ORG_INF_01",
+          "businessMeaning": "1-总行级(一级), 2-分行/大支行(二级), 3-支行/分理处(三级)",
+          "sourceTable": "VT_C_ORG_ORG_INF_01",
+          "originalTable": "VT_C_ORG_ORG_INF_01"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "UPDATE",
+      "blockName": "计算上级机构名称和简称",
+      "depth": 0,
+      "sqlCode": "UPDATE VT_C_ORG_ORG_INF_01 T SET (super_org_name, super_org_abre) = (SELECT P.org_name, P.org_abre FROM VT_C_ORG_ORG_INF_01 P WHERE P.org_no = T.super_org_no) WHERE super_org_no IS NOT NULL",
+      "tracedSqlCode": "UPDATE VT_C_ORG_ORG_INF_01 T SET (super_org_name, super_org_abre) = (SELECT P.org_name, P.org_abre FROM VT_C_ORG_ORG_INF_01 P WHERE P.org_no = T.super_org_no) WHERE super_org_no IS NOT NULL",
+      "businessScenario": "机构信息-自关联获取上级机构名称和简称",
+      "sqlFunction": "自关联更新",
+      "involvedTables": ["O_CRMS_ORG_INFO", "O_CRBS_PJGCS"],
+      "originalTables": ["F_CO_CRMS_LOAN_BIZ_ORG", "F_CO_CRBS_ORG"],
+      "tableJoinLogic": "临时表自关联，通过上级机构号super_org_no回填上级机构的名称和简称",
+      "queryDimensions": "上级机构号、上级机构名称、上级机构简称",
+      "tags": ["机构层级", "上级机构", "自关联"],
+      "synonyms": ["父机构", "上级行"],
+      "traceChains": [],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "机构层级自关联",
+          "derivedSql": "SELECT T.org_no, T.org_name, T.super_org_no, P.org_name AS super_org_name FROM VT_C_ORG_ORG_INF_01 T LEFT JOIN VT_C_ORG_ORG_INF_01 P ON T.super_org_no = P.org_no",
+          "businessMeaning": "通过上级机构号关联同一机构表，获取上级机构的名称，实现机构树层级关系的完整填充",
+          "sourceTable": "VT_C_ORG_ORG_INF_01",
+          "originalTable": "VT_C_ORG_ORG_INF_01"
+        }
+      ]
+    },
+    {
+      "blockIndex": 4,
+      "parentBlockIndex": 0,
+      "blockType": "UPDATE",
+      "blockName": "计算二级行（level_scd）信息",
+      "depth": 0,
+      "sqlCode": "UPDATE VT_C_ORG_ORG_INF_01 T SET (level_scd_org_no, level_scd_org_name, level_scd_org_abre) = (SELECT P.org_no, P.org_name, P.org_abre FROM VT_C_ORG_ORG_INF_01 P WHERE CASE WHEN LENGTH(T.org_no) = 3 THEN P.org_no = T.org_no WHEN T.org_lvl_cd = '3' THEN SUBSTR(T.org_no, 1, 7) = SUBSTR(P.org_no, 1, 6) AND P.org_lvl_cd = '2' WHEN T.org_lvl_cd = '2' THEN P.org_no = T.level_one_org_no ELSE NULL END)",
+      "tracedSqlCode": "UPDATE VT_C_ORG_ORG_INF_01 T SET (level_scd_org_no, level_scd_org_name, level_scd_org_abre) = (SELECT P.org_no, P.org_name, P.org_abre FROM VT_C_ORG_ORG_INF_01 P WHERE CASE WHEN LENGTH(T.org_no) = 3 THEN P.org_no = T.org_no WHEN T.org_lvl_cd = '3' THEN SUBSTR(T.org_no, 1, 7) = SUBSTR(P.org_no, 1, 6) AND P.org_lvl_cd = '2' WHEN T.org_lvl_cd = '2' THEN P.org_no = T.level_one_org_no ELSE NULL END)",
+      "businessScenario": "机构信息-根据层级计算归口二级行（分行/大支行）信息",
+      "sqlFunction": "层级自关联更新",
+      "involvedTables": ["O_CRMS_ORG_INFO", "O_CRBS_PJGCS"],
+      "originalTables": ["F_CO_CRMS_LOAN_BIZ_ORG", "F_CO_CRBS_ORG"],
+      "tableJoinLogic": "总行：二级行=自身；二级行：二级行=归属一级行；支行：取上级7位机构号匹配的二级行（前6位匹配）",
+      "queryDimensions": "机构号、机构层级、二级行号、二级行名称",
+      "tags": ["机构层级", "二级行", "归口管理机构"],
+      "synonyms": ["归口二级行", "管辖行"],
+      "traceChains": [],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "二级行归口逻辑",
+          "derivedSql": "SELECT T.org_no, T.org_name, T.org_lvl_cd, CASE WHEN LENGTH(T.org_no)=3 THEN T.org_no WHEN T.org_lvl_cd='3' THEN SUBSTR(T.org_no,1,7) WHEN T.org_lvl_cd='2' THEN T.level_one_org_no END AS level_scd_org_no FROM VT_C_ORG_ORG_INF_01 T",
+          "businessMeaning": "三级支行向上归口到二级行：取机构号前7位；二级行归口到自身所属一级行；总行归口到自身。用于构建机构层级树。",
+          "sourceTable": "VT_C_ORG_ORG_INF_01",
+          "originalTable": "VT_C_ORG_ORG_INF_01"
+        }
+      ]
+    },
+    {
+      "blockIndex": 5,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "插入结果表-关联机构参数配置和附加信息",
+      "depth": 0,
+      "sqlCode": "INSERT INTO C_ORG_ORG_INF (data_dt, org_no, org_name, org_abre, level_scd_org_no, level_scd_org_name, level_scd_org_abre, level_one_org_no, level_one_org_name, level_one_org_abre, super_org_no, super_org_name, super_org_abre, org_lvl_cd, city_district_flag, area_cd, pboc_large_pay_bank_no, org_type_cd, org_attac_inf, cty_scope_sbubrch_flag, empha_cty_scope_sbubrch_flag, crbs_org_flag, land_scope_lvl_cd) SELECT T1.data_dt, T1.org_no, T1.org_name, T1.org_abre, T1.level_scd_org_no, T1.level_scd_org_name, T1.level_scd_org_abre, T1.level_one_org_no, T1.level_one_org_name, T1.level_one_org_abre, T1.super_org_no, T1.super_org_name, T1.super_org_abre, T1.org_lvl_cd, T2.city_district_flag, T3.zone_cd AS area_cd, T3.pboc_bank_no AS pboc_large_pay_bank_no, '2' AS org_type_cd, T2.org_attac_inf, T2.cty_scope_sbubrch_flag, CASE WHEN T3.org_vault_flag = '1' THEN '1' ELSE T2.empha_cty_scope_sbubrch_flag END AS empha_cty_scope_sbubrch_flag, CASE WHEN T1.sourc_sys = 'CRBS' THEN '1' ELSE '0' END AS crbs_org_flag, NVL(T4.lvl_cd, T5.land_scope_lvl_cd) AS land_scope_lvl_cd FROM VT_C_ORG_ORG_INF_01 T1 LEFT JOIN C_ORG_ORG_ORGPARAM_CONFIG T2 ON T1.org_no = T2.org_no LEFT JOIN O_CRBS_PJGCS T3 ON T1.biz_org_no = T3.biz_org_no AND T3.start_dt <= '{ETL_TX_DT}' AND T3.end_dt > '{ETL_TX_DT}' AND T3.record_sts_cd = '0' AND T3.org_type_cd = '2' LEFT JOIN O_CRBS_PJGFJ T4 ON T1.biz_org_no = T4.biz_org_no AND T4.start_dt <= '{ETL_TX_DT}' AND T4.end_dt > '{ETL_TX_DT}' AND T4.record_sts_cd = '0' LEFT JOIN C_ORG_ORG_PARAM T5 ON T1.org_no = T5.org_no",
+      "tracedSqlCode": "INSERT INTO C_ORG_ORG_INF (data_dt, org_no, org_name, org_abre, level_scd_org_no, level_scd_org_name, level_scd_org_abre, level_one_org_no, level_one_org_name, level_one_org_abre, super_org_no, super_org_name, super_org_abre, org_lvl_cd, city_district_flag, area_cd, pboc_large_pay_bank_no, org_type_cd, org_attac_inf, cty_scope_sbubrch_flag, empha_cty_scope_sbubrch_flag, crbs_org_flag, land_scope_lvl_cd) SELECT T1.data_dt, T1.org_no, T1.org_name, T1.org_abre, T1.level_scd_org_no, T1.level_scd_org_name, T1.level_scd_org_abre, T1.level_one_org_no, T1.level_one_org_name, T1.level_one_org_abre, T1.super_org_no, T1.super_org_name, T1.super_org_abre, T1.org_lvl_cd, T2.city_district_flag, T3.zone_cd AS area_cd, T3.pboc_bank_no AS pboc_large_pay_bank_no, '2' AS org_type_cd, T2.org_attac_inf, T2.cty_scope_sbubrch_flag, CASE WHEN T3.org_vault_flag = '1' THEN '1' ELSE T2.empha_cty_scope_sbubrch_flag END AS empha_cty_scope_sbubrch_flag, CASE WHEN T1.sourc_sys = 'CRBS' THEN '1' ELSE '0' END AS crbs_org_flag, NVL(T4.lvl_cd, T5.land_scope_lvl_cd) AS land_scope_lvl_cd FROM VT_C_ORG_ORG_INF_01 T1 LEFT JOIN C_ORG_ORG_ORGPARAM_CONFIG T2 ON T1.org_no = T2.org_no LEFT JOIN O_CRBS_PJGCS T3 ON T1.biz_org_no = T3.biz_org_no AND T3.start_dt <= '{ETL_TX_DT}' AND T3.end_dt > '{ETL_TX_DT}' AND T3.record_sts_cd = '0' AND T3.org_type_cd = '2' LEFT JOIN O_CRBS_PJGFJ T4 ON T1.biz_org_no = T4.biz_org_no AND T4.start_dt <= '{ETL_TX_DT}' AND T4.end_dt > '{ETL_TX_DT}' AND T4.record_sts_cd = '0' LEFT JOIN C_ORG_ORG_PARAM T5 ON T1.org_no = T5.org_no",
+      "businessScenario": "共性层机构管理-整合机构基础数据、参数配置、附加信息，生成完整机构信息表",
+      "sqlFunction": "多表关联INSERT生成最终结果",
+      "involvedTables": ["O_CRMS_ORG_INFO", "O_CRBS_PJGCS", "O_CRBS_PJGFJ"],
+      "originalTables": ["F_CO_CRMS_LOAN_BIZ_ORG", "F_CO_CRBS_ORG", "F_CO_CRBS_ORG_PARAM_ADDIT_INF"],
+      "tableJoinLogic": "机构临时表 LEFT JOIN 机构参数配置表(C_ORG_ORG_ORGPARAM_CONFIG) ON 机构号; LEFT JOIN 核心机构表(O_CRBS_PJGCS) ON 业务机构号获取地区代码和人行银行号; LEFT JOIN 机构附加信息表(O_CRBS_PJGFJ) ON 业务机构号获取地域范围层级; LEFT JOIN 机构参数表(C_ORG_ORG_PARAM) ON 机构号获取备用层级",
+      "queryDimensions": "机构号、机构名称、机构简称、二级行、一级行、上级机构、机构层级、城区标志、地区代码、人行支付行号、机构类型、附加信息、城区支行标志、核心机构标志、地域范围层级",
+      "tags": ["机构信息", "参数配置", "附加信息", "最终汇总"],
+      "synonyms": ["机构宽表", "机构全量表"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "traceChains": [
+        {
+          "originalTable": "F_CO_CRBS_ORG_PARAM_ADDIT_INF",
+          "fdmScript": "dwa_f_co_crbs_org_param_addit_inf.py",
+          "tdmTable": "T_CRBS_PJGFJ_{ETL_TX_DT}",
+          "odmTable": "O_CRBS_PJGFJ",
+          "fieldMappings": [
+            {"fdmField": "biz_org_no", "odmField": "biz_org_no", "description": "业务机构号"},
+            {"fdmField": "lvl_cd", "odmField": "lvl_cd", "description": "层级代码(用于land_scope_lvl_cd)"},
+            {"fdmField": "belo_zone", "odmField": "belo_zone", "description": "所属地区"},
+            {"fdmField": "rmk", "odmField": "rmk", "description": "备注"},
+            {"fdmField": "record_sts_cd", "odmField": "record_sts_cd", "description": "记录状态代码"},
+            {"fdmField": "stand_appl_field_1", "odmField": "stand_appl_field_1", "description": "标准应用字段1"},
+            {"fdmField": "start_dt", "odmField": "start_dt", "description": "生效日期"},
+            {"fdmField": "end_dt", "odmField": "end_dt", "description": "失效日期"}
+          ],
+          "filterConditions": "record_sts_cd='0'; start_dt <= 数据日期 AND end_dt > 数据日期"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "核心机构标志(crbs_org_flag)判断",
+          "derivedSql": "SELECT org_no, CASE WHEN sourc_sys='CRBS' THEN '1' ELSE '0' END AS crbs_org_flag FROM VT_C_ORG_ORG_INF_01",
+          "businessMeaning": "来源系统为CRBS的机构设置crbs_org_flag=1，表示该机构来源于核心系统而非信贷系统",
+          "sourceTable": "VT_C_ORG_ORG_INF_01",
+          "originalTable": "VT_C_ORG_ORG_INF_01"
+        },
+        {
+          "knowledgeName": "机构类型代码(org_type_cd)信贷机构",
+          "derivedSql": "SELECT DISTINCT org_no, '2' AS org_type_cd FROM O_CRMS_ORG_INFO WHERE start_dt<='{DT}' AND end_dt>'{DT}'",
+          "businessMeaning": "信贷机构加工脚本固定设置org_type_cd='2'，表示该批次数据为信贷机构类型",
+          "sourceTable": "O_CRMS_ORG_INFO",
+          "originalTable": "F_CO_CRMS_LOAN_BIZ_ORG"
+        },
+        {
+          "knowledgeName": "重点城区支行标志(empha_cty_scope_sbubrch_flag)判断",
+          "derivedSql": "SELECT T1.org_no, CASE WHEN T3.org_vault_flag='1' THEN '1' ELSE T2.empha_cty_scope_sbubrch_flag END AS empha_cty_scope_sbubrch_flag FROM VT_C_ORG_ORG_INF_01 T1 LEFT JOIN C_ORG_ORG_ORGPARAM_CONFIG T2 ON T1.org_no=T2.org_no LEFT JOIN O_CRBS_PJGCS T3 ON T1.biz_org_no=T3.biz_org_no",
+          "businessMeaning": "重点城区支行标志优先取核心系统的库房标志(org_vault_flag='1')，否则取机构参数配置表的值",
+          "sourceTable": "O_CRBS_PJGCS",
+          "originalTable": "F_CO_CRBS_ORG"
+        },
+        {
+          "knowledgeName": "地域范围层级(land_scope_lvl_cd)取值优先级",
+          "derivedSql": "SELECT T1.org_no, NVL(T4.lvl_cd, T5.land_scope_lvl_cd) AS land_scope_lvl_cd FROM VT_C_ORG_ORG_INF_01 T1 LEFT JOIN O_CRBS_PJGFJ T4 ON T1.biz_org_no=T4.biz_org_no LEFT JOIN C_ORG_ORG_PARAM T5 ON T1.org_no=T5.org_no",
+          "businessMeaning": "地域范围层级优先取值于机构附加信息表(O_CRBS_PJGFJ)的lvl_cd，若无则取机构参数表(C_ORG_ORG_PARAM)的land_scope_lvl_cd作为兜底",
+          "sourceTable": "O_CRBS_PJGFJ",
+          "originalTable": "F_CO_CRBS_ORG_PARAM_ADDIT_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 6,
+      "parentBlockIndex": 0,
+      "blockType": "UPDATE",
+      "blockName": "更新特殊机构名称",
+      "depth": 0,
+      "sqlCode": "UPDATE C_ORG_ORG_INF SET org_name = '总行营业部' WHERE org_no = '260001'; UPDATE C_ORG_ORG_INF SET org_abre = '总行营业部' WHERE org_no = '260001'; UPDATE C_ORG_ORG_INF SET super_org_name = '总行' WHERE org_no LIKE '260%' AND org_no <> '260'; UPDATE C_ORG_ORG_INF SET level_one_org_name = '总行' WHERE org_no LIKE '260%' AND org_no <> '260'",
+      "tracedSqlCode": "UPDATE C_ORG_ORG_INF SET org_name = '总行营业部' WHERE org_no = '260001'; UPDATE C_ORG_ORG_INF SET org_abre = '总行营业部' WHERE org_no = '260001'; UPDATE C_ORG_ORG_INF SET super_org_name = '总行' WHERE org_no LIKE '260%' AND org_no <> '260'; UPDATE C_ORG_ORG_INF SET level_one_org_name = '总行' WHERE org_no LIKE '260%' AND org_no <> '260'",
+      "businessScenario": "机构信息-特殊机构名称硬编码修正",
+      "sqlFunction": "批量UPDATE修正",
+      "involvedTables": ["O_CRMS_ORG_INFO"],
+      "originalTables": ["F_CO_CRMS_LOAN_BIZ_ORG"],
+      "tableJoinLogic": "直接更新目标表C_ORG_ORG_INF中特定机构号的名称字段",
+      "queryDimensions": "机构号",
+      "tags": ["机构信息", "特殊处理", "名称修正"],
+      "synonyms": ["机构名称修正", "硬编码修正"],
+      "traceChains": [],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "总行营业部特殊处理",
+          "derivedSql": "SELECT org_no, org_name, org_abre FROM C_ORG_ORG_INF WHERE org_no='260001'",
+          "businessMeaning": "机构号260001（总行营业部）虽然在系统中为二级机构，但在机构信息表中名称统一为'总行营业部'",
+          "sourceTable": "C_ORG_ORG_INF",
+          "originalTable": "C_ORG_ORG_INF"
+        },
+        {
+          "knowledgeName": "260开头机构归属总行",
+          "derivedSql": "SELECT org_no, super_org_name, level_one_org_name FROM C_ORG_ORG_INF WHERE org_no LIKE '260%' AND org_no<>'260'",
+          "businessMeaning": "所有以260开头的机构（除260本身外），其上级机构和一级机构均归口为'总行'",
+          "sourceTable": "C_ORG_ORG_INF",
+          "originalTable": "C_ORG_ORG_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 7,
+      "parentBlockIndex": 0,
+      "blockType": "UPDATE",
+      "blockName": "更新一级行（level_one）缺失信息",
+      "depth": 0,
+      "sqlCode": "UPDATE C_ORG_ORG_INF T SET (level_one_org_no, level_one_org_name, level_one_org_abre) = (SELECT P.level_one_org_no, P.level_one_org_name, P.level_one_org_abre FROM C_ORG_ORG_INF P WHERE P.org_no = T.super_org_no) WHERE level_one_org_no IS NULL OR level_one_org_name IS NULL",
+      "tracedSqlCode": "UPDATE C_ORG_ORG_INF T SET (level_one_org_no, level_one_org_name, level_one_org_abre) = (SELECT P.level_one_org_no, P.level_one_org_name, P.level_one_org_abre FROM C_ORG_ORG_INF P WHERE P.org_no = T.super_org_no) WHERE level_one_org_no IS NULL OR level_one_org_name IS NULL",
+      "businessScenario": "机构信息-补全一级行信息，通过上级机构继承",
+      "sqlFunction": "自关联UPDATE继承",
+      "involvedTables": ["O_CRMS_ORG_INFO", "O_CRBS_PJGCS"],
+      "originalTables": ["F_CO_CRMS_LOAN_BIZ_ORG", "F_CO_CRBS_ORG"],
+      "tableJoinLogic": "目标表C_ORG_ORG_INF自关联，取上级机构(super_org_no)的一级行信息补全当前机构缺失的一级行信息",
+      "queryDimensions": "一级行号、一级行名称、一级行简称",
+      "tags": ["机构层级", "一级行", "数据补全"],
+      "synonyms": ["一级行补全", "层级继承"],
+      "traceChains": [],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "一级行信息继承规则",
+          "derivedSql": "SELECT T.org_no, T.org_name, T.level_one_org_no, P.level_one_org_no AS inherit_level_one_org_no FROM C_ORG_ORG_INF T LEFT JOIN C_ORG_ORG_INF P ON T.super_org_no = P.org_no WHERE T.level_one_org_no IS NULL",
+          "businessMeaning": "当机构的一级行信息缺失时，向上级机构(直属上级行)继承其一级行信息，确保所有机构都有完整的一级行归属",
+          "sourceTable": "C_ORG_ORG_INF",
+          "originalTable": "C_ORG_ORG_INF"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["O_CRMS_ORG_INFO", "O_CRBS_PJGCS", "O_CRBS_PJGFJ", "C_ORG_ORG_ORGPARAM_CONFIG", "C_ORG_ORG_PARAM"],
+  "allOriginalTables": ["F_CO_CRMS_LOAN_BIZ_ORG", "F_CO_CRBS_ORG", "F_CO_CRBS_ORG_PARAM_ADDIT_INF", "C_ORG_ORG_ORGPARAM_CONFIG", "C_ORG_ORG_PARAM"],
+  "traceSummary": {
+    "totalFdmTables": 3,
+    "scriptsFound": 3,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "信贷机构双源合并规则",
+      "condition": "CRMS机构 UNION ALL (CRBS机构 WHERE 不在CRMS中)",
+      "description": "信贷机构以CRMS(信贷管理系统)为主数据源，CRBS(核心系统)中信贷独有的机构作为补充，通过LEFT JOIN+IS NULL排除已在CRMS存在的机构"
+    },
+    {
+      "ruleName": "村镇银行排除规则",
+      "condition": "SUBSTR(org_no, 1, 2) <> '70'",
+      "description": "机构号前两位为70的是村镇银行机构，信贷机构加工时需排除"
+    },
+    {
+      "ruleName": "有效记录筛选规则",
+      "condition": "start_dt <= 数据日期 AND end_dt > 数据日期; record_sts_cd = '0'(仅CRBS)",
+      "description": "基于拉链表(start_dt/end_dt)取当日快照数据，CRBS表额外要求record_sts_cd='0'有效记录"
+    },
+    {
+      "ruleName": "卡机构排除规则（已废弃）",
+      "condition": "biz_org_no NOT LIKE '%93'（已注释/20251126起移除）",
+      "description": "历史上曾排除以93结尾的卡机构，2025年11月26日起不再排除卡机构，机构层级判断也已移除对%93的过滤"
+    },
+    {
+      "ruleName": "机构层级判断规则",
+      "condition": "LENGTH(org_no)=3→总行(1级); LENGTH(org_no)=6且第4位非9→分行(2级); LENGTH(org_no)=6且第4位为9→大支行(2级); LENGTH(org_no)=7/9/12→支行(3级); 260/270/280→总行(1级)",
+      "description": "根据机构号长度及特征位自动推导机构层级"
+    },
+    {
+      "ruleName": "来源系统标注规则",
+      "condition": "sourc_sys='CRMS'（默认）; sourc_sys='CRBS'（仅CRBS独有机构）",
+      "description": "来源系统标注用于crbs_org_flag判断，CRBS来源机构标记crbs_org_flag='1'"
+    },
+    {
+      "ruleName": "机构类型标识规则",
+      "condition": "org_type_cd='2'",
+      "description": "本脚本加工的机构类型固定为'2'（信贷机构），与核心机构加工脚本(org_inf_crbs.py)区分"
+    },
+    {
+      "ruleName": "一级行信息补全规则",
+      "condition": "level_one_org_no IS NULL OR level_one_org_name IS NULL → 从上级机构继承",
+      "description": "缺失一级行信息时通过上级机构(super_org_no)继承其一级行信息，确保层级树完整性"
+    }
+  ],
+  "businessDomain": "机构管理",
+  "dataSource": ["CRMS-信贷管理系统", "CRBS-核心银行系统"],
+  "codeValues": {
+    "org_lvl_cd": {
+      "1": "总行/一级机构",
+      "2": "分行/大支行/二级机构",
+      "3": "支行/分理处/三级机构"
+    },
+    "org_type_cd": {
+      "2": "信贷机构"
+    },
+    "sourc_sys": {
+      "CRMS": "信贷管理系统（主数据源）",
+      "CRBS": "核心银行系统（补充数据源）"
+    },
+    "crbs_org_flag": {
+      "0": "非核心系统机构（来源于CRMS）",
+      "1": "核心系统机构（来源于CRBS）"
+    },
+    "record_sts_cd": {
+      "0": "有效记录"
+    }
+  },
+  "notes": [
+    "20240619后仅保留信贷机构加工逻辑，核心机构拆分到dwa_c_org_org_inf_crbs.py脚本",
+    "本脚本为切片表更新模式，按ETL_TX_DT重新生成当日数据",
+    "CRMS为主要数据源，CRBS仅为信贷独有机构（CRMS不存在的机构）作为补充",
+    "20251126起移除卡机构（%93结尾）的排除逻辑，机构层级判断也不再过滤%93",
+    "机构层级通过机构号长度规则自动推导，非直接取源表字段",
+    "总行营业部(260001)等特殊机构名称通过硬编码UPDATE修正",
+    "一级行信息缺失时通过上级机构继承补全，保证层级树完整"
+  ]
+}

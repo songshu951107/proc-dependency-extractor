@@ -7,6 +7,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -48,8 +53,23 @@ public class PyProcParser {
      * @param filePath 文件路径
      * @return 解析结果
      */
+    /**
+     * 自动检测文件编码：优先 UTF-8 严格解码，失败则回退 GBK（兼容 # coding=gbk 脚本）。
+     */
+    private String readContentWithEncodingDetection(Path filePath) throws IOException {
+        byte[] bytes = Files.readAllBytes(filePath);
+        try {
+            CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT);
+            return decoder.decode(ByteBuffer.wrap(bytes)).toString();
+        } catch (CharacterCodingException e) {
+            return new String(bytes, Charset.forName("GBK"));
+        }
+    }
+
     public ProcMetadata parse(Path filePath) throws IOException {
-        String content = Files.readString(filePath, StandardCharsets.UTF_8);
+        String content = readContentWithEncodingDetection(filePath);
 
         ProcMetadata metadata = new ProcMetadata();
         metadata.setFilePath(filePath.toString());

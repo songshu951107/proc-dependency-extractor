@@ -1,0 +1,1 @@
+{"schema":"cdm","tableShortName":"c_com_exch_rate","fieldName":"dom_currcy_convt_price","direction":"DOWNSTREAM","maxDepth":5,"analyzeReportImpact":true}

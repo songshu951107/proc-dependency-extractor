@@ -19,8 +19,13 @@
     <div v-if="result" class="result">
       <h3>生成结果</h3>
       <el-tag :type="statusType" style="margin-bottom: 8px">{{ statusText }}</el-tag>
+      <el-alert
+        v-if="result.errorMessage"
+        type="warning" :closable="false" :title="result.errorMessage" show-icon
+        style="margin-bottom: 8px"
+      />
       <el-alert type="warning" :closable="false" title="SQL 未经执行验证，请在数据库客户端人工确认后执行" style="margin-bottom: 8px" />
-      <pre class="sql-block">{{ result.sql }}</pre>
+      <pre v-if="result.sql" class="sql-block">{{ result.sql }}</pre>
 
       <template v-if="result.assumptions && result.assumptions.length">
         <h4>AI 假设</h4>

@@ -1,0 +1,215 @@
+{
+  "scriptName": "dwa_c_com_cd_trans.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T00:00:00",
+  "businessScenario": "共性层通用业务-构建基础层到共性层的码值转换映射关系，解决代码表号、字段名、表名的一致性问题",
+  "updateMethod": "F3无删除拉链（增量拉链，有变更时新增复写，不做删除）",
+  "targetTable": "C_COM_CD_TRANS",
+  "totalBlocks": 6,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_CO_TRANS_CD",
+      "fdmScript": "N/A",
+      "found": false,
+      "odmTable": "N/A（配置型码表，由多系统代码标准化配置产生）",
+      "transformLogic": "基础层标准化码值转换表，存储各系统源码值到标准码值的映射关系，由代码标准化流程维护，非单一ETL脚本产出"
+    },
+    {
+      "fdmTable": "F_CO_CD",
+      "fdmScript": "N/A",
+      "found": false,
+      "odmTable": "N/A（配置型码表，由各系统代码配置统一管理产生）",
+      "transformLogic": "基础层代码表，存储各系统原始的码值定义，由代码配置管理流程维护，非单一ETL脚本产出"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "DELETE/UPDATE",
+      "blockName": "重跑预处理-删除新数据并打开闭链",
+      "depth": 0,
+      "sqlCode": "DELETE FROM CDM.C_COM_CD_TRANS WHERE start_dt >= DATE '{ETL_TX_DT}';\nUPDATE CDM.C_COM_CD_TRANS SET end_dt = DATE '{MAX_DATE}' WHERE end_dt >= DATE '{ETL_TX_DT}' AND end_dt < DATE '{MAX_DATE}';",
+      "tracedSqlCode": "DELETE FROM CDM.C_COM_CD_TRANS WHERE start_dt >= DATE '{ETL_TX_DT}';\nUPDATE CDM.C_COM_CD_TRANS SET end_dt = DATE '{MAX_DATE}' WHERE end_dt >= DATE '{ETL_TX_DT}' AND end_dt < DATE '{MAX_DATE}';",
+      "businessScenario": "共性层代码转换映射表-支持重跑机制：删除当天数据并将已闭链数据重新打开",
+      "sqlFunction": "数据预处理（重跑支持）",
+      "involvedTables": ["C_COM_CD_TRANS"],
+      "originalTables": ["C_COM_CD_TRANS"],
+      "tableJoinLogic": "无关联，纯目标表维护操作",
+      "queryDimensions": "开始日期、结束日期",
+      "tags": ["重跑", "拉链", "代码转换"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "拉链表重跑预处理模式",
+          "derivedSql": "DELETE FROM {目标表} WHERE start_dt >= '{ETL_TX_DT}';\nUPDATE {目标表} SET end_dt = '{MAX_DATE}' WHERE end_dt >= '{ETL_TX_DT}' AND end_dt < '{MAX_DATE}';",
+          "businessMeaning": "F3无删除拉链重跑标准模式：先删除当天新增数据，再将当天闭链的数据打开（恢复为有效）",
+          "sourceTable": "C_COM_CD_TRANS",
+          "originalTable": "C_COM_CD_TRANS"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "CREATE TABLE",
+      "blockName": "创建临时表ST和VT",
+      "depth": 0,
+      "sqlCode": "CREATE TEMPORARY TABLE CDM.ST_C_COM_CD_TRANS AS(SELECT * FROM CDM.C_COM_CD_TRANS LIMIT 0);\nCREATE TEMPORARY TABLE CDM.VT_C_COM_CD_TRANS AS(SELECT * FROM CDM.C_COM_CD_TRANS LIMIT 0);",
+      "tracedSqlCode": "CREATE TEMPORARY TABLE CDM.ST_C_COM_CD_TRANS AS(SELECT * FROM CDM.C_COM_CD_TRANS LIMIT 0);\nCREATE TEMPORARY TABLE CDM.VT_C_COM_CD_TRANS AS(SELECT * FROM CDM.C_COM_CD_TRANS LIMIT 0);",
+      "businessScenario": "共性层代码转换映射表-创建源数据临时表和处理结果临时表",
+      "sqlFunction": "临时表结构创建",
+      "involvedTables": ["C_COM_CD_TRANS"],
+      "originalTables": ["C_COM_CD_TRANS"],
+      "tableJoinLogic": "无关联，纯结构复制",
+      "queryDimensions": "共性层英文表名、中文表名、字段名；基础层英文表名、中文表名、字段名；代码值、代码描述",
+      "tags": ["临时表", "ST表", "VT表"],
+      "derivedKnowledge": []
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "插入标准化码值映射",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.ST_C_COM_CD_TRANS\nSELECT T1.GENE_ST_EN_TAB_NAME, T1.GENE_ST_CN_TAB_NAME, T1.GENE_ST_EN_FIELD_NAME, T1.GENE_ST_CN_FIELD_NAME,\n  T1.BASE_ST_EN_TAB_NAME, T1.BASE_ST_CN_TAB_NAME, T1.BASE_ST_EN_FIELD_NAME, T1.BASE_ST_CN_FIELD_NAME,\n  T2.STAND_CD_VAL, T2.STAND_CD_DESC\nFROM CDM.C_COM_CD_TRANS_CONFIG T1\nINNER JOIN FDM.F_CO_TRANS_CD T2\n  ON T1.BASE_ST_EN_TAB_NAME = T2.F_EN_TAB_NAME\n  AND T1.BASE_ST_EN_FIELD_NAME = T2.F_EN_FIELD_NAME\n  AND T2.start_dt <= DATE'{ETL_TX_DT}' AND T2.end_dt > DATE'{ETL_TX_DT}';",
+      "tracedSqlCode": "INSERT INTO CDM.ST_C_COM_CD_TRANS\nSELECT T1.GENE_ST_EN_TAB_NAME, T1.GENE_ST_CN_TAB_NAME, T1.GENE_ST_EN_FIELD_NAME, T1.GENE_ST_CN_FIELD_NAME,\n  T1.BASE_ST_EN_TAB_NAME, T1.BASE_ST_CN_TAB_NAME, T1.BASE_ST_EN_FIELD_NAME, T1.BASE_ST_CN_FIELD_NAME,\n  T2.STAND_CD_VAL, T2.STAND_CD_DESC\nFROM CDM.C_COM_CD_TRANS_CONFIG T1\nINNER JOIN FDM.F_CO_TRANS_CD T2\n  ON T1.BASE_ST_EN_TAB_NAME = T2.F_EN_TAB_NAME\n  AND T1.BASE_ST_EN_FIELD_NAME = T2.F_EN_FIELD_NAME\n  AND T2.start_dt <= DATE'{ETL_TX_DT}' AND T2.end_dt > DATE'{ETL_TX_DT}';",
+      "businessScenario": "共性层代码转换映射表-通过配置表关联基础层标准化码值转换表，获取经过标准化处理的码值映射",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["C_COM_CD_TRANS_CONFIG", "F_CO_TRANS_CD"],
+      "originalTables": ["C_COM_CD_TRANS_CONFIG", "F_CO_TRANS_CD"],
+      "tableJoinLogic": "通过配置表(C_COM_CD_TRANS_CONFIG)定义的基础层英文表名和英文字段名，关联基础层标准化码值转换表(F_CO_TRANS_CD)，取当前有效的标准化码值",
+      "queryDimensions": "共性层/基础层的表名和字段名、标准化代码值、标准化代码描述",
+      "tags": ["标准化码值", "代码转换", "配置驱动"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "基础层标准化码值查询",
+          "derivedSql": "SELECT STAND_CD_VAL, STAND_CD_DESC FROM F_CO_TRANS_CD WHERE F_EN_TAB_NAME = '{表名}' AND F_EN_FIELD_NAME = '{字段名}' AND start_dt <= '{日期}' AND end_dt > '{日期}'",
+          "businessMeaning": "从基础层标准化码值转换表获取指定表和字段在当前日期的有效标准化代码值",
+          "sourceTable": "F_CO_TRANS_CD",
+          "originalTable": "F_CO_TRANS_CD"
+        },
+        {
+          "knowledgeName": "配置驱动码值映射模式",
+          "derivedSql": "SELECT T1.{共性层字段}, T2.STAND_CD_VAL, T2.STAND_CD_DESC FROM C_COM_CD_TRANS_CONFIG T1 INNER JOIN F_CO_TRANS_CD T2 ON T1.BASE_ST_EN_TAB_NAME=T2.F_EN_TAB_NAME AND T1.BASE_ST_EN_FIELD_NAME=T2.F_EN_FIELD_NAME",
+          "businessMeaning": "通过配置表驱动基础层和共性层之间的码值映射关系，实现灵活的代码转换管理",
+          "sourceTable": "C_COM_CD_TRANS_CONFIG",
+          "originalTable": "C_COM_CD_TRANS_CONFIG"
+        }
+      ]
+    },
+    {
+      "blockIndex": 4,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "插入非标准化（源系统）码值映射",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.ST_C_COM_CD_TRANS\nSELECT T1.GENE_ST_EN_TAB_NAME, T1.GENE_ST_CN_TAB_NAME, T1.GENE_ST_EN_FIELD_NAME, T1.GENE_ST_CN_FIELD_NAME,\n  T1.BASE_ST_EN_TAB_NAME, T1.BASE_ST_CN_TAB_NAME, T1.BASE_ST_EN_FIELD_NAME, T1.BASE_ST_CN_FIELD_NAME,\n  T2.SRC_CD_VAL, T2.SRC_CD_DESC\nFROM CDM.C_COM_CD_TRANS_CONFIG T1\nINNER JOIN FDM.F_CO_CD T2\n  ON T1.BASE_ST_EN_TAB_NAME = T2.F_EN_TAB_NAME\n  AND T1.BASE_ST_EN_FIELD_NAME = T2.F_EN_FIELD_NAME\n  AND T2.start_dt <= DATE'{ETL_TX_DT}' AND T2.end_dt > DATE'{ETL_TX_DT}';",
+      "tracedSqlCode": "INSERT INTO CDM.ST_C_COM_CD_TRANS\nSELECT T1.GENE_ST_EN_TAB_NAME, T1.GENE_ST_CN_TAB_NAME, T1.GENE_ST_EN_FIELD_NAME, T1.GENE_ST_CN_FIELD_NAME,\n  T1.BASE_ST_EN_TAB_NAME, T1.BASE_ST_CN_TAB_NAME, T1.BASE_ST_EN_FIELD_NAME, T1.BASE_ST_CN_FIELD_NAME,\n  T2.SRC_CD_VAL, T2.SRC_CD_DESC\nFROM CDM.C_COM_CD_TRANS_CONFIG T1\nINNER JOIN FDM.F_CO_CD T2\n  ON T1.BASE_ST_EN_TAB_NAME = T2.F_EN_TAB_NAME\n  AND T1.BASE_ST_EN_FIELD_NAME = T2.F_EN_FIELD_NAME\n  AND T2.start_dt <= DATE'{ETL_TX_DT}' AND T2.end_dt > DATE'{ETL_TX_DT}';",
+      "businessScenario": "共性层代码转换映射表-通过配置表关联基础层代码表，获取未经标准化处理的原始（源系统）码值",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["C_COM_CD_TRANS_CONFIG", "F_CO_CD"],
+      "originalTables": ["C_COM_CD_TRANS_CONFIG", "F_CO_CD"],
+      "tableJoinLogic": "通过配置表(C_COM_CD_TRANS_CONFIG)定义的基础层英文表名和英文字段名，关联基础层代码表(F_CO_CD)，取当前有效的源系统原始码值",
+      "queryDimensions": "共性层/基础层的表名和字段名、源系统代码值、源系统代码描述",
+      "tags": ["非标准化码值", "代码转换", "源系统码值", "配置驱动"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "基础层源系统码值查询",
+          "derivedSql": "SELECT SRC_CD_VAL, SRC_CD_DESC FROM F_CO_CD WHERE F_EN_TAB_NAME = '{表名}' AND F_EN_FIELD_NAME = '{字段名}' AND start_dt <= '{日期}' AND end_dt > '{日期}'",
+          "businessMeaning": "从基础层代码表获取指定表和字段在当前日期的有效源系统原始代码值",
+          "sourceTable": "F_CO_CD",
+          "originalTable": "F_CO_CD"
+        },
+        {
+          "knowledgeName": "标准化与非标准化码值并集策略",
+          "derivedSql": "SELECT STAND_CD_VAL AS cd_val, STAND_CD_DESC AS cd_descn FROM F_CO_TRANS_CD WHERE ...\nUNION ALL\nSELECT SRC_CD_VAL AS cd_val, SRC_CD_DESC AS cd_descn FROM F_CO_CD WHERE ...",
+          "businessMeaning": "同时获取标准化和源系统两个维度的码值，但优先使用标准化码值（代码最全的一组），确保码值覆盖的完整性",
+          "sourceTable": "C_COM_CD_TRANS_CONFIG",
+          "originalTable": "C_COM_CD_TRANS_CONFIG"
+        }
+      ]
+    },
+    {
+      "blockIndex": 5,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "增量数据检测（EXCEPT ALL）",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.VT_C_COM_CD_TRANS\nSELECT * FROM (\n  SELECT * FROM CDM.ST_C_COM_CD_TRANS T\n  EXCEPT ALL\n  SELECT * FROM CDM.C_COM_CD_TRANS F WHERE F.end_dt = DATE '{MAX_DATE}'\n) T01;",
+      "tracedSqlCode": "INSERT INTO CDM.VT_C_COM_CD_TRANS\nSELECT * FROM (\n  SELECT * FROM CDM.ST_C_COM_CD_TRANS T\n  EXCEPT ALL\n  SELECT * FROM CDM.C_COM_CD_TRANS F WHERE F.end_dt = DATE '{MAX_DATE}'\n) T01;",
+      "businessScenario": "共性层代码转换映射表-对比源数据与当前有效数据的差异，识别新增和变更记录",
+      "sqlFunction": "增量数据检测",
+      "involvedTables": ["C_COM_CD_TRANS"],
+      "originalTables": ["C_COM_CD_TRANS"],
+      "tableJoinLogic": "通过EXCEPT ALL集合运算，对比ST临时表（源数据）与C_COM_CD_TRANS（当前有效数据），差异记录即为新增或变更数据",
+      "queryDimensions": "共性层/基础层的表名和字段名、代码值、代码描述",
+      "tags": ["增量检测", "EXCEPT ALL", "拉链处理"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "F3拉链增量检测模式",
+          "derivedSql": "SELECT * FROM {ST表} EXCEPT ALL SELECT * FROM {目标表} WHERE end_dt = '{MAX_DATE}'",
+          "businessMeaning": "通过EXCEPT ALL对比临时表与目标表当前有效数据，自动识别需要新增或变更的记录，是F3无删除拉链的核心增量检测逻辑",
+          "sourceTable": "C_COM_CD_TRANS",
+          "originalTable": "C_COM_CD_TRANS"
+        }
+      ]
+    },
+    {
+      "blockIndex": 6,
+      "parentBlockIndex": 0,
+      "blockType": "UPDATE/INSERT",
+      "blockName": "闭链旧数据并插入新数据",
+      "depth": 0,
+      "sqlCode": "UPDATE CDM.C_COM_CD_TRANS F SET F.end_dt = DATE '{ETL_TX_DT}'\nWHERE EXISTS(SELECT 1 FROM CDM.VT_C_COM_CD_TRANS T WHERE F.end_dt = DATE '{MAX_DATE}'\n  AND T.gene_st_en_tab_name = F.gene_st_en_tab_name AND T.gene_st_en_field_name = F.gene_st_en_field_name AND T.cd_val = F.cd_val);\n\nINSERT INTO CDM.C_COM_CD_TRANS\nSELECT ..., DATE '{ETL_TX_DT}', DATE '{MAX_DATE}'\nFROM CDM.VT_C_COM_CD_TRANS T\nGROUP BY T.gene_st_en_tab_name, T.gene_st_cn_tab_name, T.gene_st_en_field_name, T.gene_st_cn_field_name,\n  T.base_st_en_tab_name, T.base_st_cn_tab_name, T.base_st_en_field_name, T.base_st_cn_field_name, T.cd_val, T.cd_descn;",
+      "tracedSqlCode": "UPDATE CDM.C_COM_CD_TRANS F SET F.end_dt = DATE '{ETL_TX_DT}'\nWHERE EXISTS(SELECT 1 FROM CDM.VT_C_COM_CD_TRANS T WHERE F.end_dt = DATE '{MAX_DATE}'\n  AND T.gene_st_en_tab_name = F.gene_st_en_tab_name AND T.gene_st_en_field_name = F.gene_st_en_field_name AND T.cd_val = F.cd_val);\n\nINSERT INTO CDM.C_COM_CD_TRANS ... FROM CDM.VT_C_COM_CD_TRANS T GROUP BY ...;",
+      "businessScenario": "共性层代码转换映射表-F3无删除拉链处理：将变更记录闭链（结束日期设为当天），然后将新增/变更记录以新拉链形式插入",
+      "sqlFunction": "拉链数据处理（闭链+新增）",
+      "involvedTables": ["C_COM_CD_TRANS"],
+      "originalTables": ["C_COM_CD_TRANS"],
+      "tableJoinLogic": "UPDATE通过EXISTS关联VT临时表与目标表当前有效数据，找到需要闭链的记录；INSERT将VT中的增量数据追加到目标表并设置新的有效区间",
+      "queryDimensions": "共性层/基础层的表名和字段名、代码值、代码描述、开始日期、结束日期",
+      "tags": ["拉链", "F3", "闭链", "增量插入", "代码转换"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "拉链闭链操作",
+          "derivedSql": "UPDATE {目标表} SET end_dt = '{ETL_TX_DT}' WHERE end_dt = '{MAX_DATE}' AND EXISTS(SELECT 1 FROM {VT表} WHERE {关联条件})",
+          "businessMeaning": "将存在变更的当前有效记录闭链（结束日期置为数据日期），使历史记录可追溯",
+          "sourceTable": "C_COM_CD_TRANS",
+          "originalTable": "C_COM_CD_TRANS"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["C_COM_CD_TRANS_CONFIG", "F_CO_TRANS_CD", "F_CO_CD", "C_COM_CD_TRANS"],
+  "allOriginalTables": ["C_COM_CD_TRANS_CONFIG", "F_CO_TRANS_CD", "F_CO_CD", "C_COM_CD_TRANS"],
+  "traceSummary": {
+    "totalFdmTables": 2,
+    "scriptsFound": 0,
+    "scriptsNotFound": 2,
+    "notFoundTables": ["F_CO_TRANS_CD", "F_CO_CD"]
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "F3无删除拉链规则",
+      "condition": "start_dt为记录生效日期，end_dt为记录失效日期，MAX_DATE表示当前有效",
+      "description": "采用F3无删除拉链模式：修改数据时不删除旧记录，而是通过设置end_dt闭链旧记录、插入新记录的方式保留完整历史变更轨迹"
+    },
+    {
+      "ruleName": "码值双源策略",
+      "condition": "standard code from F_CO_TRANS_CD; source code from F_CO_CD",
+      "description": "每个码值映射同时获取标准化码值（来自F_CO_TRANS_CD）和源系统原始码值（来自F_CO_CD），确保既支持标准代码查询也支持源系统代码查询"
+    },
+    {
+      "ruleName": "配置驱动映射规则",
+      "condition": "通过C_COM_CD_TRANS_CONFIG配置表驱动",
+      "description": "基础层到共性层的表名和字段名映射关系通过C_COM_CD_TRANS_CONFIG配置表管理，新增映射只需配置表变更"
+    },
+    {
+      "ruleName": "拉链有效性过滤规则",
+      "condition": "start_dt <= '{ETL_TX_DT}' AND end_dt > '{ETL_TX_DT}'",
+      "description": "只取在处理日期有效的拉链记录，确保数据一致性"
+    }
+  ],
+  "codeValues": {}
+}

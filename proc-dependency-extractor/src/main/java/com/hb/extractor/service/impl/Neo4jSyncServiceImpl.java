@@ -56,6 +56,9 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
     @Autowired
     private DdlParser ddlParser;
 
+    @Autowired
+    private TableDdlInfoMapper tableDdlInfoMapper;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final Pattern FIELD_PATTERN = Pattern.compile("(\\w+)\\.(\\w+)");
@@ -92,6 +95,10 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
 
             List<TableLineage> edges = tableLineageMapper.selectList(
                     new LambdaQueryWrapper<TableLineage>().eq(TableLineage::getProcName, procName));
+            // 键规范化：补齐无 schema 前缀的表名（如 INSERT INTO A_G_LN 无 PID. 前缀），
+            // 保证 Column/Table 节点的 col_key/name 与 DDL 元数据导入的带前缀键一致，
+            // 否则影响分析跨层穿透断链（例：a_g_ln_new_pord_sum vs pid.a_g_ln_new_pord_sum）。
+            normalizeEdgeTableNames(edges);
             List<Long> edgeIds = edges.stream().map(TableLineage::getId).collect(Collectors.toList());
 
             Map<Long, List<TableLineageFilter>> filtersByLineageId = new HashMap<>();
@@ -172,7 +179,9 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                 mergeBelongsRelationship(targetColKey, edge.getTargetTable());
 
                 // 2. Transform 节点
-                String transformId = generateTransformId(procName, targetColKey);
+                // 用 field_mapping.id 作为区分因子：同一 proc 内多块写入同一目标列时，
+                // 每个 FieldMapping 各自一个 Transform 节点，避免后写块覆盖 logic_type（如真实源被 LITERAL 覆盖）
+                String transformId = generateTransformId(procName, targetColKey, fm.getId());
                 String logicType = fm.getLogicType();
                 if (logicType == null) {
                     logicType = inferLogicTypeFromExpr(fm.getSourceExpr());
@@ -383,9 +392,11 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
                     "SET t.short_name = $shortName, t.schema_prefix = $schemaPrefix, " +
                     "t.layer = $layer, t.is_temp = $isTemp, t.script_file = $scriptFile";
         } else {
+            // 仅作源表时不覆盖 is_temp（建表方已写入权威值，读表方不知表是否临时，
+            // 覆盖会导致 CREATE TEMPORARY TABLE 的 is_temp=true 被错误覆盖为 false）
             cypher = "MERGE (t:Table {name: $name}) " +
                     "SET t.short_name = $shortName, t.schema_prefix = $schemaPrefix, " +
-                    "t.layer = $layer, t.is_temp = $isTemp";
+                    "t.layer = $layer";
         }
         neo4jClient.query(cypher).bindAll(params).run();
     }
@@ -503,10 +514,12 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
     }
 
     /**
-     * 生成 Transform 节点 id: md5(proc_name + "|" + target_col_key), 全小写
+     * 生成 Transform 节点 id: md5(proc_name + "|" + target_col_key + "|" + field_mapping_id), 全小写
+     * 加入 fieldMappingId 区分同一 proc 内多块写入同一目标列的不同 Transform 节点
      */
-    private String generateTransformId(String procName, String targetColKey) {
-        String raw = procName + "|" + (targetColKey != null ? targetColKey.toLowerCase() : "");
+    private String generateTransformId(String procName, String targetColKey, Long fieldMappingId) {
+        String raw = procName + "|" + (targetColKey != null ? targetColKey.toLowerCase() : "")
+                + "|" + (fieldMappingId != null ? fieldMappingId : "");
         try {
             java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
             byte[] digest = md.digest(raw.getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -700,6 +713,66 @@ public class Neo4jSyncServiceImpl implements Neo4jSyncService {
     private String extractSchema(String fullName) {
         int idx = fullName.indexOf('.');
         return idx > 0 ? fullName.substring(0, idx) : null;
+    }
+
+    /**
+     * 键规范化：为当前脚本所有血缘边的 source/target 表名补齐 schema 前缀。
+     * 无前缀（如 INSERT INTO A_G_LN 未写 schema 时 source/target 为 a_g_ln_new_pord_sum）
+     * 会被规范化为 pid.a_g_ln_new_pord_sum，从而与 DDL 元数据导入的带前缀键一致。
+     * 已带前缀（如 cdm.c_agt_loan_rcpt_inf、PID.vt_*）保持不变。
+     * 规范化的判定基于 table_ddl_info 元数据，临时表（无 DDL 记录）按表名前缀规则处理。
+     */
+    private void normalizeEdgeTableNames(List<TableLineage> edges) {
+        if (edges == null || edges.isEmpty()) return;
+        for (TableLineage edge : edges) {
+            if (edge.getSourceTable() != null) {
+                edge.setSourceTable(normalizeTableFullName(edge.getSourceTable(), edges));
+            }
+            if (edge.getTargetTable() != null) {
+                edge.setTargetTable(normalizeTableFullName(edge.getTargetTable(), edges));
+            }
+        }
+    }
+
+    /**
+     * 表名键规范化：无 schema 前缀的表名，补全为 schema.table 完整键。
+     * - 已含 '.'：视为已带前缀，原样返回（统一小写）
+     * - 不含 '.'（如 INSERT INTO A_G_LN 未写 schema）按优先级判定 schema：
+     *   1. table_ddl_info 命中同短表名 → 取其 full_table_name（物理表通用）
+     *   2. 同脚本其它边中出现过带前缀的同短表名 → 沿用其前缀（临时表通用，
+     *      如 vt_* 在某块 target 为 PID.vt_xxx、另一块 source 为 vt_xxx 时统一为 PID.vt_xxx）
+     *   3. 兜底：返回原短表名（此时以表名自身作为键）
+     */
+    private String normalizeTableFullName(String rawName, List<TableLineage> edges) {
+        if (rawName == null || rawName.isEmpty()) return rawName;
+        if (rawName.contains(".")) return rawName.toLowerCase();
+        String shortName = rawName.toLowerCase();
+
+        // 1. 物理表：table_ddl_info 反查
+        TableDdlInfo info = tableDdlInfoMapper.selectOne(
+                new LambdaQueryWrapper<TableDdlInfo>().eq(TableDdlInfo::getTableName, shortName).last("LIMIT 1"));
+        if (info != null && info.getFullTableName() != null && !info.getFullTableName().isEmpty()) {
+            return info.getFullTableName().toLowerCase();
+        }
+
+        // 2. 临时表：从同脚本其它边中沿用同短表名的带前缀写法
+        if (edges != null) {
+            for (TableLineage e : edges) {
+                if (e.getSourceTable() != null
+                        && shortName.equalsIgnoreCase(e.getSourceTableShort())
+                        && e.getSourceTable().contains(".")) {
+                    return e.getSourceTable().toLowerCase();
+                }
+                if (e.getTargetTable() != null
+                        && shortName.equalsIgnoreCase(e.getTargetTableShort())
+                        && e.getTargetTable().contains(".")) {
+                    return e.getTargetTable().toLowerCase();
+                }
+            }
+        }
+
+        // 3. 兜底
+        return shortName;
     }
 
     private TableLineage findEdgeById(List<TableLineage> edges, Long id) {

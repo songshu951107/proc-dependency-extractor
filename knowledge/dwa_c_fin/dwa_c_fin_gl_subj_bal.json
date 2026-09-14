@@ -1,0 +1,265 @@
+{
+  "scriptName": "dwa_c_fin_gl_subj_bal.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T10:00:00",
+  "businessScenario": "财务管理系统科目余额-汇总各币种科目余额、积数、发生额，折人民币处理",
+  "updateMethod": "切片表（每日全量覆盖当日数据）",
+  "targetTable": "C_FIN_GL_SUBJ_BAL",
+  "totalBlocks": 6,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_FI_FIGL_SUBJ_BAL_TAB",
+      "fdmScript": "dwa_f_fi_figl_subj_bal_tab.py",
+      "found": true,
+      "tdmTable": "T_FIGL_ZFAGLFLEXT_1_${ETL_TX_DT}",
+      "odmTable": "O_FIGL_ZFAGLFLEXT_1",
+      "transformLogic": "从核心总账系统TDM表全量入FDM，通过F_CO_TRANS_CD转换币种代码（STAND_CD_TAB_NO='FIGL0004'），其他字段直接映射"
+    },
+    {
+      "fdmTable": "F_CO_TRANS_CD",
+      "fdmScript": null,
+      "found": false,
+      "transformLogic": "码值转换表，未找到对应FDM脚本"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "blockName": "原币余额及发生额加工",
+      "sqlCode": "INSERT INTO VT_C_FIN_GL_SUBJ_BAL_01\nSELECT '{ETL_TX_DT}', org_no, currcy_cd, subj_no,\n  CASE WHEN day_begin_debit - day_begin_credit <= 0 THEN 0 ELSE day_begin_debit - day_begin_credit END,\n  CASE WHEN meadow_begin_debit - meadow_begin_credit <= 0 THEN 0 ELSE meadow_begin_debit - meadow_begin_credit END,\n  CASE WHEN month_begin_debit - month_begin_credit <= 0 THEN 0 ELSE month_begin_debit - month_begin_credit END,\n  CASE WHEN quart_begin_debit - quart_begin_credit <= 0 THEN 0 ELSE quart_begin_debit - quart_begin_credit END,\n  CASE WHEN half_year_begin_debit - half_year_begin_credit <= 0 THEN 0 ELSE half_year_begin_debit - half_year_begin_credit END,\n  CASE WHEN begin_year_debit - begin_year_credit <= 0 THEN 0 ELSE begin_year_debit - begin_year_credit END,\n  CASE WHEN day_begin_credit - day_begin_debit <= 0 THEN 0 ELSE day_begin_credit - day_begin_debit END,\n  CASE WHEN meadow_begin_credit - meadow_begin_debit <= 0 THEN 0 ELSE meadow_begin_credit - meadow_begin_debit END,\n  CASE WHEN month_begin_credit - month_begin_debit <= 0 THEN 0 ELSE month_begin_credit - month_begin_debit END,\n  CASE WHEN quart_begin_credit - quart_begin_debit <= 0 THEN 0 ELSE quart_begin_credit - quart_begin_debit END,\n  CASE WHEN half_year_begin_credit - half_year_begin_debit <= 0 THEN 0 ELSE half_year_begin_credit - half_year_begin_debit END,\n  CASE WHEN begin_year_credit - begin_year_debit <= 0 THEN 0 ELSE begin_year_credit - begin_year_debit END,\n  term_end_bal_debit, term_end_bal_credit,\n  day_happen_debit, meadow_happen_debit, month_happen_debit, quart_happen_debit, half_year_happen_debit, year_happen_debit,\n  day_happen_credit, meadow_happen_credit, month_happen_credit, quart_happen_credit, half_year_happen_credit, year_happen_credit\nFROM FDM.F_FI_FIGL_SUBJ_BAL_TAB T1\nWHERE period_dt = '{ETL_TX_DT}' AND currcy_cd <> '@RMB' AND MOD(LENGTH(T1.subj_no),2) = 0",
+      "tracedSqlCode": "INSERT INTO VT_C_FIN_GL_SUBJ_BAL_01\nSELECT '{ETL_TX_DT}', org_no, currcy_cd, subj_no,\n  -- 计算各时段借方/贷方余额（借-贷>0取差，否则0）\n  CASE WHEN day_begin_debit - day_begin_credit <= 0 THEN 0 ELSE day_begin_debit - day_begin_credit END,\n  ...\nFROM ODM.O_FIGL_ZFAGLFLEXT_1 T1\nWHERE period_dt = '{ETL_TX_DT}' AND currcy_cd <> '@RMB' AND MOD(LENGTH(T1.subj_no),2) = 0",
+      "businessScenario": "财务管理系统科目余额-按原币提取当日科目余额及发生额数据，过滤非本币记录和偶数位科目",
+      "sqlFunction": "数据汇总查询",
+      "involvedTables": ["O_FIGL_ZFAGLFLEXT_1"],
+      "originalTables": ["F_FI_FIGL_SUBJ_BAL_TAB"],
+      "tableJoinLogic": "单表查询，直接取总账科目余额表当日数据",
+      "queryDimensions": "机构号、币种代码、科目号",
+      "tags": ["科目余额", "原币余额", "总账科目余额表", "借贷方余额", "发生额"],
+      "traceChains": [
+        {
+          "originalTable": "F_FI_FIGL_SUBJ_BAL_TAB",
+          "fdmScript": "dwa_f_fi_figl_subj_bal_tab.py",
+          "tdmTable": "T_FIGL_ZFAGLFLEXT_1_${ETL_TX_DT}",
+          "odmTable": "O_FIGL_ZFAGLFLEXT_1",
+          "filterConditions": "币种代码通过F_CO_TRANS_CD转换（STAND_CD_TAB_NO='FIGL0004'）",
+          "fieldMappings": [
+            {"fdmField": "period_dt", "odmField": "PERIOD_NAME", "description": "日期"},
+            {"fdmField": "currcy_cd", "odmField": "CURRENCY_CODE", "description": "币种代码（经码值转换）"},
+            {"fdmField": "org_no", "odmField": "SEGMENT1", "description": "机构号"},
+            {"fdmField": "subj_no", "odmField": "SEGMENT3", "description": "科目号"},
+            {"fdmField": "day_begin_debit", "odmField": "AMOUNT_1", "description": "日初借"},
+            {"fdmField": "day_begin_credit", "odmField": "AMOUNT_2", "description": "日初贷"}
+          ]
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "当日原币科目余额查询（偶数位科目）",
+          "derivedSql": "SELECT org_no, currcy_cd, subj_no, term_end_bal_debit, term_end_bal_credit, day_happen_debit, day_happen_credit FROM O_FIGL_ZFAGLFLEXT_1 WHERE period_name = '{日期}' AND currency_code NOT IN (SELECT stand_cd_val FROM F_CO_TRANS_CD WHERE stand_cd_tab_no='FIGL0004' AND src_cd_val='RMB') AND MOD(LENGTH(subj_no),2) = 0",
+          "businessMeaning": "查询指定日期各机构科目的原币借方/贷方余额和发生额，排除本币和奇数位科目",
+          "sourceTable": "O_FIGL_ZFAGLFLEXT_1",
+          "originalTable": "F_FI_FIGL_SUBJ_BAL_TAB"
+        },
+        {
+          "knowledgeName": "借贷方余额方向判断",
+          "derivedSql": "SELECT CASE WHEN debit_bal - credit_bal > 0 THEN debit_bal - credit_bal ELSE 0 END AS debtor_bal, CASE WHEN credit_bal - debit_bal > 0 THEN credit_bal - debit_bal ELSE 0 END AS creditor_bal",
+          "businessMeaning": "通过借贷轧差计算借方余额和贷方余额，保证余额方向非负",
+          "sourceTable": "O_FIGL_ZFAGLFLEXT_1"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "blockName": "原币积数信息加工",
+      "sqlCode": "INSERT INTO VT_C_FIN_GL_SUBJ_BAL_02\nSELECT '{ETL_TX_DT}', T1.org_no, T1.currcy_cd, T1.subj_no, NVL(T3.zkemumc,''),\n  SUM(CASE WHEN period_dt BETWEEN DATE'{I_TDB_DT}' AND DATE'{ETL_TX_DT}' THEN term_end_bal_debit ELSE 0 END), -- 借方旬积数\n  SUM(...), ...\nFROM FDM.F_FI_FIGL_SUBJ_BAL_TAB T1\nLEFT JOIN ODM.O_FIGL_ZSAPKMCS T3\n  ON T1.subj_no = T3.zkmuhao AND T3.start_dt <= DATE'{ETL_TX_DT}' AND T3.end_dt > DATE'{ETL_TX_DT}'\nWHERE T1.period_dt <= '{ETL_TX_DT}' AND T1.period_dt >= '{I_MATTY_DT}'\n  AND T1.currcy_cd <> '@RMB' AND MOD(LENGTH(T1.subj_no),2) = 0\nGROUP BY org_no, currcy_cd, subj_no, NVL(T3.zkemumc,'')",
+      "tracedSqlCode": "INSERT INTO VT_C_FIN_GL_SUBJ_BAL_02\nSELECT '{ETL_TX_DT}', T1.org_no, T1.currcy_cd, T1.subj_no, NVL(T3.zkemumc,''),\n  SUM(CASE WHEN period_dt BETWEEN DATE'{I_TDB_DT}' AND DATE'{ETL_TX_DT}' THEN term_end_bal_debit ELSE 0 END),\n  ...\nFROM ODM.O_FIGL_ZFAGLFLEXT_1 T1\nLEFT JOIN ODM.O_FIGL_ZSAPKMCS T3\n  ON T1.subj_no = T3.zkmuhao AND T3.start_dt <= DATE AND T3.end_dt > DATE\nWHERE period_dt 在滚动年范围 AND currcy_cd <> 本币 AND 偶数位科目\nGROUP BY org_no, currcy_cd, subj_no, zkemumc",
+      "businessScenario": "财务管理系统科目余额-按原币计算各时间维度（旬/月/季/半年/年）的借方和贷方积数，并关联科目名称表获取科目中文名",
+      "sqlFunction": "多表关联查询（汇总计算）",
+      "involvedTables": ["O_FIGL_ZFAGLFLEXT_1", "O_FIGL_ZSAPKMCS"],
+      "originalTables": ["F_FI_FIGL_SUBJ_BAL_TAB", "O_FIGL_ZSAPKMCS"],
+      "tableJoinLogic": "FDM科目余额表 LEFT JOIN ODM科目名称表，通过科目号关联，使用拉链有效性过滤（start_dt<=当期 AND end_dt>当期）",
+      "queryDimensions": "机构号、币种代码、科目号、科目名称",
+      "tags": ["科目余额", "积数计算", "旬积数", "月积数", "季积数", "年积数", "科目名称"],
+      "traceChains": [
+        {
+          "originalTable": "F_FI_FIGL_SUBJ_BAL_TAB",
+          "fdmScript": "dwa_f_fi_figl_subj_bal_tab.py",
+          "tdmTable": "T_FIGL_ZFAGLFLEXT_1_${ETL_TX_DT}",
+          "odmTable": "O_FIGL_ZFAGLFLEXT_1",
+          "filterConditions": "滚动年范围内数据，偶数位科目，非本币",
+          "fieldMappings": [
+            {"fdmField": "period_dt", "odmField": "PERIOD_NAME", "description": "日期"},
+            {"fdmField": "subj_no", "odmField": "SEGMENT3", "description": "科目号"}
+          ]
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "科目积数计算（旬/月/季/半年/年）",
+          "derivedSql": "SELECT org_no, currcy_cd, subj_no, SUM(CASE WHEN period_dt BETWEEN 旬初 AND 当日 THEN term_end_bal_debit ELSE 0 END) AS debtor_meadow_calcu_base, SUM(CASE WHEN period_dt BETWEEN 月初 AND 当日 THEN term_end_bal_debit ELSE 0 END) AS debtor_month_calcu_base FROM O_FIGL_ZFAGLFLEXT_1 WHERE period_dt BETWEEN 滚动年初 AND 当日 AND 偶数位科目 GROUP BY org_no, currcy_cd, subj_no",
+          "businessMeaning": "按不同时间维度（旬/月/季/半年/年）汇总借方和贷方余额作为积数",
+          "sourceTable": "O_FIGL_ZFAGLFLEXT_1"
+        },
+        {
+          "knowledgeName": "科目名称查询（拉链有效）",
+          "derivedSql": "SELECT zkmuhao, zkemumc FROM O_FIGL_ZSAPKMCS WHERE start_dt <= DATE'{日期}' AND end_dt > DATE'{日期}'",
+          "businessMeaning": "通过拉链表获取指定日期有效的科目名称映射",
+          "sourceTable": "O_FIGL_ZSAPKMCS"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "blockName": "原币余额数据插入目标表",
+      "sqlCode": "INSERT INTO CDM.C_FIN_GL_SUBJ_BAL(...)\nSELECT T2.data_dt, T2.org_no, T2.currcy_cd, '000', T2.subj_no,\n  CASE WHEN LENGTH(T2.subj_no)=4 THEN '1' WHEN 6 THEN '2' WHEN 8 THEN '3' WHEN 10 THEN '4' END,\n  T2.subj_name, '', NVL(T1.last_day_debtor_bal,0), ..., NVL(T1.creditor_year_amt,0),\n  T2.debtor_meadow_calcu_base/{TEN_DAYS}, T2.debtor_month_calcu_base/{MTD}, ...\nFROM VT_C_FIN_GL_SUBJ_BAL_02 T2\nLEFT JOIN VT_C_FIN_GL_SUBJ_BAL_01 T1\n  ON T1.org_no=T2.org_no AND T1.currcy_cd=T2.currcy_cd AND T1.subj_no=T2.subj_no AND T1.data_dt=T2.data_dt",
+      "tracedSqlCode": "同原始SQL（使用临时表，临时表已追溯至ODM层）",
+      "businessScenario": "财务管理系统科目余额-合并余额（临时表1）与积数（临时表2）数据，填充科目级别、科目名称，计算各时段日均余额",
+      "sqlFunction": "多表关联查询（合并汇总）",
+      "involvedTables": ["O_FIGL_ZFAGLFLEXT_1", "O_FIGL_ZSAPKMCS"],
+      "originalTables": ["F_FI_FIGL_SUBJ_BAL_TAB", "O_FIGL_ZSAPKMCS"],
+      "tableJoinLogic": "积数临时表 LEFT JOIN 余额临时表，通过(机构号+币种+科目号+数据日期)关联",
+      "queryDimensions": "机构号、币种代码、科目号、科目级别",
+      "tags": ["科目余额", "折币", "科目级别", "日均"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "科目级别判断",
+          "derivedSql": "SELECT CASE WHEN LENGTH(subj_no)=4 THEN '1' WHEN LENGTH(subj_no)=6 THEN '2' WHEN LENGTH(subj_no)=8 THEN '3' WHEN LENGTH(subj_no)=10 THEN '4' END AS subj_lvl_cd",
+          "businessMeaning": "根据科目号长度判断科目级别：4位=1级，6位=2级，8位=3级，10位=4级",
+          "sourceTable": "O_FIGL_ZFAGLFLEXT_1"
+        }
+      ]
+    },
+    {
+      "blockIndex": 4,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "blockName": "折人民币余额插入",
+      "sqlCode": "INSERT INTO CDM.C_FIN_GL_SUBJ_BAL(...)\nSELECT DATE'{ETL_TX_DT}', T1.org_no, '', '001', T1.subj_no, T1.subj_lvl_cd, NVL(T3.zkemumc,''), '',\n  SUM(T1.last_day_debtor_bal*T2.last_dt_rate_rmb), ...\nFROM CDM.C_FIN_GL_SUBJ_BAL T1\nLEFT JOIN (SELECT T2.currcy_cd, SUM(CASE WHEN data_dt=当日 THEN dom_currcy_convt_price ELSE 0 END) rate_rmb,\n    SUM(CASE WHEN data_dt=上日 THEN dom_currcy_convt_price ELSE 0 END) last_dt_rate_rmb, ...\n  FROM CDM.C_COM_EXCH_RATE T2\n  LEFT JOIN FDM.F_CO_TRANS_CD T3 ON T2.currcy_cd=T3.STAND_CD_VAL AND T3.STAND_CD_TAB_NO='CCRD0005'\n  GROUP BY T2.currcy_cd) T2 ON T1.currcy_cd=T2.currcy_cd\nLEFT JOIN ODM.O_FIGL_ZSAPKMCS T3 ON T1.subj_no=T3.zkmuhao AND T3.del_ind<>'D' AND T3.start_dt<=DATE AND T3.end_dt>DATE\nWHERE T1.data_dt=当日 AND T1.conve_into_currcy_cd='000'\nGROUP BY T1.org_no, T1.subj_no, T1.subj_lvl_cd, NVL(T3.zkemumc,'')",
+      "tracedSqlCode": "INSERT INTO CDM.C_FIN_GL_SUBJ_BAL\nSELECT ..., 折人民币各时段余额（原币*对应日期汇率）...\nFROM (原币科目余额表)\nLEFT JOIN (汇率快照表 LEFT JOIN 码值转换表)\nLEFT JOIN ODM.O_FIGL_ZSAPKMCS\nWHERE data_dt=当日 AND conve_into_currcy_cd='000'",
+      "businessScenario": "财务管理系统科目余额-将原币余额按各时段汇率转换为折人民币余额，汇总到机构+科目级别",
+      "sqlFunction": "多表关联查询（汇率转换+汇总）",
+      "involvedTables": ["O_FIGL_ZSAPKMCS"],
+      "originalTables": ["F_CO_TRANS_CD", "O_FIGL_ZSAPKMCS"],
+      "tableJoinLogic": "CDM科目余额表 LEFT JOIN (CDM汇率表 LEFT JOIN FDM码值转换表) 通过币种关联，LEFT JOIN ODM科目名称表 通过科目号关联",
+      "queryDimensions": "机构号、科目号、科目级别、科目名称、折币代码",
+      "tags": ["折人民币", "汇率转换", "科目余额", "多时段汇率"],
+      "traceChains": [
+        {
+          "originalTable": "F_CO_TRANS_CD",
+          "fdmScript": null,
+          "found": false,
+          "filterConditions": "STAND_CD_TAB_NO='CCRD0005'，用于过滤有效汇率币种"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "多时段汇率查询",
+          "derivedSql": "SELECT currcy_cd, SUM(CASE WHEN data_dt=当前日 THEN dom_currcy_convt_price ELSE 0 END) rate_rmb, SUM(CASE WHEN data_dt=上日 THEN dom_currcy_convt_price ELSE 0 END) last_dt_rate_rmb, SUM(CASE WHEN data_dt=上旬末 THEN dom_currcy_convt_price ELSE 0 END) last_tdb_rate_rmb, SUM(CASE WHEN data_dt=上月末 THEN dom_currcy_convt_price ELSE 0 END) lme_rate_rmb, SUM(CASE WHEN data_dt=上季末 THEN dom_currcy_convt_price ELSE 0 END) lqe_rate_rmb, SUM(CASE WHEN data_dt=上半年末 THEN dom_currcy_convt_price ELSE 0 END) lfe_rate_rmb, SUM(CASE WHEN data_dt=上年末 THEN dom_currcy_convt_price ELSE 0 END) lye_rate_rmb FROM C_COM_EXCH_RATE GROUP BY currcy_cd",
+          "businessMeaning": "获取各币种在多个时间节点的汇率，用于多时段折算",
+          "sourceTable": "C_COM_EXCH_RATE"
+        }
+      ]
+    },
+    {
+      "blockIndex": 5,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "blockName": "折人民币积数信息加工",
+      "sqlCode": "INSERT INTO VT_C_FIN_GL_SUBJ_BAL_04\nSELECT T1.org_no, T1.subj_no, CASE WHEN LENGTH(T1.subj_no)=4 THEN '1'...,\n  SUM((CASE WHEN period_dt BETWEEN 旬初 AND 当日 THEN term_end_bal_debit ELSE 0 END)*T2.dom_currcy_convt_price), ...\nFROM FDM.F_FI_FIGL_SUBJ_BAL_TAB T1\nLEFT JOIN (SELECT T2.currcy_cd, T2.dom_currcy_convt_price FROM CDM.C_COM_EXCH_RATE T2\n  LEFT JOIN FDM.F_CO_TRANS_CD T3 ON T2.currcy_cd=T3.STAND_CD_VAL AND T3.STAND_CD_TAB_NO='CCRD0005'\n  WHERE T2.data_dt=当日) T2 ON T1.currcy_cd=T2.currcy_cd\nWHERE T1.period_dt 在滚动年范围 AND currcy_cd <> '@RMB' AND MOD(LENGTH(T1.subj_no),2)=0\nGROUP BY T1.org_no, T1.subj_no, CASE WHEN LENGTH(subj_no) ...",
+      "tracedSqlCode": "INSERT INTO VT_C_FIN_GL_SUBJ_BAL_04\nSELECT T1.org_no, T1.subj_no, ..., SUM((CASE ...)*T2.dom_currcy_convt_price)\nFROM ODM.O_FIGL_ZFAGLFLEXT_1 T1\nLEFT JOIN (CDM汇率表 LEFT JOIN 码值转换表) T2 ON T1.currcy_cd=T2.currcy_cd\nWHERE ...",
+      "businessScenario": "财务管理系统科目余额-按折人民币汇率计算各时间的借方和贷方积数",
+      "sqlFunction": "多表关联查询（汇率转换+汇总计算）",
+      "involvedTables": ["O_FIGL_ZFAGLFLEXT_1"],
+      "originalTables": ["F_FI_FIGL_SUBJ_BAL_TAB", "F_CO_TRANS_CD"],
+      "tableJoinLogic": "FDM科目余额表 LEFT JOIN (CDM汇率表 LEFT JOIN FDM码值转换表) 通过币种关联",
+      "queryDimensions": "机构号、科目号、科目级别",
+      "tags": ["折人民币", "积数计算", "汇率转换"],
+      "traceChains": [
+        {
+          "originalTable": "F_FI_FIGL_SUBJ_BAL_TAB",
+          "fdmScript": "dwa_f_fi_figl_subj_bal_tab.py",
+          "tdmTable": "T_FIGL_ZFAGLFLEXT_1_${ETL_TX_DT}",
+          "odmTable": "O_FIGL_ZFAGLFLEXT_1",
+          "filterConditions": "滚动年范围，偶数位科目，非本币"
+        },
+        {
+          "originalTable": "F_CO_TRANS_CD",
+          "fdmScript": null,
+          "found": false
+        }
+      ],
+      "derivedKnowledge": []
+    },
+    {
+      "blockIndex": 6,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "blockName": "折人民币余额插入目标表+轧差项",
+      "sqlCode": "INSERT INTO CDM.C_FIN_GL_SUBJ_BAL(...)\nSELECT DATE'{ETL_TX_DT}', T1.org_no, '', '001', T1.subj_no, T1.subj_lvl_cd, T1.subj_name, '',\n  T1.last_day_debtor_bal, ..., T2.creditor_year_calcu_base/{YTD_DAYS}\nFROM VT_C_FIN_GL_SUBJ_BAL_03 T1\nLEFT JOIN VT_C_FIN_GL_SUBJ_BAL_04 T2 ON T1.org_no=T2.org_no AND T1.subj_no=T2.subj_no",
+      "tracedSqlCode": "同原始SQL（临时表已追溯至ODM层）",
+      "businessScenario": "财务管理系统科目余额-将折人民币余额（临时表3）与折人民币积数（临时表4）合并，计算日均，同时生成轧差项（科目0001/0002）",
+      "sqlFunction": "多表关联查询（合并汇总+轧差计算）",
+      "involvedTables": ["O_FIGL_ZFAGLFLEXT_1", "O_FIGL_ZSAPKMCS"],
+      "originalTables": ["F_FI_FIGL_SUBJ_BAL_TAB", "O_FIGL_ZSAPKMCS"],
+      "tableJoinLogic": "折人民币余额临时表 LEFT JOIN 折人民币积数临时表，通过(机构号+科目号)关联",
+      "queryDimensions": "机构号、科目号、科目级别、科目名称、折币代码",
+      "tags": ["折人民币", "科目余额", "积数", "日均", "轧差"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "轧差项计算（科目1002+2007->0001, 科目183502+272502->0002）",
+          "derivedSql": "SELECT org_no, currcy_cd, conve_into_currcy_cd, '0001' AS subj_no, '1' AS subj_lvl_cd, '轧差项' AS subj_name, '02' AS bal_nature_cd, CASE WHEN SUM(debtor_bal)-SUM(creditor_bal)>0 THEN SUM(debtor_bal)-SUM(creditor_bal) ELSE 0 END AS debtor_bal, CASE WHEN SUM(creditor_bal)-SUM(debtor_bal)>0 THEN SUM(creditor_bal)-SUM(debtor_bal) ELSE 0 END AS creditor_bal FROM C_FIN_GL_SUBJ_BAL WHERE data_dt=当日 AND subj_no IN ('1002','2007') GROUP BY org_no, currcy_cd, conve_into_currcy_cd",
+          "businessMeaning": "对指定科目（1002+2007、183502+272502）进行借贷方轧差汇总，生成轧差科目0001和0002",
+          "sourceTable": "C_FIN_GL_SUBJ_BAL"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["O_FIGL_ZFAGLFLEXT_1", "O_FIGL_ZSAPKMCS", "C_COM_EXCH_RATE", "C_FIN_GL_SUBJ_BAL"],
+  "allOriginalTables": ["F_FI_FIGL_SUBJ_BAL_TAB", "O_FIGL_ZSAPKMCS", "F_CO_TRANS_CD", "C_COM_EXCH_RATE", "C_FIN_GL_SUBJ_BAL"],
+  "traceSummary": {
+    "totalFdmTables": 2,
+    "scriptsFound": 1,
+    "scriptsNotFound": 1,
+    "notFoundTables": ["F_CO_TRANS_CD"]
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "偶数位科目过滤",
+      "condition": "MOD(LENGTH(subj_no),2) = 0",
+      "description": "仅处理偶数位科目号（如4位、6位、8位、10位），奇数位科目不参与汇总"
+    },
+    {
+      "ruleName": "非本币过滤",
+      "condition": "currcy_cd <> '@RMB'",
+      "description": "排除本币（@RMB）的科目余额记录，仅处理外币数据"
+    },
+    {
+      "ruleName": "科目级别判断",
+      "condition": "LENGTH(subj_no) = 4->'1', 6->'2', 8->'3', 10->'4'",
+      "description": "根据科目号长度判断科目级别"
+    },
+    {
+      "ruleName": "积数计算时间范围",
+      "condition": "period_dt >= 滚动年开始日期",
+      "description": "积数从滚动年开始累计到当日，积数/天数=日均"
+    },
+    {
+      "ruleName": "轧差科目生成",
+      "condition": "subj_no IN ('1002','2007') → 科目0001; subj_no IN ('183502','272502') → 科目0002",
+      "description": "特定科目组合的借贷轧差汇总为新的轧差科目"
+    }
+  ]
+}

@@ -16,6 +16,8 @@ public class ImpactAnalysisVO {
     private String sourceTable;
     /** 源表数据层级（用于前端节点着色） */
     private String sourceLayer;
+    /** 源表是否存在于血缘图（任何已解析脚本引用过）；false 时前端提示检查表名 */
+    private Boolean sourceTableFound;
     /** 按深度分组：key=depth(1,2,3...), value=该层受影响表列表 */
     private java.util.Map<Integer, List<ImpactedTable>> impactedByDepth;
     /** 传播链路描述：["SOURCE → TABLE_A", "TABLE_A → TABLE_C"] */

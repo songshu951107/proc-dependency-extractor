@@ -17,8 +17,10 @@
 
     <el-alert
       v-if="result && !impactRows.length"
-      title="未分析到受影响对象"
-      type="info"
+      :title="result?.sourceTableFound === false
+        ? `表 ${result?.sourceTable || ''} 在已解析脚本中未被引用，请检查表名是否正确`
+        : '未分析到受影响对象'"
+      :type="result?.sourceTableFound === false ? 'warning' : 'info'"
       :closable="false"
       style="margin-bottom: 10px"
     />
@@ -74,6 +76,7 @@
       :nodes="pathDialogNodes"
       :edges="pathDialogEdges"
       :sourceId="sourceNodeId"
+      :maxDepth="lastRequest?.maxDepth"
       @update:visible="pathDialogVisible = $event"
       @viewScript="handlePathEdgeViewScript"
     />
@@ -135,8 +138,10 @@ function openStatsDetail(type) {
   statsDialogVisible.value = true
 }
 
+// 必须返回布尔值：空字符串传给 Boolean 类型的 prop 会被 Vue 转成 true（HTML 属性语义），
+// 导致表级分析被误判为字段级、清单被"值影响"筛选清空（2026-08-24 表级结果空白问题）
 const isFieldLevel = computed(() => {
-  return lastRequest.value?.fieldName && lastRequest.value.fieldName !== ''
+  return Boolean(lastRequest.value?.fieldName && lastRequest.value.fieldName !== '')
 })
 
 // 统计卡与表格同口径：从清单行（单一事实来源）推导，避免后端 stats
@@ -158,9 +163,12 @@ const displayStats = computed(() => {
   return {
     ...backend,
     affectedTableCount: tables.size,
+    // 表级分析无字段维度：置 null 由统计卡隐藏（不展示"影响字段数"）
     affectedFieldCount: isFieldLevel.value ? fields.size : null,
     affectedProcCount: procs.size,
-    maxDepthReached: maxLevel
+    maxDepthReached: maxLevel,
+    // 未勾选"分析报表影响"时不展示报表卡（此时后端也不返回报表数据）
+    showReports: !!lastRequest.value?.analyzeReportImpact
   }
 })
 
@@ -202,13 +210,13 @@ const handleAnalyze = async (request) => {
       // UPSTREAM：行 = 来源字段清单（反向传播推导）；BOTH 暂按下游清单展示
       isUpstream.value = (request.direction || 'DOWNSTREAM') === 'UPSTREAM'
       impactRows.value = isUpstream.value
-        ? buildFieldSourceRows(nodes, edges, sourceNodeId.value)
-        : buildFieldImpactRows(nodes, edges, sourceNodeId.value)
+        ? buildFieldSourceRows(nodes, edges, sourceNodeId.value, request.maxDepth)
+        : buildFieldImpactRows(nodes, edges, sourceNodeId.value, request.maxDepth)
       pathDialogNodes.value = nodes
       pathDialogEdges.value = edges
       exportFileName.value = `影响分析_${request.schema}.${request.tableShortName}.${request.fieldName}_${request.direction || 'DOWNSTREAM'}`
     } else {
-      const built = buildTableImpactData(res.data?.sourceTable, res.data?.impactedByDepth || {}, res.data?.sourceLayer)
+      const built = buildTableImpactData(res.data?.sourceTable, res.data?.impactedByDepth || {}, res.data?.sourceLayer, request.maxDepth)
       sourceNodeId.value = res.data?.sourceTable || ''
       isUpstream.value = false
       impactRows.value = built.rows

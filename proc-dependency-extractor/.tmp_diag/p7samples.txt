@@ -1,0 +1,198 @@
+﻿@@BLOCK dwa_a_d_pt_pos_merch_info_sum | 3@@	CREATE TABLE {PID}.TMP_A_D_POS_MERCH_DEPOSIT_GR                                               
+
+  AS SELECT T1.ORG_NO
+
+           ,NVL(SUM(T3.BAL_GR),0) AS BAL
+
+           ,NVL(SUM(T3.BAL_GR_MAVG),0) AS BAL_MAVG		   
+
+           ,NVL(SUM(T3.BAL_GR_YAVG),0) AS BAL_YAVG		   		   
+
+     FROM
+
+          (SELECT T1.ORG_NO
+
+                 ,T1.CUST_NO
+
+            FROM (SELECT *,ROW_NUMBER()OVER(PARTITION BY CUST_NO ORDER BY CUST_NO) NM  
+
+                  FROM {PID}.A_D_PT_POS_MERCH_INFO 
+
+                  WHERE TX_DT={ETL_TX_DT}
+
+  		          AND BELO_LINE='01'
+
+                    )T1
+
+             WHERE T1.NM='1'
+
+              GROUP BY 1,2) T1 
+
+           LEFT JOIN (SELECT T1.CUST_NO AS C_CUSNO
+
+                         ,SUM(T1.BAL_RMB) AS BAL_GR
+
+						 ,SUM(T1.MONTH_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_MAVG
+
+						 ,SUM(T1.YEAR_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_YAVG					 
+
+     
+@@BLOCK dwa_c_agt_deposit_acct_intst | 3@@	CREATE TABLE {CDM}.VT_C_AGT_DEPOSIT_ACCT_INTST_temp_01 
+SELECT  T.LIABI_ACCT_NO       
+       ,T.OPEN_ACCT_ORG_NO   
+       ,T.CURRCY_CD              as CURRCY_CD  
+       ,T2.ACCINT          as ACCINT     
+       ,date'{ETL_TX_DT}'  as DATA_DT    
+  FROM fdm.F_AC_CRBS_DEPOSIT_ACCT T  
+  LEFT JOIN (
+               SELECT  b.LIABI_ACCT_NO 
+                      ,SUM(CASE WHEN b.RECEN_UPDATE_DT > '{ETL_TX_DT}'   
+                                THEN c.ACCRU_INT+c.LAST_DAY_ACCRU_INT 
+                                ELSE b.ACCRU_INT 
+                           end  
+                           ) AS ACCINT
+                 FROM fdm.F_AC_CRBS_ACCT_ACCRU_DEF      b 
+                 left join fdm.F_AC_CRBS_ACCT_ACCRU_DEF c 
+                   ON b.LIABI_ACCT_NO = c.LIABI_ACCT_NO
+                  AND b.INT_CD = c.INT_CD
+                  and c.start_dt <= date'{ETL_TX_DT}'-1 
+                  a
+@@BLOCK dwa_pid_a_d_eq_rpt_gov_qlfy_info | 3@@	CREATE TABLE TMP1_A_D_EQ_RPT_GOV_QLFY_INFO
+
+as 
+
+	 select t.etl_tx_dt
+
+        ,t.MAIN_CUST_NO
+
+        ,t.COUNT_CUST_ACCT_NO
+
+        ,sum(nvl(t.TXN_AMT,0)) TXN_AMT
+
+    from(
+
+  select substr(t1.etl_tx_dt,1,4) as etl_tx_dt
+
+        ,t2.MAIN_CUST_NO as MAIN_CUST_NO
+
+  	    ,t1.COUNT_CUST_ACCT_NO as COUNT_CUST_ACCT_NO
+
+  	    ,sum(t1.TXN_AMT) as TXN_AMT
+
+    from {FDM}.F_EV_CRBS_ACCT_BAL_HAPPEN_DTL t1
+
+   inner join {FDM}.F_AC_CRBS_CUST_ACCT_NO t2 
+
+      on t1.CUST_ACCT_NO = t2.CUST_ACCT_NO 
+
+     and DATE({ETL_TX_DT}) between t2.start_dt and t2.end_dt -1
+
+   where t1.etl_tx_dt >= to_char(substr(DATE({ETL_TX_DT}),1,4)-1)||'0101'
+
+     and t1.etl_tx_dt <= DATE({ETL_TX_DT})
+
+     and t1.USERN IN ('河北省省直住房资金管理中心','河北省省直住房资金中心','石家庄住房公积金管理中心','辛集市住房公积金管理中心','唐山市住房公积金管理中心','唐山市住房公积金管理中心开滦分中心','邯郸市住房公积金管理中心','廊坊市住房公积金中心','沧州市住房公积金管理中心','保定市住房公积金管理中心','定州市住房公积金管理中心','邢台市住房公积金管理中心','邢台市住房公积金管理中
+@@BLOCK dwa_pid_a_d_fi_gl_inf | 10@@	CREATE TABLE {PID}.O_CB_PZSHL_TMP   
+    AS    
+        SELECT 
+         currcy_cd  
+        ,DOM_CURRCY_CONVT_PRICE  
+        FROM 
+      ( select currcy_cd, DOM_CURRCY_CONVT_PRICE
+      from (select currcy_cd, 
+                   DOM_CURRCY_CONVT_PRICE,
+                   row_number() over(partition by currcy_symbo order by ETL_TX_DT desc) rm
+            
+               from {FDM}.F_CO_CRBS_CONVT_EXCH_RATE_PARAM 
+             where CONVT_CATEGORY_CD = '0'
+               and RECORD_STS_CD = '0'
+               and eff_dt <= {ETL_TX_DT}) t
+     where rm = 1 
+    ) T11
+@@BLOCK DWA_PID_A_D_LN_LOAN_ACCT_INF | 3@@	CREATE TABLE {PID}.VT_A_D_LN_LOAN_ACCT_INF_01
+
+    ( 
+
+    SELECT F1.CORE_CUST_NO AS CUST_ID
+
+    FROM {FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF F1     
+
+    INNER JOIN {FDM}.F_PT_ECIF_PUB_CUST_INF F2      
+
+       ON F1.CUST_NO = F2.CUST_NO
+
+      AND F2.GOVERN_STRUCTURE = '1'                 
+
+      AND '{ETL_TX_DT}'BETWEEN F2.START_DT AND F2.END_DT - 1
+
+    WHERE '{ETL_TX_DT}'BETWEEN F1.START_DT AND F1.END_DT - 1
+
+      AND F1.DEL_FLAG <> 'D'
+
+      AND F1.CORE_CUST_NO <> ''
+
+    )
+@@BLOCK dwa_pid_a_g_ln_loan_org_itnet_sum | 3@@	CREATE TABLE {PID}.VT_A_G_LN_LOAN_ORG_ITNET_SUM_01_{ETL_TX_DT}
+(SELECT   
+ACCT_NO
+,CONTRACT_NO
+,PROD_NO
+,BELO_LINE
+,VAL_DT
+,DATA_SOURC_TAB_NAME
+,sum(CASE WHEN T.DATA_DT = DATE '{ETL_TX_DT}' THEN T.LOAN_BAL else 0 end) LOAN_BAL  
+,SUM(CASE WHEN T.DATA_DT >= DATE '{I_MB_DT}' AND T.DATA_DT <= DATE '{ETL_TX_DT}' THEN NVL(T.LOAN_BAL,0) ELSE 0 END) / {MTD_DAYS} AS MONTH_DAILY_AVG 
+,SUM(CASE WHEN T.DATA_DT >= DATE '{I_QB_DT}' AND T.DATA_DT <= DATE '{ETL_TX_DT}' THEN NVL(T.LOAN_BAL,0) ELSE 0 END) / {QTD_DAYS} AS QUART_DAILY_AVG 
+,SUM(CASE WHEN T.DATA_DT >= DATE '{I_YB_DT}' AND T.DATA_DT <= DATE '{ETL_TX_DT}' THEN NVL(T.LOAN_BAL,0) ELSE 0 END) / {YTD_DAYS} AS YEAR_DAILY_AVG  
+FROM {PID}.A_D_LN_LOAN_ACCT_ITNET_INF T 
+WHERE T.DATA_DT >= DATE '{I_YB_DT}' AND T.DATA_DT <= DATE '{ETL_TX_DT}'
+and NVL(T.LOAN_BAL,0) <> 0
+GROUP BY T.ACCT_NO,CONTRACT_NO,prod_no,belo_line,t.VAL_DT,DATA_SOURC_TAB_NAME
+)
+@@BLOCK dwa_pid_a_g_ln_loan_org_itnet_sum | 5@@	CREATE TABLE {PID}.VT_A_G_LN_LOAN_ORG_ITNET_SUM_02_{ETL_TX_DT}
+select
+   date '{ETL_TX_DT}' as DATA_DT
+  ,t.acct_no
+  ,T.CURRCY_CD
+  ,t.org_no
+  ,t.prod_no 
+  ,t.BELO_LINE                                  as BELO_LINE   
+  ,SUM(CASE WHEN T.DATA_DT = DATE'{ETL_TX_DT}' THEN FTP_INT_DAY_AJUST*PLUS_MINUS_FLAG ELSE 0 END)   AS FTP_INT_DAY_AJUST      
+  ,SUM(CASE WHEN T.DATA_DT between DATE '{I_MB_DT}' and DATE '{ETL_TX_DT}' THEN FTP_INT_DAY_AJUST*PLUS_MINUS_FLAG else 0 end) AS FTP_INT_MONTH_AJUST  
+  ,SUM(CASE WHEN T.DATA_DT BETWEEN DATE '{I_QB_DT}' AND DATE '{ETL_TX_DT}' THEN FTP_INT_DAY_AJUST*PLUS_MINUS_FLAG ELSE 0 END)  AS FTP_INT_QUAR_AJUST     
+  ,SUM(FTP_INT_DAY_AJUST*PLUS_MINUS_FLAG)  AS FTP_INT_YEAR_AJUST     
+from 
+pid.a_d_ln_loan_acct_prft t 
+where t.DATA_DT <= date '{ETL_TX_DT}'
+and t.data_dt >= date '{I_YB_DT}'
+and (t.DATA_SOURCE = 'HLW' or prod_no in ('1110140','1110145','1110155
+@@BLOCK dwa_pid_a_g_ln_new_distr_loan_int_rate | 10@@	CREATE TABLE {PID}.TMP_kln_0 as
+
+   SELECT SUM(CASE WHEN T.LOAN_TYPE_CD = '0110' THEN T.OUT_ACCT_AMT ELSE 0 END) a1
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0110' THEN T.OUT_ACCT_AMT*t.ACTUAL_OUT_ACCT_INT_RATE ELSE 0 END) a2
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0110' AND T3.CORE_CUST_NO IS NULL THEN T.OUT_ACCT_AMT ELSE 0 END) b1
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0110' AND T3.CORE_CUST_NO IS NULL THEN T.OUT_ACCT_AMT*t.ACTUAL_OUT_ACCT_INT_RATE ELSE 0 END) b2
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0110' AND T3.CORE_CUST_NO IS NOT NULL THEN T.OUT_ACCT_AMT ELSE 0 END) c1
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0110' AND T3.CORE_CUST_NO IS NOT NULL THEN T.OUT_ACCT_AMT*t.ACTUAL_OUT_ACCT_INT_RATE ELSE 0 END) c2
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0120' THEN T.OUT_ACCT_AMT ELSE 0 END) d1
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0120' THEN T.OUT_ACCT_AMT*t.ACTUAL_O
+@@BLOCK dwa_pid_a_g_ln_new_distr_loan_int_rate | 17@@	CREATE TABLE {PID}.TMP_kxf_1 as
+
+   SELECT SUM(T.LOAN_DISTR_AMT/100) as a1,  
+
+   SUM(T.LOAN_DISTR_AMT/100*CURR_CONTRACT_INT_RATE/100) as a2
+
+   FROM {FDM}.F_FI_CSLN_XXT_LOAN_TEMP_B4 T 
+
+   WHERE {ETL_TX_DT} between start_dt and end_dt-1
+
+   AND DATE(T.EXPIR_DT)-DATE(T.LOAN_DISTR_DT) >= 10
+
+   AND SUBSTR(T.LOAN_DISTR_DT,1,4) = substr({ETL_TX_DT},1,4)

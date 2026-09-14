@@ -64,6 +64,24 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-neo4j</artifactId>
         </dependency>
+
+        <!-- Apache POI: 解析 xlsx 物理表字段元数据 -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.2.5</version>
+        </dependency>
+
+        <!-- JsqlParser: SQL AST 解析（替代正则方案）
+             MyBatis-Plus 3.5.7 的 mybatis-plus-extension 内 PaginationInnerInterceptor 计数逻辑
+             按 jsqlparser 4.9 API 编译（SelectItem 在 4.5 起改为抽象类）。
+             若用 4.4（SelectItem 为接口），启动时反射实例化抛 InstantiationError。
+             故统一锁定 4.9，与 MyBatis-Plus 编译目标一致。 -->
+        <dependency>
+            <groupId>com.github.jsqlparser</groupId>
+            <artifactId>jsqlparser</artifactId>
+            <version>4.9</version>
+        </dependency>
     </dependencies>
 
     <build>

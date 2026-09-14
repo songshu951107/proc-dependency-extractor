@@ -1,0 +1,54 @@
+﻿diff --git a/proc-dependency-extractor/src/main/java/com/hb/extractor/parser/JsqlSqlAnalyzer.java b/proc-dependency-extractor/src/main/java/com/hb/extractor/parser/JsqlSqlAnalyzer.java
+index 0fde850..3997284 100644
+--- a/proc-dependency-extractor/src/main/java/com/hb/extractor/parser/JsqlSqlAnalyzer.java
++++ b/proc-dependency-extractor/src/main/java/com/hb/extractor/parser/JsqlSqlAnalyzer.java
+@@ -15,6 +15,8 @@ import net.sf.jsqlparser.expression.operators.arithmetic.Subtraction;
+ import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
+ import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
+ import net.sf.jsqlparser.expression.operators.relational.ComparisonOperator;
++import net.sf.jsqlparser.expression.operators.relational.InExpression;
++import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
+ import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+ import net.sf.jsqlparser.schema.Column;
+ import net.sf.jsqlparser.schema.Table;
+@@ -450,6 +452,18 @@ public class JsqlSqlAnalyzer {
+             return;
+         }
+ 
++        // MySQL GROUP_CONCAT: 4.9 中解析为 MySQLGroupConcat（不继承 Function），需单独遍历其参数
++        if (expr instanceof net.sf.jsqlparser.expression.MySQLGroupConcat) {
++            net.sf.jsqlparser.expression.MySQLGroupConcat gc =
++                    (net.sf.jsqlparser.expression.MySQLGroupConcat) expr;
++            if (gc.getExpressionList() != null && gc.getExpressionList().getExpressions() != null) {
++                for (Expression arg : gc.getExpressionList().getExpressions()) {
++                    collectColumnRefs(arg, role, result);
++                }
++            }
++            return;
++        }
++
+         // 二元运算（算术、比较、AND/OR）
+         if (expr instanceof net.sf.jsqlparser.expression.operators.conditional.AndExpression) {
+             AndExpression and = (AndExpression) expr;
+@@ -469,6 +483,21 @@ public class JsqlSqlAnalyzer {
+             collectColumnRefs(cmp.getRightExpression(), role, result);
+             return;
+         }
++        if (expr instanceof InExpression) {
++            // IN (...): 左侧字段 + 右侧列表（右侧通常为字面量, 保险起见同样遍历）
++            // 缺失时 CASE WHEN x IN (...) 的条件字段会被静默丢弃, 导致子查询穿透索引缺列
++            InExpression in = (InExpression) expr;
++            collectColumnRefs(in.getLeftExpression(), role, result);
++            Expression right = in.getRightExpression();
++            if (right instanceof ExpressionList) {
++                for (Expression e : ((ExpressionList<?>) right)) {
++                    collectColumnRefs(e, role, result);
++                }
++            } else {
++                collectColumnRefs(right, role, result);
++            }
++            return;
++        }
+         if (expr instanceof Addition) {
+             Addition add = (Addition) expr;
+             collectColumnRefs(add.getLeftExpression(), role, result);

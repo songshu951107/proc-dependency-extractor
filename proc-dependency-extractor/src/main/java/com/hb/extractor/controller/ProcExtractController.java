@@ -6,9 +6,12 @@ import com.hb.extractor.dto.ExtractRequest;
 import com.hb.extractor.dto.Result;
 import com.hb.extractor.dto.ScriptVO;
 import com.hb.extractor.entity.ProcInfo;
+import com.hb.extractor.entity.ProcParseFail;
 import com.hb.extractor.entity.ProcTableDependency;
+import com.hb.extractor.entity.RebuildTaskEntity;
 import com.hb.extractor.service.Neo4jSyncService;
 import com.hb.extractor.service.ProcExtractService;
+import com.hb.extractor.service.impl.AsyncExtractService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +34,9 @@ public class ProcExtractController {
 
     @Autowired
     private Neo4jSyncService neo4jSyncService;
+
+    @Autowired
+    private AsyncExtractService asyncExtractService;
 
     /**
      * 单文件解析入库
@@ -83,6 +89,39 @@ public class ProcExtractController {
             log.error("全量重新解析失败", e);
             return Result.error(e.getMessage());
         }
+    }
+
+    /**
+     * 异步重新解析全部已存在存储过程（后台执行，避免大库请求超时）
+     * POST /api/proc/extract/all/async
+     * 立即返回 taskId，前端轮询进度查询接口。
+     */
+    @PostMapping("/extract/all/async")
+    public Result<String> reExtractAllAsync() {
+        String taskId = asyncExtractService.start();
+        return Result.success(taskId);
+    }
+
+    /**
+     * 查询异步全量解析任务进度
+     * GET /api/proc/extract/all/task/{taskId}
+     */
+    @GetMapping("/extract/all/task/{taskId}")
+    public Result<RebuildTaskEntity> reExtractAllTask(@PathVariable String taskId) {
+        RebuildTaskEntity task = asyncExtractService.get(taskId);
+        if (task == null) {
+            return Result.error(404, "任务不存在或已清除");
+        }
+        return Result.success(task);
+    }
+
+    /**
+     * 查询最近一次全量解析任务进度（页面常驻展示用）
+     * GET /api/proc/extract/all/task/latest
+     */
+    @GetMapping("/extract/all/task/latest")
+    public Result<RebuildTaskEntity> reExtractAllLatest() {
+        return Result.success(asyncExtractService.latest());
     }
 
     /**
@@ -159,6 +198,49 @@ public class ProcExtractController {
             return Result.error(404, "存储过程不存在");
         }
         return Result.success(vo);
+    }
+
+    /**
+     * 分页查询解析失败清单
+     * GET /api/proc/parse-fails?pageNum=1&pageSize=10&procName=xxx&onlyUnresolved=true
+     */
+    @GetMapping("/parse-fails")
+    public Result<IPage<ProcParseFail>> parseFails(
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) String procName,
+            @RequestParam(required = false) Boolean onlyUnresolved) {
+        IPage<ProcParseFail> page = procExtractService.listParseFails(pageNum, pageSize, procName, onlyUnresolved);
+        return Result.success(page);
+    }
+
+    /**
+     * 标记一条解析失败为已处理
+     * POST /api/proc/parse-fail/{id}/resolve
+     */
+    @PostMapping("/parse-fail/{id}/resolve")
+    public Result<Boolean> resolveParseFail(@PathVariable Long id) {
+        boolean ok = procExtractService.resolveParseFail(id);
+        if (!ok) {
+            return Result.error(404, "记录不存在");
+        }
+        return Result.success(true);
+    }
+
+    /**
+     * 重新解析单个存储过程
+     * POST /api/proc/{procName}/reparse
+     */
+    @PostMapping("/{procName}/reparse")
+    public Result<ProcInfo> reparse(@PathVariable String procName) {
+        try {
+            ProcInfo procInfo = procExtractService.reparse(procName);
+            syncNeo4jSafe(procInfo.getProcName());
+            return Result.success(procInfo);
+        } catch (Exception e) {
+            log.error("重新解析存储过程失败 procName={}", procName, e);
+            return Result.error(e.getMessage());
+        }
     }
 
     /**

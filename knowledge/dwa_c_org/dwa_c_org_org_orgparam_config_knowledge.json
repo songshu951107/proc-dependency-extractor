@@ -1,0 +1,104 @@
+{
+  "scriptName": "dwa_c_org_org_orgparam_config.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T10:00:00",
+  "businessScenario": "可视化分析平台-机构配置参数管理，维护县域支行标志和重点县域支行标志",
+  "updateMethod": "全删全插",
+  "targetTable": "C_ORG_ORG_ORGPARAM_CONFIG",
+  "totalBlocks": 2,
+  "fdmScriptsAnalyzed": [],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "SELECT",
+      "blockName": "县域机构信息与配置参数合并",
+      "depth": 0,
+      "sqlCode": "CREATE TEMPORARY TABLE VT_C_ORG_ORG_ORGPARAM_CONFIG_01 AS\nSELECT \n   T1.org_id AS org_no\n  ,NVL(T2.pboc_large_pay_bank_no,'') AS pboc_large_pay_bank_no\n  ,NVL(T2.org_type_cd,'') AS org_type_cd\n  ,NVL(T2.org_attac_inf,'') AS org_attac_inf\n  ,T1.is_xy AS cty_scope_sbubrch_flag\n  ,T1.is_zd AS empha_cty_scope_sbubrch_flag\nFROM O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL T1\nLEFT JOIN C_ORG_ORG_ORGPARAM_CONFIG T2\n  ON T1.org_id = T2.org_no\nWHERE T1.start_dt <= DATE'{ETL_TX_DT}'\n  AND T1.end_dt > DATE'{ETL_TX_DT}'",
+      "tracedSqlCode": "CREATE TEMPORARY TABLE VT_C_ORG_ORG_ORGPARAM_CONFIG_01 AS\nSELECT \n   T1.org_id AS org_no\n  ,NVL(T2.pboc_large_pay_bank_no,'') AS pboc_large_pay_bank_no\n  ,NVL(T2.org_type_cd,'') AS org_type_cd\n  ,NVL(T2.org_attac_inf,'') AS org_attac_inf\n  ,T1.is_xy AS cty_scope_sbubrch_flag\n  ,T1.is_zd AS empha_cty_scope_sbubrch_flag\nFROM O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL T1\nLEFT JOIN C_ORG_ORG_ORGPARAM_CONFIG T2\n  ON T1.org_id = T2.org_no\nWHERE T1.start_dt <= DATE'{ETL_TX_DT}'\n  AND T1.end_dt > DATE'{ETL_TX_DT}'",
+      "businessScenario": "可视化分析平台-从ODM层获取当前有效的县域支行信息，与已有配置参数做左关联合并，保留手工维护的非县域字段，更新县域标志和重点县域标志",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL"],
+      "originalTables": ["O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL"],
+      "tableJoinLogic": "以ODM层县域附加信息表(O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL)为主表，通过机构号(org_id = org_no)左关联CDM层机构配置参数表(C_ORG_ORG_ORGPARAM_CONFIG)，保留手工维护的pboc_large_pay_bank_no、org_type_cd、org_attac_inf字段，同时从ODM表获取县域标志(is_xy)和重点县域标志(is_zd)",
+      "queryDimensions": "机构号、县域标志、重点县域标志、人行大额支付行号、机构类型、机构附属信息",
+      "tags": ["县域支行", "机构配置", "参数管理", "县域标志", "重点县域支行", "数据合并", "左关联"],
+      "traceChains": [],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "当前有效县域机构信息获取",
+          "derivedSql": "SELECT org_id, is_xy, is_zd, belo_city, belo_cty, brch_id, brch_name, org_name FROM O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL WHERE start_dt <= DATE'{ETL_TX_DT}' AND end_dt > DATE'{ETL_TX_DT}'",
+          "businessMeaning": "通过start_dt和end_dt日期范围筛选，获取在ETL数据日期当日有效的县域机构附加信息记录，包含县域标志和重点县域标志",
+          "sourceTable": "O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL",
+          "originalTable": "O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL"
+        },
+        {
+          "knowledgeName": "机构配置手工字段保留",
+          "derivedSql": "SELECT org_no, pboc_large_pay_bank_no, org_type_cd, org_attac_inf FROM C_ORG_ORG_ORGPARAM_CONFIG",
+          "businessMeaning": "从机构配置参数表获取手工维护的非县域字段（人行大额支付行号、机构类型代码、机构附属信息），在合并时若ODM表中无对应的机构记录则保留原值为空字符串",
+          "sourceTable": "C_ORG_ORG_ORGPARAM_CONFIG",
+          "originalTable": "C_ORG_ORG_ORGPARAM_CONFIG"
+        },
+        {
+          "knowledgeName": "县域标志字段映射",
+          "derivedSql": "SELECT org_id AS org_no, is_xy AS cty_scope_sbubrch_flag, is_zd AS empha_cty_scope_sbubrch_flag FROM O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL WHERE start_dt <= DATE'{ETL_TX_DT}' AND end_dt > DATE'{ETL_TX_DT}'",
+          "businessMeaning": "将ODM层的is_xy字段映射为CDM层的cty_scope_sbubrch_flag（县域支行标志），is_zd字段映射为empha_cty_scope_sbubrch_flag（重点县域支行标志），实现从贴源层到共性层的字段标准化",
+          "sourceTable": "O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL",
+          "originalTable": "O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "DELETE_INSERT",
+      "blockName": "全删全插更新机构配置参数表",
+      "depth": 0,
+      "sqlCode": "DELETE FROM C_ORG_ORG_ORGPARAM_CONFIG;\nINSERT INTO C_ORG_ORG_ORGPARAM_CONFIG\nSELECT\n   org_no\n  ,pboc_large_pay_bank_no\n  ,org_type_cd\n  ,org_attac_inf\n  ,cty_scope_sbubrch_flag\n  ,empha_cty_scope_sbubrch_flag\nFROM VT_C_ORG_ORG_ORGPARAM_CONFIG_01",
+      "tracedSqlCode": "DELETE FROM C_ORG_ORG_ORGPARAM_CONFIG;\nINSERT INTO C_ORG_ORG_ORGPARAM_CONFIG\nSELECT\n   org_no\n  ,pboc_large_pay_bank_no\n  ,org_type_cd\n  ,org_attac_inf\n  ,cty_scope_sbubrch_flag\n  ,empha_cty_scope_sbubrch_flag\nFROM VT_C_ORG_ORG_ORGPARAM_CONFIG_01",
+      "businessScenario": "数据仓库共性层-采用全删全插方式将合并后的机构配置数据写入目标表，确保机构配置参数与ODM层县域信息保持同步",
+      "sqlFunction": "数据加载写入",
+      "involvedTables": ["O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL"],
+      "originalTables": ["O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL"],
+      "tableJoinLogic": "先将目标表C_ORG_ORG_ORGPARAM_CONFIG全部清空，再从临时表VT_C_ORG_ORG_ORGPARAM_CONFIG_01全量插入合并后的机构配置数据，临时表数据来源于上一步的ODM层与CDM层左关联结果",
+      "queryDimensions": "机构号、人行大额支付行号、机构类型代码、机构附属信息、县域支行标志、重点县域支行标志",
+      "tags": ["全删全插", "机构配置", "数据同步", "县域支行"],
+      "traceChains": [],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "机构配置参数全量更新",
+          "derivedSql": "INSERT INTO C_ORG_ORG_ORGPARAM_CONFIG (org_no, pboc_large_pay_bank_no, org_type_cd, org_attac_inf, cty_scope_sbubrch_flag, empha_cty_scope_sbubrch_flag) SELECT org_no, pboc_large_pay_bank_no, org_type_cd, org_attac_inf, cty_scope_sbubrch_flag, empha_cty_scope_sbubrch_flag FROM (SELECT T1.org_id AS org_no, NVL(T2.pboc_large_pay_bank_no,'') AS pboc_large_pay_bank_no, NVL(T2.org_type_cd,'') AS org_type_cd, NVL(T2.org_attac_inf,'') AS org_attac_inf, T1.is_xy AS cty_scope_sbubrch_flag, T1.is_zd AS empha_cty_scope_sbubrch_flag FROM O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL T1 LEFT JOIN C_ORG_ORG_ORGPARAM_CONFIG T2 ON T1.org_id = T2.org_no WHERE T1.start_dt <= DATE'{ETL_TX_DT}' AND T1.end_dt > DATE'{ETL_TX_DT}') T",
+          "businessMeaning": "全量更新机构配置参数表的完整逻辑：先清空再插入，从ODM层获取当前有效的县域信息，与已有配置参数合并，只更新县域标志字段，其他字段保留手工维护值",
+          "sourceTable": "O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL",
+          "originalTable": "O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL"],
+  "allOriginalTables": ["O_VSAP_A_ORG_CTY_ADDIT_RECOR_DTL"],
+  "traceSummary": {
+    "totalFdmTables": 0,
+    "scriptsFound": 0,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "只更新县域相关字段",
+      "condition": "脚本只维护cty_scope_sbubrch_flag（县域支行标志）和empha_cty_scope_sbubrch_flag（重点县域支行标志），其他字段（pboc_large_pay_bank_no、org_type_cd、org_attac_inf）通过NVL保留原值或为空",
+      "description": "机构配置参数表中的人行大额支付行号、机构类型代码、机构附属信息由手工维护，ETL脚本不覆盖这些字段，仅从ODM层更新县域标志信息"
+    },
+    {
+      "ruleName": "当前有效数据过滤",
+      "condition": "T1.start_dt <= DATE'{ETL_TX_DT}' AND T1.end_dt > DATE'{ETL_TX_DT}'",
+      "description": "通过开始日期和结束日期筛选ODM层县域附加信息表中当前有效的数据记录，确保只使用ETL数据日期当日在有效期间内的机构信息"
+    },
+    {
+      "ruleName": "全删全插更新策略",
+      "condition": "DELETE FROM C_ORG_ORG_ORGPARAM_CONFIG 后 INSERT INTO ... SELECT ... FROM VT_表",
+      "description": "每次执行先清空目标表全部数据，再从临时表全量插入最新合并结果，确保数据完整性和一致性，不做增量更新"
+    }
+  ]
+}

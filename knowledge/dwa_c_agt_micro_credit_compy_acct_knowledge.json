@@ -1,0 +1,123 @@
+{
+  "scriptName": "dwa_c_agt_micro_credit_compy_acct.py",
+  "extractTime": "2026-05-10T10:30:00",
+  "totalBlocks": 2,
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "alias": null,
+      "sqlCode": "INSERT INTO {CDM}.C_AGT_MICRO_CREDIT_COMPY_ACCT SELECT DATE '{ETL_TX_DT}', TA1.agent_pay_compy_acct_no, TA1.agent_pay_compy_name, TA1.corp_cust_no, TA1.org_no FROM (SELECT T01.agent_pay_compy_acct_no, T01.agent_pay_compy_name, CASE WHEN T03.main_cust_no IS NOT NULL THEN T03.main_cust_no WHEN T04.core_cust_no IS NOT NULL THEN T04.core_cust_no ELSE T01.agent_pay_compy_name END AS corp_cust_no, T01.org_no FROM {CDM}.C_AGT_MICRO_CREDIT_COMPY_ACCT_INIT T01 LEFT JOIN {FDM}.F_AC_CRBS_CUST_ACCT_NO T03 ON T01.agent_pay_compy_acct_no = T03.cust_acct_no AND T03.start_dt <= DATE '{ETL_TX_DT}' AND T03.end_dt > DATE '{ETL_TX_DT}' AND T03.del_flag <> 'D' LEFT JOIN (SELECT cust_name, core_cust_no, ROW_NUMBER()OVER(PARTITION BY cust_name ORDER BY last_update_tm DESC) t4rn FROM {FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF WHERE cust_type_cd = '2' AND start_dt <= DATE '{ETL_TX_DT}' AND end_dt > DATE '{ETL_TX_DT}' AND del_flag <> 'D') T04 ON T01.agent_pay_compy_name = T04.cust_name AND T04.t4rn = 1) TA1 GROUP BY TA1.agent_pay_compy_acct_no, TA1.agent_pay_compy_name, TA1.corp_cust_no, TA1.org_no",
+      "businessScenario": "数据仓库代发业务-从初始化表获取2023年6月30日前的历史小额贷记公司账户信息，通过客户账号或客户名称匹配核心客户号",
+      "sqlFunction": "多表关联查询与客户号匹配",
+      "involvedTables": ["C_AGT_MICRO_CREDIT_COMPY_ACCT_INIT", "F_AC_CRBS_CUST_ACCT_NO", "F_PT_ECIF_WHOLE_BANK_CUST_INF"],
+      "tableJoinLogic": "优先通过客户账号关联核心客户账号表获取主客户号，其次通过客户名称关联全行客户信息表获取核心客户号",
+      "queryDimensions": "数据日期、代发公司账号、代发公司名称、客户号、机构号",
+      "tags": ["小额贷记", "客户号匹配", "历史数据"],
+      "synonyms": ["代发公司账户", "小额贷记单位"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "对公客户核心客户号",
+          "derivedSql": "SELECT cust_name, core_cust_no FROM {FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF WHERE cust_type_cd = '2' AND del_flag <> 'D'",
+          "businessMeaning": "通过客户类型代码为'2'(对公客户)筛选对公客户的核心客户号和客户名称",
+          "sourceTable": "F_PT_ECIF_WHOLE_BANK_CUST_INF"
+        },
+        {
+          "knowledgeName": "客户账号与主客户号对照",
+          "derivedSql": "SELECT cust_acct_no, main_cust_no FROM {FDM}.F_AC_CRBS_CUST_ACCT_NO WHERE del_flag <> 'D'",
+          "businessMeaning": "获取客户账号与主客户号的对照关系，用于通过账号查询客户号",
+          "sourceTable": "F_AC_CRBS_CUST_ACCT_NO"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 1,
+      "blockType": "SELECT",
+      "depth": 1,
+      "alias": "T04",
+      "sqlCode": "SELECT cust_name, core_cust_no, ROW_NUMBER()OVER(PARTITION BY cust_name ORDER BY last_update_tm DESC) t4rn FROM {FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF WHERE cust_type_cd = '2' AND start_dt <= DATE '{ETL_TX_DT}' AND end_dt > DATE '{ETL_TX_DT}' AND del_flag <> 'D'",
+      "businessScenario": "数据仓库客户管理-按客户名称去重获取对公客户最新核心客户号",
+      "sqlFunction": "窗口函数去重",
+      "involvedTables": ["F_PT_ECIF_WHOLE_BANK_CUST_INF"],
+      "tableJoinLogic": "单表查询，通过客户类型代码筛选对公客户，按最后更新时间排序取最新记录",
+      "queryDimensions": "客户名称、核心客户号、最后更新时间",
+      "tags": ["对公客户", "去重", "子查询"],
+      "synonyms": ["企业客户查询", "公司客户号"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "对公客户最新记录",
+          "derivedSql": "SELECT cust_name, core_cust_no FROM {FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF WHERE cust_type_cd = '2' AND del_flag <> 'D' ORDER BY last_update_tm DESC LIMIT 1",
+          "businessMeaning": "获取对公客户按名称去重后的最新核心客户号，用于客户名称匹配",
+          "sourceTable": "F_PT_ECIF_WHOLE_BANK_CUST_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "alias": null,
+      "sqlCode": "INSERT INTO {CDM}.C_AGT_MICRO_CREDIT_COMPY_ACCT SELECT DATE '{ETL_TX_DT}', TA1.agent_pay_compy_acct_no, TA1.agent_pay_compy_name, TA1.corp_cust_no, TA1.org_no FROM (SELECT T01.agent_pay_compy_acct_no, T01.agent_pay_compy_name, CASE WHEN T03.main_cust_no IS NOT NULL THEN T03.main_cust_no WHEN T04.core_cust_no IS NOT NULL THEN T04.core_cust_no ELSE T01.agent_pay_compy_name END AS corp_cust_no, T02.ORG_ID FROM {CDM}.C_TRN_MICRO_CREDIT_FLOWS T01 INNER JOIN (SELECT org_id, unit_cust_no, unit_name, ROW_NUMBER()OVER(PARTITION BY unit_name ORDER BY related_unit_cust_no DESC, related_unit_cust_name DESC, unit_cust_no DESC) t2rn FROM {CDM}.C_CUS_ENT_ADDIT_RECOR_INF WHERE data_dt = DATE '{ETL_TX_DT}' AND est_agent_pay_chan = '他行小额贷记' AND LENGTH(unit_name) > 3) T02 ON T01.agent_pay_compy_name = T02.unit_name AND T02.t2rn = 1 LEFT JOIN {FDM}.F_AC_CRBS_CUST_ACCT_NO T03 ON T01.agent_pay_compy_acct_no = T03.cust_acct_no AND T03.start_dt <= DATE '{ETL_TX_DT}' AND T03.end_dt > DATE '{ETL_TX_DT}' AND T03.del_flag <> 'D' LEFT JOIN (SELECT cust_name, core_cust_no, ROW_NUMBER()OVER(PARTITION BY cust_name ORDER BY last_update_tm DESC) t4rn FROM {FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF WHERE cust_type_cd = '2' AND start_dt <= DATE '{ETL_TX_DT}' AND end_dt > DATE '{ETL_TX_DT}' AND del_flag <> 'D') T04 ON T01.agent_pay_compy_name = T04.cust_name AND T04.t4rn = 1 WHERE T01.data_dt >= DATE '20230701' AND T01.data_dt <= DATE '{ETL_TX_DT}') TA1 GROUP BY TA1.agent_pay_compy_acct_no, TA1.agent_pay_compy_name, TA1.corp_cust_no, TA1.org_no",
+      "businessScenario": "数据仓库代发业务-从流水表获取2023年7月1日后新增小额贷记公司账户信息，关联企业补录信息获取机构号并匹配核心客户号",
+      "sqlFunction": "多表关联与UNION合并",
+      "involvedTables": ["C_TRN_MICRO_CREDIT_FLOWS", "C_CUS_ENT_ADDIT_RECOR_INF", "F_AC_CRBS_CUST_ACCT_NO", "F_PT_ECIF_WHOLE_BANK_CUST_INF"],
+      "tableJoinLogic": "通过企业名称关联企业补录信息表获取机构号，再通过客户账号或名称匹配核心客户号",
+      "queryDimensions": "数据日期、代发公司账号、代发公司名称、客户号、机构号",
+      "tags": ["小额贷记", "流水数据", "客户号匹配"],
+      "synonyms": ["代发公司账户", "新增小额贷记单位"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "他行小额贷记企业",
+          "derivedSql": "SELECT org_id, unit_cust_no, unit_name FROM {CDM}.C_CUS_ENT_ADDIT_RECOR_INF WHERE est_agent_pay_chan = '他行小额贷记' AND LENGTH(unit_name) > 3",
+          "businessMeaning": "筛选预计代发渠道为'他行小额贷记'且单位名称长度大于3的企业补录信息",
+          "sourceTable": "C_CUS_ENT_ADDIT_RECOR_INF"
+        },
+        {
+          "knowledgeName": "小额贷记流水数据",
+          "derivedSql": "SELECT agent_pay_compy_acct_no, agent_pay_compy_name, cust_no FROM {CDM}.C_TRN_MICRO_CREDIT_FLOWS WHERE data_dt >= DATE '20230701'",
+          "businessMeaning": "获取2023年7月1日之后的小额贷记流水数据，包括代发公司账号、名称和客户号",
+          "sourceTable": "C_TRN_MICRO_CREDIT_FLOWS"
+        }
+      ]
+    },
+    {
+      "blockIndex": 4,
+      "parentBlockIndex": 3,
+      "blockType": "SELECT",
+      "depth": 1,
+      "alias": "T02",
+      "sqlCode": "SELECT org_id, unit_cust_no, unit_name, ROW_NUMBER()OVER(PARTITION BY unit_name ORDER BY related_unit_cust_no DESC, related_unit_cust_name DESC, unit_cust_no DESC) t2rn FROM {CDM}.C_CUS_ENT_ADDIT_RECOR_INF WHERE data_dt = DATE '{ETL_TX_DT}' AND est_agent_pay_chan = '他行小额贷记' AND LENGTH(unit_name) > 3",
+      "businessScenario": "数据仓库代发业务-按单位名称去重获取他行小额贷记企业的机构号和客户号",
+      "sqlFunction": "窗口函数去重",
+      "involvedTables": ["C_CUS_ENT_ADDIT_RECOR_INF"],
+      "tableJoinLogic": "单表查询，通过预计代发渠道筛选他行小额贷记企业，按关联客户号排序取优先记录",
+      "queryDimensions": "机构号、单位客户号、单位名称、预计代发渠道",
+      "tags": ["他行小额贷记", "企业去重", "子查询"],
+      "synonyms": ["代发企业信息", "小额贷记单位"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "他行小额贷记企业去重",
+          "derivedSql": "SELECT org_id, unit_cust_no, unit_name FROM {CDM}.C_CUS_ENT_ADDIT_RECOR_INF WHERE est_agent_pay_chan = '他行小额贷记' AND LENGTH(unit_name) > 3 ORDER BY related_unit_cust_no DESC LIMIT 1",
+          "businessMeaning": "获取他行小额贷记企业按名称去重后的机构号和客户号，优先选择有关联客户号的记录",
+          "sourceTable": "C_CUS_ENT_ADDIT_RECOR_INF"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": [
+    "C_AGT_MICRO_CREDIT_COMPY_ACCT_INIT",
+    "C_TRN_MICRO_CREDIT_FLOWS",
+    "C_CUS_ENT_ADDIT_RECOR_INF",
+    "F_AC_CRBS_CUST_ACCT_NO",
+    "F_PT_ECIF_WHOLE_BANK_CUST_INF",
+    "C_AGT_MICRO_CREDIT_COMPY_ACCT"
+  ]
+}

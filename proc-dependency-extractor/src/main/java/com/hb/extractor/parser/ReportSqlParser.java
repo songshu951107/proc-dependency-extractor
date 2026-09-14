@@ -23,37 +23,79 @@ public class ReportSqlParser {
     /** ${if(...)} 帆软动态参数 */
     private static final Pattern FR_PARAM_PATTERN = Pattern.compile("\\$\\{[^}]*\\}");
 
-    /** 行注释 -- ... */
-    private static final Pattern LINE_COMMENT_PATTERN = Pattern.compile("--[^\\n]*");
-
-    /** 块注释 (C 风格 star-slash) */
-    private static final Pattern BLOCK_COMMENT_PATTERN = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
-
     /** FROM/JOIN 后的表引用: [schema.]table [alias] */
     private static final Pattern FROM_JOIN_PATTERN = Pattern.compile(
             "(?i)\\b(FROM|JOIN)\\s+(?:(\\w+)\\.)?(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?");
 
-    /** AS 别名: expr AS alias */
+    /** 单词 token（用于裸列提取） */
+    private static final Pattern WORD_PATTERN = Pattern.compile("\\b(\\w+)\\b");
+
+    /** AS 别名: expr AS alias 或 expr AS 'alias' / "alias"（帆软报表常用单引号汉字别名，如 round(bal/10000,2) as '账户余额'） */
     private static final Pattern AS_ALIAS_PATTERN = Pattern.compile(
-            "(?i)\\bAS\\s+(\\w+)\\s*$");
+            "(?i)\\bAS\\s+(\\w+|'[^']*'|\"[^\"]*\")\\s*$");
 
     /** alias.field 模式 */
     private static final Pattern ALIAS_FIELD_PATTERN = Pattern.compile("(\\w+)\\.(\\w+)");
 
-    /** 末尾空格别名: expr alias */
+    /** 末尾空格别名: expr alias 或 expr 'alias'（Oracle 风格无 AS + 引号别名） */
     private static final Pattern SPACE_ALIAS_PATTERN = Pattern.compile(
-            "\\s+(\\w+)\\s*$");
+            "\\s+(\\w+|'[^']*'|\"[^\"]*\")\\s*$");
 
     /**
-     * 预处理 SQL：去除帆软参数和注释
+     * 预处理 SQL：去除帆软参数和注释。
+     * 注释剥离必须感知单引号字符串状态——否则字符串字面量里的 "--"（如
+     * REPLACE(CUST_NAME,'--河北银行保证金','')）会被误判为行注释，
+     * 连带吃掉右括号导致后续括号深度错乱、列拆分失败。
      */
     public String preprocess(String sql) {
         if (sql == null) return "";
-        String result = sql;
-        result = FR_PARAM_PATTERN.matcher(result).replaceAll("__PARAM__");
-        result = BLOCK_COMMENT_PATTERN.matcher(result).replaceAll(" ");
-        result = LINE_COMMENT_PATTERN.matcher(result).replaceAll(" ");
-        return result;
+        String result = FR_PARAM_PATTERN.matcher(sql).replaceAll("__PARAM__");
+        return stripComments(result);
+    }
+
+    /** 感知字符串的注释剥离：引号内的 -- 和 /* 不视为注释 */
+    private String stripComments(String sql) {
+        StringBuilder sb = new StringBuilder(sql.length());
+        boolean inString = false;
+        for (int i = 0; i < sql.length(); i++) {
+            char c = sql.charAt(i);
+            if (inString) {
+                sb.append(c);
+                if (c == '\'') {
+                    // '' 转义仍处于字符串内，否则字符串结束
+                    if (i + 1 < sql.length() && sql.charAt(i + 1) == '\'') {
+                        sb.append('\'');
+                        i++;
+                    } else {
+                        inString = false;
+                    }
+                }
+                continue;
+            }
+            if (c == '\'') {
+                inString = true;
+                sb.append(c);
+                continue;
+            }
+            // 行注释 --（引号外）
+            if (c == '-' && i + 1 < sql.length() && sql.charAt(i + 1) == '-') {
+                int nl = sql.indexOf('\n', i);
+                if (nl == -1) break;
+                sb.append(' ');
+                i = nl - 1; // 保留换行，下一轮从 \n 继续
+                continue;
+            }
+            // 块注释（引号外）
+            if (c == '/' && i + 1 < sql.length() && sql.charAt(i + 1) == '*') {
+                int end = sql.indexOf("*/", i + 2);
+                if (end == -1) break;
+                sb.append(' ');
+                i = end + 1;
+                continue;
+            }
+            sb.append(c);
+        }
+        return sb.toString();
     }
 
     /**
@@ -115,8 +157,9 @@ public class ReportSqlParser {
                 aliasToTable.put(ref.getAlias(), ref.getFullName());
             }
         }
-        // 单表（无论是否有别名）时作为无 alias.field 字段的兜底源表
-        String defaultTable = tableRefs.size() == 1 ? tableRefs.get(0).getFullName() : null;
+        // 无 alias.field 限定字段的兜底源表：取 FROM 主表（多表 JOIN 时未限定列按惯例归属主表，
+        // 如 acct_no/rate/bal 均来自 FROM GMDATA.G_AG_DP_ACCT t，仅 t1.brch_spl_nm 显式限定）
+        String defaultTable = tableRefs.isEmpty() ? null : tableRefs.get(0).getFullName();
 
         // 按括号深度拆分列
         List<String> columns = splitSelectColumns(selectClause);
@@ -182,13 +225,13 @@ public class ReportSqlParser {
         String alias = null;
         String sourceExpr = expr;
         if (asMatcher.find()) {
-            alias = asMatcher.group(1);
+            alias = stripAliasQuotes(asMatcher.group(1));
             sourceExpr = expr.substring(0, asMatcher.start()).trim();
         } else {
             // 尝试末尾空格别名（如 nvl(a.X,0) CURR_BAL）
             Matcher spaceMatcher = SPACE_ALIAS_PATTERN.matcher(expr);
             if (spaceMatcher.find()) {
-                String candidate = spaceMatcher.group(1);
+                String candidate = stripAliasQuotes(spaceMatcher.group(1));
                 // 排除关键字和函数名
                 if (!isKeyword(candidate) && !expr.endsWith("(" + candidate + ")")) {
                     alias = candidate;
@@ -225,13 +268,45 @@ public class ReportSqlParser {
             if (table != null) {
                 mapping.setSourceTable(table);
             }
-        } else if (defaultTable != null) {
-            // 无 alias.field 且仅单表，归属到该表
-            mapping.setSourceField(alias.toUpperCase());
-            mapping.setSourceTable(defaultTable);
+        } else {
+            // 无 alias.field 限定：提取表达式中的首个裸列（跳过函数名/关键字/数字字面量），
+            // 归属到 FROM 主表。如 round(bal/10000,2) → 字段 BAL；rate → 字段 RATE
+            String fieldName = extractFirstColumn(sourceExpr);
+            if (fieldName != null) {
+                mapping.setSourceField(fieldName);
+                if (defaultTable != null) {
+                    mapping.setSourceTable(defaultTable);
+                }
+            }
         }
 
         return mapping;
+    }
+
+    /** 从表达式中提取第一个裸列名：跳过函数名（后跟 '('）、关键字、数字字面量 */
+    private String extractFirstColumn(String expr) {
+        Matcher m = WORD_PATTERN.matcher(expr);
+        while (m.find()) {
+            String tok = m.group(1);
+            if (Character.isDigit(tok.charAt(0))) continue;
+            if (isKeyword(tok)) continue;
+            int after = m.end();
+            while (after < expr.length() && Character.isWhitespace(expr.charAt(after))) after++;
+            if (after < expr.length() && expr.charAt(after) == '(') continue;
+            return tok.toUpperCase();
+        }
+        return null;
+    }
+
+    /** 剥离别名的引号（'账户余额' → 账户余额）；无引号原样返回 */
+    private String stripAliasQuotes(String alias) {
+        if (alias == null) return null;
+        if (alias.length() >= 2
+                && ((alias.startsWith("'") && alias.endsWith("'"))
+                 || (alias.startsWith("\"") && alias.endsWith("\"")))) {
+            return alias.substring(1, alias.length() - 1);
+        }
+        return alias;
     }
 
     private boolean isKeyword(String word) {

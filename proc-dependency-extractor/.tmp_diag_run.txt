@@ -1,0 +1,690 @@
+﻿=== PROC dwa_A_D_FIN_GL_SUBJ_BAL_B ===
+  [b2] 无目标表或无SELECT: target=VT_A_D_FIN_GL_SUBJ_BAL_B_01
+  [b3] target=vt_a_d_fin_gl_subj_bal_b_01 mappings=30 broken=0 aliasMap={T1=f_fi_figl_subj_bal_tab_b} ddl=null
+  [b4] 无目标表或无SELECT: target=VT_A_D_FIN_GL_SUBJ_BAL_B_02
+  [b5] target=vt_a_d_fin_gl_subj_bal_b_02 mappings=16 broken=0 aliasMap={T1=f_fi_figl_subj_bal_tab_b} ddl=null
+  [b6] target=a_d_fin_gl_subj_bal_b mappings=56 broken=0 aliasMap={T1=vt_a_d_fin_gl_subj_bal_b_01, T2=vt_a_d_fin_gl_subj_bal_b_02} ddl=null
+  [b7] 无目标表或无SELECT: target=VT_A_D_FIN_GL_SUBJ_BAL_B_03
+  [b8] target=vt_a_d_fin_gl_subj_bal_b_03 mappings=30 broken=26 aliasMap={T1=a_d_fin_gl_subj_bal_b, T2=null} ddl=null
+    BROKEN target=expr_5 <- last_dt_rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_6 <- last_tdb_rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_7 <- lme_rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_8 <- lqe_rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_9 <- lfe_rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_10 <- lye_rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_11 <- last_dt_rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_12 <- last_tdb_rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_13 <- lme_rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_14 <- lqe_rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_15 <- lfe_rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_16 <- lye_rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_17 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_18 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_19 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_20 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_21 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_22 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_23 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_24 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_25 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_26 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_27 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_28 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_29 <- rate_rmb (alias=T2, role=value)
+    BROKEN target=expr_30 <- rate_rmb (alias=T2, role=value)
+  [b9] 无目标表或无SELECT: target=VT_A_D_FIN_GL_SUBJ_BAL_B_04
+  [b10] target=vt_a_d_fin_gl_subj_bal_b_04 mappings=15 broken=12 aliasMap={T1=f_fi_figl_subj_bal_tab_b, T2=null} ddl=null
+    BROKEN target=expr_4 <- term_end_bal_debit (alias=null, role=value)
+    BROKEN target=expr_5 <- term_end_bal_debit (alias=null, role=value)
+    BROKEN target=expr_6 <- term_end_bal_debit (alias=null, role=value)
+    BROKEN target=expr_7 <- term_end_bal_debit (alias=null, role=value)
+    BROKEN target=expr_8 <- term_end_bal_debit (alias=null, role=value)
+    BROKEN target=expr_9 <- term_end_bal_debit (alias=null, role=value)
+    BROKEN target=expr_10 <- term_end_bal_credit (alias=null, role=value)
+    BROKEN target=expr_11 <- term_end_bal_credit (alias=null, role=value)
+    BROKEN target=expr_12 <- term_end_bal_credit (alias=null, role=value)
+    BROKEN target=expr_13 <- term_end_bal_credit (alias=null, role=value)
+    BROKEN target=expr_14 <- term_end_bal_credit (alias=null, role=value)
+    BROKEN target=expr_15 <- term_end_bal_credit (alias=null, role=value)
+  [b11] target=a_d_fin_gl_subj_bal_b mappings=56 broken=0 aliasMap={T1=vt_a_d_fin_gl_subj_bal_b_03, T2=vt_a_d_fin_gl_subj_bal_b_04} ddl=null
+  [b12] target=a_d_fin_gl_subj_bal_b mappings=56 broken=0 aliasMap={A_D_FIN_GL_SUBJ_BAL_B=a_d_fin_gl_subj_bal_b} ddl=null
+  [b13] target=a_d_fin_gl_subj_bal_b mappings=56 broken=0 aliasMap={A_D_FIN_GL_SUBJ_BAL_B=a_d_fin_gl_subj_bal_b} ddl=null
+12:02:27.212 [main] WARN com.hb.extractor.parser.JsqlSqlAnalyzer -- JsqlParser 解析失败（块将跳过）: net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+    at line 4, column 5.
+
+Was expecting one of:
+
+    "."
+    "::"
+    "ON"
+    "RETURN"
+    "RETURNING"
+    "["
+    "^"
+    <EOF>
+    <ST_SEMICOLON>
+ | preprocess 后 SQL 预览(前200字符): INSERT INTO   CDM.VT_C_AGT_CREDIT_CARD_ACCT_07
+select  T2.ACCT_NO   
+,SUM(CASE WHEN  DATE '__ph_ETL_TX_DT__'-1>=DATE(add_months(T3.LAST_RECOMB_DT,+6))  AND DATE(T2.REPAY_DT)>=DATE(T3.LAST_RECOMB_DT) T...
+12:02:27.419 [main] WARN com.hb.extractor.parser.JsqlSqlAnalyzer -- JsqlParser 解析失败（块将跳过）: net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "<" "<"
+    at line 18, column 73.
+
+Was expecting one of:
+
+    "::"
+    "THEN"
+    "["
+    "^"
+ | preprocess 后 SQL 预览(前200字符): INSERT INTO CDM.C_AGT_CREDIT_CARD_ACCT
+SELECT 
+'__ph_ETL_TX_DT__'
+,T1.acct_no
+,T1.bank as bank_no
+,T8.unifi_cust_no
+,T1.custr_nbr AS iden_no
+,T8.cust_name  
+,T1.acct_sts_cd
+,T1.acct_class_cd
+,T1.check...
+=== PROC dwa_c_agt_credit_card_info ===
+  [b9] 无目标表或无SELECT: target=VT_C_AGT_CREDIT_CARD_INFO_SCLN_01
+  [b10] 无目标表或无SELECT: target=VT_C_AGT_CREDIT_CARD_INFO_SCLN_05
+  [b11] 无目标表或无SELECT: target=VT_C_AGT_CREDIT_CARD_INFO_SCLN_02
+  [b12] 无目标表或无SELECT: target=VT_C_AGT_CREDIT_CARD_INFO_SCLN_03
+  [b13] 无目标表或无SELECT: target=VT_C_AGT_CREDIT_CARD_INFO_SCLN_04
+  [b14] 无目标表或无SELECT: target=VT_C_AGT_CREDIT_CARD_INFO_SCLN_06
+  [b15] 无目标表或无SELECT: target=VT_C_AGT_CREDIT_CARD_INFO_SCLN_07
+  [b16] target=vt_c_agt_credit_card_info_scln_06 mappings=6 broken=0 aliasMap={A=null} ddl=null
+  [b17] target=vt_c_agt_credit_card_info_scln_02 mappings=2 broken=0 aliasMap={F_EV_CCRD_ACCTG_TXN_FLOWS=f_ev_ccrd_acctg_txn_flows} ddl=null
+  [b18] target=vt_c_agt_credit_card_info_scln_01 mappings=9 broken=3 aliasMap={T1=f_md_ccrd_card_info, T2=vt_c_agt_credit_card_info_scln_06, T3=null, WS1=null, WS2=null} ddl=null
+    BROKEN target=intiv_org <- mq_org (alias=WS2, role=value)
+    BROKEN target=intiv_person <- mq_manager (alias=WS2, role=value)
+    BROKEN target=mq_org <- mq_org (alias=WS1, role=value)
+  [b19] target=vt_c_agt_credit_card_info_scln_05 mappings=10 broken=3 aliasMap={T1=null, T2=null, T3=f_ev_ccrd_recmd_person_matrl_book, WS1=null, WS2=null} ddl=null
+    BROKEN target=intiv_org <- mq_org (alias=WS2, role=value)
+    BROKEN target=intiv_person <- mq_manager (alias=WS2, role=value)
+    BROKEN target=mq_org <- mq_org (alias=WS1, role=value)
+  [b20] target=vt_c_agt_credit_card_info_scln_02 mappings=2 broken=0 aliasMap={F_EV_CCRD_ACCTG_TXN_FLOWS=f_ev_ccrd_acctg_txn_flows} ddl=null
+  [b21] target=vt_c_agt_credit_card_info_scln_02 mappings=2 broken=0 aliasMap={C_AGT_CREDIT_CARD_INFO=c_agt_credit_card_info} ddl=null
+  [b22] target=vt_c_agt_credit_card_info_scln_01 mappings=9 broken=3 aliasMap={T1=f_md_ccrd_card_info, T2=null, WS1=null, WS2=null} ddl=null
+    BROKEN target=intiv_org <- mq_org (alias=WS2, role=value)
+    BROKEN target=intiv_person <- mq_manager (alias=WS2, role=value)
+    BROKEN target=mq_org <- mq_org (alias=WS1, role=value)
+  [b23] target=vt_c_agt_credit_card_info_scln_05 mappings=10 broken=3 aliasMap={T1=null, T2=null, T3=f_ev_ccrd_recmd_person_matrl_book, WS1=null, WS2=null} ddl=null
+    BROKEN target=intiv_org <- mq_org (alias=WS2, role=value)
+    BROKEN target=intiv_person <- mq_manager (alias=WS2, role=value)
+    BROKEN target=mq_org <- mq_org (alias=WS1, role=value)
+  [b24] target=vt_c_agt_credit_card_info_scln_07 mappings=2 broken=1 aliasMap={T1=f_md_ccrd_card_info, T2=null} ddl=null
+    BROKEN target=issued_dt <- issued_dt (alias=null, role=value)
+  [b25] target=vt_c_agt_credit_card_info_scln_03 mappings=1 broken=0 aliasMap={T1=null, T2=null, T3=null, T4=null} ddl=null
+  [b26] target=vt_c_agt_credit_card_info_scln_04 mappings=1 broken=0 aliasMap={T1=null, T2=f_ac_ccrd_cny_credit_acct, T3=null} ddl=null
+  [b27] target=c_agt_credit_card_info mappings=57 broken=4 aliasMap={T1=f_md_ccrd_card_info, T15=null, T16=vt_c_agt_credit_card_info_scln_07, T2=f_ac_ccrd_cny_credit_acct, T3=null, T4=null, T5=c_cus_unifi_cust_inf_pri, T6=vt_c_agt_credit_card_info_scln_05, T61=vt_c_agt_credit_card_info_scln_01, T8=vt_c_agt_credit_card_info_scln_03, T9=vt_c_agt_credit_card_info_scln_04, T10=f_pt_ccrd_cust_inf, T11=null, T12=null, T13=null, T14=null, T17=null, T18=null, T19=null} ddl=null
+    BROKEN target=fst_repay_dt <- earliest_date (alias=T19, role=condition)
+    BROKEN target=fst_repay_dt <- earliest_date (alias=T19, role=value)
+    BROKEN target=recen_one_tm_repay_dt <- latest_date (alias=T19, role=condition)
+    BROKEN target=recen_one_tm_repay_dt <- latest_date (alias=T19, role=value)
+=== PROC dwa_c_agt_loan_appl_inf ===
+  [b3] 无目标表或无SELECT: target=VT_C_AGT_LOAN_APPL_INF_01
+  [b4] target=vt_c_agt_loan_appl_inf_01 mappings=20 broken=20 aliasMap={B=null} ddl=null
+    BROKEN target=expr_1 <- biz_seq_no (alias=null, role=value)
+    BROKEN target=expr_2 <- aaaa (alias=null, role=value)
+    BROKEN target=expr_3 <- appli_name (alias=null, role=value)
+    BROKEN target=expr_4 <- appli_iden_type_cd (alias=null, role=value)
+    BROKEN target=expr_5 <- appli_iden_no (alias=null, role=value)
+    BROKEN target=expr_6 <- brwer_name (alias=null, role=value)
+    BROKEN target=expr_7 <- brwer_iden_type_cd (alias=null, role=value)
+    BROKEN target=expr_8 <- brwer_iden_no (alias=null, role=value)
+    BROKEN target=expr_9 <- brw_money_subj_cd (alias=null, role=value)
+    BROKEN target=expr_10 <- appl_chan_cd (alias=null, role=value)
+    BROKEN target=expr_11 <- prod_no (alias=null, role=value)
+    BROKEN target=expr_12 <- amt (alias=null, role=value)
+    BROKEN target=expr_13 <- term (alias=null, role=value)
+    BROKEN target=expr_14 <- int_rate (alias=null, role=value)
+    BROKEN target=expr_15 <- appl_sts_cd (alias=null, role=value)
+    BROKEN target=expr_16 <- appl_tips_inf (alias=null, role=value)
+    BROKEN target=expr_17 <- org_no (alias=null, role=value)
+    BROKEN target=expr_18 <- cust_manag_no (alias=null, role=value)
+    BROKEN target=expr_19 <- loan_usage_cd (alias=null, role=value)
+    BROKEN target=expr_20 <- create_tm (alias=null, role=value)
+  [b5] target=c_agt_loan_appl_inf mappings=29 broken=0 aliasMap={INFO=null, PR=null, PU=null, PR1=null, PU1=null} ddl=null
+  [b6] target=c_agt_loan_appl_inf mappings=29 broken=0 aliasMap={ALY=vt_c_agt_loan_appl_inf_01, PR=null, PU=null, PR1=null, PU1=null} ddl=null
+  [b7] target=c_agt_loan_appl_inf mappings=29 broken=0 aliasMap={BA=o_crms_business_apply, PR=c_cus_unifi_cust_inf_pri, PU=c_cus_unifi_cust_inf_pub, RI=o_crms_relaent_info, EI=o_crms_ent_info, ID=o_crms_indentowner_info, PU1=c_cus_unifi_cust_inf_pub, PR1=c_cus_unifi_cust_inf_pri, T1=c_com_trans_cd, T2=c_com_trans_cd} ddl=null
+  [b8] target=vt_c_agt_loan_appl_inf_02 mappings=3 broken=0 aliasMap={T=null} ddl=null
+  [b9] target=vt_c_agt_loan_appl_inf_03 mappings=3 broken=0 aliasMap={T=null} ddl=null
+  [b10] target=c_agt_loan_appl_inf mappings=29 broken=0 aliasMap={T1=o_eapp_ares_loan, T2=null, T3=o_eapp_ares_loan_relate, T4=vt_c_agt_loan_appl_inf_02, T5=vt_c_agt_loan_appl_inf_03, T6=null, T7=c_agt_loan_appl_inf, T8=vt_c_agt_loan_appl_inf_02, T9=vt_c_agt_loan_appl_inf_03, T10=c_com_trans_cd} ddl=null
+  [b11] target=c_agt_loan_appl_inf mappings=29 broken=0 aliasMap={T1=o_eapp_ares_loan, T2=null, T3=o_eapp_ares_loan_relate, T4=vt_c_agt_loan_appl_inf_02, T5=vt_c_agt_loan_appl_inf_03, T6=null, T7=c_agt_loan_appl_inf, T8=vt_c_agt_loan_appl_inf_02, T9=vt_c_agt_loan_appl_inf_03, T10=c_com_trans_cd} ddl=null
+12:02:29.962 [main] WARN com.hb.extractor.parser.JsqlSqlAnalyzer -- JsqlParser 解析失败（块将跳过）: net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "##" <S_IDENTIFIER>
+    at line 7, column 27.
+
+Was expecting one of:
+
+    ")"
+    "::"
+    "["
+    "^"
+ | preprocess 后 SQL 预览(前200字符): CREATE TEMPORARY TABLE pid.guishujigou as
+SELECT  nvl(WS1.MQ_ORG,WS2.MQ_ORG)MQ_ORG ,  t1.* 
+FROM pid.A_D_LN_CREDIT_CARD_ACCT_RELAX_TAB t1  
+LEFT JOIN(SELECT ACCT_NO,TELLER_NO,TRIM(EXTER_BRCH_NO) MQ_OR...
+=== PROC dwa_pid_a_d_ln_loan_org_dtl ===
+  [b4] target=vt_a_d_ln_loan_org_dtl_01_ mappings=22 broken=0 aliasMap={A=null} ddl=null
+  [b5] target=vt_a_d_ln_loan_org_dtl_01_ mappings=19 broken=0 aliasMap={A=a_d_ln_loan_qt_inf} ddl=null
+  [b6] target=a_d_ln_loan_org_dtl mappings=71 broken=35 aliasMap={A=vt_a_d_ln_loan_org_dtl_01_, A1=null, A12=f_ev_crbs_pri_loan_cpns_inf, C1=null, C12=null, C=null, C2=null, CURRCY=c_com_exch_rate, B=a_d_dm_org_inf, B1=a_d_dm_org_inf, B2=a_d_dm_org_inf} ddl=null
+    BROKEN target=contract_bal <- contract_bal (alias=null, role=value)
+    BROKEN target=recvbl_intst <- recvbl_intst (alias=null, role=value)
+    BROKEN target=accru_intst <- accru_intst (alias=null, role=value)
+    BROKEN target=avg_month_daily_bal <- avg_month_daily_bal (alias=null, role=value)
+    BROKEN target=bal_month_daily_avg <- bal_month_daily_avg (alias=null, role=value)
+    BROKEN target=bal_quart_daily_avg <- bal_quart_daily_avg (alias=null, role=value)
+    BROKEN target=bal_year_daily_avg <- bal_year_daily_avg (alias=null, role=value)
+    BROKEN target=ftpexpen <- ftpexpen (alias=null, role=value)
+    BROKEN target=ftpexpen <- exchange_to_cny_rate (alias=null, role=value)
+    BROKEN target=asses_prft <- tax_after_intst_income (alias=null, role=value)
+    BROKEN target=asses_prft <- ftpexpen (alias=null, role=value)
+    BROKEN target=asses_prft <- exchange_to_cny_rate (alias=null, role=value)
+    BROKEN target=economy_cap <- economy_cap (alias=null, role=value)
+    BROKEN target=economy_cap_cost <- economy_cap_cost (alias=null, role=value)
+    BROKEN target=item_setou <- item_setou (alias=null, role=value)
+    BROKEN target=eva <- tax_after_intst_income (alias=null, role=value)
+    BROKEN target=eva <- ftpexpen (alias=null, role=value)
+    BROKEN target=eva <- exchange_to_cny_rate (alias=null, role=value)
+    BROKEN target=eva <- economy_cap_cost (alias=null, role=value)
+    BROKEN target=eva <- item_setou (alias=null, role=value)
+    BROKEN target=loan_revenu_rate <- tax_after_intst_income (alias=null, role=value)
+    BROKEN target=loan_revenu_rate <- bal_year_daily_avg (alias=null, role=value)
+    BROKEN target=after_ftpprice <- ftpexpen (alias=null, role=value)
+    BROKEN target=after_ftpprice <- exchange_to_cny_rate (alias=null, role=value)
+    BROKEN target=after_ftpprice <- bal_year_daily_avg (alias=null, role=value)
+    BROKEN target=asses_int_rate_sprea <- tax_after_intst_income (alias=null, role=value)
+    BROKEN target=asses_int_rate_sprea <- ftpexpen (alias=null, role=value)
+    BROKEN target=asses_int_rate_sprea <- exchange_to_cny_rate (alias=null, role=value)
+    BROKEN target=asses_int_rate_sprea <- bal_year_daily_avg (alias=null, role=value)
+    BROKEN target=economy_cap_rate <- economy_cap_cost (alias=null, role=value)
+    BROKEN target=economy_cap_rate <- avg_month_daily_bal (alias=null, role=value)
+    BROKEN target=item_setou_rate <- item_setou (alias=null, role=value)
+    BROKEN target=item_setou_rate <- bal_year_daily_avg (alias=null, role=value)
+    BROKEN target=pre_tax_intst_income <- pre_tax_intst_income (alias=null, role=value)
+    BROKEN target=data_sourc <- data_sourc (alias=null, role=condition)
+=== PROC dwa_pid_a_d_ln_loan_specil_item_setou_dtl ===
+  [b2] 无目标表或无SELECT: target=A_D_LN_LOAN_SPECIL_ITEM_SETOU_DTL_TEMP01
+  [b3] target=a_d_ln_loan_specil_item_setou_dtl_temp01 mappings=32 broken=8 aliasMap={TT=null} ddl=null
+    BROKEN target=term_end_bal_handw_val <- term_end_bal_handw_val (alias=null, role=value)
+    BROKEN target=term_end_loss_rate <- term_end_loss_rate (alias=null, role=value)
+    BROKEN target=term_end_loss_rate_handw_val <- term_end_loss_rate_handw_val (alias=null, role=value)
+    BROKEN target=term_begin_bal_handw_val <- term_begin_bal_handw_val (alias=null, role=value)
+    BROKEN target=term_begin_loss_rate <- term_begin_loss_rate (alias=null, role=value)
+    BROKEN target=term_begin_loss_rate_handw_val <- term_begin_loss_rate_handw_val (alias=null, role=value)
+    BROKEN target=specil_item_setou_handw_val <- specil_item_setou_handw_val (alias=null, role=value)
+    BROKEN target=cust_type <- cust_type (alias=null, role=value)
+  [b4] target=a_d_ln_loan_specil_item_setou_dtl_temp01 mappings=32 broken=6 aliasMap={TT=null} ddl=null
+    BROKEN target=term_end_bal_handw_val <- term_end_bal_handw_val (alias=null, role=value)
+    BROKEN target=term_end_loss_rate_handw_val <- term_end_loss_rate_handw_val (alias=null, role=value)
+    BROKEN target=term_begin_bal_handw_val <- term_begin_bal_handw_val (alias=null, role=value)
+    BROKEN target=term_begin_loss_rate_handw_val <- term_begin_loss_rate_handw_val (alias=null, role=value)
+    BROKEN target=specil_item_setou_handw_val <- specil_item_setou_handw_val (alias=null, role=value)
+    BROKEN target=cust_type <- cust_type (alias=null, role=value)
+  [b5] target=a_d_ln_loan_specil_item_setou_dtl_temp01 mappings=32 broken=10 aliasMap={TT=null} ddl=null
+    BROKEN target=term_end_sts <- term_end_sts (alias=null, role=value)
+    BROKEN target=term_end_bal_handw_val <- term_end_bal_handw_val (alias=null, role=value)
+    BROKEN target=term_end_loss_rate <- term_end_loss_rate (alias=null, role=value)
+    BROKEN target=term_end_loss_rate_handw_val <- term_end_loss_rate_handw_val (alias=null, role=value)
+    BROKEN target=term_begin_sts <- term_begin_sts (alias=null, role=value)
+    BROKEN target=term_begin_bal_handw_val <- term_begin_bal_handw_val (alias=null, role=value)
+    BROKEN target=term_begin_loss_rate <- term_begin_loss_rate (alias=null, role=value)
+    BROKEN target=term_begin_loss_rate_handw_val <- term_begin_loss_rate_handw_val (alias=null, role=value)
+    BROKEN target=specil_item_setou_handw_val <- specil_item_setou_handw_val (alias=null, role=value)
+    BROKEN target=cust_type <- cust_type (alias=null, role=value)
+  [b6] target=a_d_ln_loan_specil_item_setou_dtl mappings=33 broken=0 aliasMap={A=a_d_ln_loan_specil_item_setou_dtl_temp01} ddl=null
+=== PROC dwa_pid_a_d_pi_new_gl_d_b ===
+  [b2] 无目标表或无SELECT: target=TMP_A_PI_NEW_GL_B_TMP
+  [b3] target=tmp_a_pi_new_gl_b_tmp mappings=19 broken=6 aliasMap={RR1=null} ddl=null
+    BROKEN target=curr_cd <- curr_cd (alias=null, role=condition)
+    BROKEN target=curr_cd <- curr_cd (alias=null, role=value)
+    BROKEN target=convt_curr_cd <- convt_curr_cd (alias=null, role=condition)
+    BROKEN target=convt_curr_cd <- convt_curr_cd (alias=null, role=value)
+    BROKEN target=time_period_type_cd <- time_period_type_cd (alias=null, role=condition)
+    BROKEN target=time_period_type_cd <- time_period_type_cd (alias=null, role=value)
+  [b4] target=tmp_a_pi_new_gl_b_tmp mappings=19 broken=28 aliasMap={RT1=tmp_a_pi_new_gl_b_tmp, RT2=a_dm_pi} ddl=null
+    BROKEN target=expr_1 <- stat_dt (alias=null, role=value)
+    BROKEN target=expr_2 <- org_id (alias=null, role=value)
+    BROKEN target=bal <- bal (alias=null, role=condition)
+    BROKEN target=bal <- bal (alias=null, role=value)
+    BROKEN target=xun_bal <- xun_bal (alias=null, role=condition)
+    BROKEN target=xun_bal <- xun_bal (alias=null, role=value)
+    BROKEN target=month_bal <- month_bal (alias=null, role=condition)
+    BROKEN target=month_bal <- month_bal (alias=null, role=value)
+    BROKEN target=quarter_bal <- quarter_bal (alias=null, role=condition)
+    BROKEN target=quarter_bal <- quarter_bal (alias=null, role=value)
+    BROKEN target=h_year_bal <- h_year_bal (alias=null, role=condition)
+    BROKEN target=h_year_bal <- h_year_bal (alias=null, role=value)
+    BROKEN target=year_bal <- year_bal (alias=null, role=condition)
+    BROKEN target=year_bal <- year_bal (alias=null, role=value)
+    BROKEN target=pre_bal <- pre_bal (alias=null, role=condition)
+    BROKEN target=pre_bal <- pre_bal (alias=null, role=value)
+    BROKEN target=last_bal <- last_bal (alias=null, role=condition)
+    BROKEN target=last_bal <- last_bal (alias=null, role=value)
+    BROKEN target=q_accum <- q_accum (alias=null, role=condition)
+    BROKEN target=q_accum <- q_accum (alias=null, role=value)
+    BROKEN target=h_accum <- h_accum (alias=null, role=condition)
+    BROKEN target=h_accum <- h_accum (alias=null, role=value)
+    BROKEN target=m_accum <- m_accum (alias=null, role=condition)
+    BROKEN target=m_accum <- m_accum (alias=null, role=value)
+    BROKEN target=y_accum <- y_accum (alias=null, role=condition)
+    BROKEN target=y_accum <- y_accum (alias=null, role=value)
+    BROKEN target=roll_accum <- roll_accum (alias=null, role=condition)
+    BROKEN target=roll_accum <- roll_accum (alias=null, role=value)
+  [b5] target=tmp_a_pi_new_gl_b_tmp mappings=19 broken=30 aliasMap={RT1=tmp_a_pi_new_gl_b_tmp, RT2=a_dm_pi} ddl=null
+    BROKEN target=expr_1 <- stat_dt (alias=null, role=value)
+    BROKEN target=expr_2 <- org_id (alias=null, role=value)
+    BROKEN target=expr_4 <- curr_cd (alias=null, role=value)
+    BROKEN target=expr_5 <- convt_curr_cd (alias=null, role=value)
+    BROKEN target=bal <- bal (alias=null, role=condition)
+    BROKEN target=bal <- bal (alias=null, role=value)
+    BROKEN target=xun_bal <- xun_bal (alias=null, role=condition)
+    BROKEN target=xun_bal <- xun_bal (alias=null, role=value)
+    BROKEN target=month_bal <- month_bal (alias=null, role=condition)
+    BROKEN target=month_bal <- month_bal (alias=null, role=value)
+    BROKEN target=quarter_bal <- quarter_bal (alias=null, role=condition)
+    BROKEN target=quarter_bal <- quarter_bal (alias=null, role=value)
+    BROKEN target=h_year_bal <- h_year_bal (alias=null, role=condition)
+    BROKEN target=h_year_bal <- h_year_bal (alias=null, role=value)
+    BROKEN target=year_bal <- year_bal (alias=null, role=condition)
+    BROKEN target=year_bal <- year_bal (alias=null, role=value)
+    BROKEN target=pre_bal <- pre_bal (alias=null, role=condition)
+    BROKEN target=pre_bal <- pre_bal (alias=null, role=value)
+    BROKEN target=last_bal <- last_bal (alias=null, role=condition)
+    BROKEN target=last_bal <- last_bal (alias=null, role=value)
+    BROKEN target=q_accum <- q_accum (alias=null, role=condition)
+    BROKEN target=q_accum <- q_accum (alias=null, role=value)
+    BROKEN target=h_accum <- h_accum (alias=null, role=condition)
+    BROKEN target=h_accum <- h_accum (alias=null, role=value)
+    BROKEN target=m_accum <- m_accum (alias=null, role=condition)
+    BROKEN target=m_accum <- m_accum (alias=null, role=value)
+    BROKEN target=y_accum <- y_accum (alias=null, role=condition)
+    BROKEN target=y_accum <- y_accum (alias=null, role=value)
+    BROKEN target=roll_accum <- roll_accum (alias=null, role=condition)
+    BROKEN target=roll_accum <- roll_accum (alias=null, role=value)
+  [b6] 无目标表或无SELECT: target=TMP_A_D_PI_NEW_GL_B_01
+  [b7] target=tmp_a_d_pi_new_gl_b_01 mappings=1 broken=0 aliasMap={T=f_ac_crbs_sub_ldgr} ddl=null
+  [b8] 无目标表或无SELECT: target=TMP_A_D_PI_NEW_GL_B_02
+  [b9] target=tmp_a_d_pi_new_gl_b_02 mappings=1 broken=0 aliasMap={T=f_ac_crbs_sub_ldgr} ddl=null
+  [b10] 无目标表或无SELECT: target=TMP_A_D_PI_NEW_GL_B_03
+  [b11] target=tmp_a_d_pi_new_gl_b_03 mappings=1 broken=0 aliasMap={T=f_ac_crbs_sub_ldgr} ddl=null
+  [b12] target=a_d_pi_new_gl_b mappings=19 broken=28 aliasMap={T1=tmp_a_pi_new_gl_b_tmp, TMP_A_D_PI_NEW_GL_B_01=tmp_a_d_pi_new_gl_b_01, TMP_A_D_PI_NEW_GL_B_02=tmp_a_d_pi_new_gl_b_02, TMP_A_D_PI_NEW_GL_B_03=tmp_a_d_pi_new_gl_b_03} ddl=null
+    BROKEN target=stat_dt <- stat_dt (alias=null, role=value)
+    BROKEN target=org_id <- org_id (alias=null, role=value)
+    BROKEN target=pi_cd <- pi_cd (alias=null, role=value)
+    BROKEN target=curr_cd <- curr_cd (alias=null, role=value)
+    BROKEN target=convt_curr_cd <- convt_curr_cd (alias=null, role=value)
+    BROKEN target=time_period_type_cd <- time_period_type_cd (alias=null, role=value)
+    BROKEN target=bal <- org_id (alias=null, role=condition)
+    BROKEN target=bal <- pi_cd (alias=null, role=condition)
+    BROKEN target=bal <- bal (alias=null, role=value)
+    BROKEN target=bal <- nonet (alias=null, role=value)
+    BROKEN target=xun_bal <- xun_bal (alias=null, role=value)
+    BROKEN target=month_bal <- month_bal (alias=null, role=value)
+    BROKEN target=quarter_bal <- quarter_bal (alias=null, role=value)
+    BROKEN target=h_year_bal <- h_year_bal (alias=null, role=value)
+    BROKEN target=year_bal <- org_id (alias=null, role=condition)
+    BROKEN target=year_bal <- pi_cd (alias=null, role=condition)
+    BROKEN target=year_bal <- year_bal (alias=null, role=value)
+    BROKEN target=year_bal <- nonet_y_dt (alias=null, role=value)
+    BROKEN target=pre_bal <- org_id (alias=null, role=condition)
+    BROKEN target=pre_bal <- pi_cd (alias=null, role=condition)
+    BROKEN target=pre_bal <- pre_bal (alias=null, role=value)
+    BROKEN target=pre_bal <- nonet_last_dt (alias=null, role=value)
+    BROKEN target=last_bal <- last_bal (alias=null, role=value)
+    BROKEN target=q_accum <- q_accum (alias=null, role=value)
+    BROKEN target=h_accum <- h_accum (alias=null, role=value)
+    BROKEN target=m_accum <- m_accum (alias=null, role=value)
+    BROKEN target=y_accum <- y_accum (alias=null, role=value)
+    BROKEN target=roll_accum <- roll_accum (alias=null, role=value)
+12:02:32.239 [main] WARN com.hb.extractor.parser.JsqlSqlAnalyzer -- JsqlParser 解析失败（块将跳过）: net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "#\u52a9\u519c\u70b9\u72b6\u6001" <S_IDENTIFIER>
+    at line 10, column 121.
+
+Was expecting:
+
+    ")"
+ | preprocess 后 SQL 预览(前200字符): INSERT INTO  PID.VT_A_G_DP_DEPOSIT_PROD_STRUC_SUM_00
+   SELECT ACCT_NO,CUST_NO,CUST_ACCT_NO
+   FROM (SELECT T.ACCT_NO
+                                ,T.CUST_NO
+                                ,T.CUST...
+=== PROC dwa_pid_a_g_dp_deposit_report ===
+  [b5] target=vt_a_g_dp_deposit_report_01_ mappings=26 broken=0 aliasMap={T=a_d_dp_deposit_org_dtl_query} ddl=null
+  [b8] target=vt_a_g_dp_deposit_report_02_ mappings=15 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_01_} ddl=null
+  [b9] target=vt_a_g_dp_deposit_report_02_ mappings=16 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_01_} ddl=null
+  [b10] target=vt_a_g_dp_deposit_report_02_ mappings=16 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_02_} ddl=null
+  [b11] target=vt_a_g_dp_deposit_report_02_ mappings=16 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_01_} ddl=null
+  [b12] target=vt_a_g_dp_deposit_report_02_ mappings=16 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_02_} ddl=null
+  [b13] target=vt_a_g_dp_deposit_report_02_ mappings=16 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_01_} ddl=null
+  [b14] target=vt_a_g_dp_deposit_report_02_ mappings=16 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_02_} ddl=null
+  [b15] target=vt_a_g_dp_deposit_report_02_ mappings=16 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_01_} ddl=null
+  [b16] target=a_g_dp_deposit_report mappings=21 broken=13 aliasMap={P1=vt_a_g_dp_deposit_report_02_, T1=f_fi_crbs_subj_file_inf} ddl=null
+    BROKEN target=belo_brch_no <- belo_brch_no (alias=null, role=value)
+    BROKEN target=belo_brch_name <- belo_brch_name (alias=null, role=value)
+    BROKEN target=org_code <- org_no (alias=null, role=value)
+    BROKEN target=org_name <- org_name (alias=null, role=value)
+    BROKEN target=line_name <- line_name (alias=null, role=value)
+    BROKEN target=perm_line <- perm_line (alias=null, role=condition)
+    BROKEN target=perm_line <- perm_line (alias=null, role=value)
+    BROKEN target=month_average_bal <- month_daily_avg (alias=null, role=value)
+    BROKEN target=quarter_average_bal <- quart_daily_avg (alias=null, role=value)
+    BROKEN target=year_average_bal <- year_daily_avg (alias=null, role=value)
+    BROKEN target=deposit_interest_rate <- year_daily_avg (alias=null, role=value)
+    BROKEN target=ftp_price <- year_daily_avg (alias=null, role=value)
+    BROKEN target=assessment_spread <- year_daily_avg (alias=null, role=value)
+  [b17] target=a_g_dp_deposit_report mappings=21 broken=10 aliasMap={P1=vt_a_g_dp_deposit_report_02_, T1=f_fi_crbs_subj_file_inf} ddl=null
+    BROKEN target=belo_brch_no <- belo_brch_no (alias=null, role=value)
+    BROKEN target=belo_brch_name <- belo_brch_name (alias=null, role=value)
+    BROKEN target=org_code <- org_no (alias=null, role=value)
+    BROKEN target=org_name <- org_name (alias=null, role=value)
+    BROKEN target=month_average_bal <- month_daily_avg (alias=null, role=value)
+    BROKEN target=quarter_average_bal <- quart_daily_avg (alias=null, role=value)
+    BROKEN target=year_average_bal <- year_daily_avg (alias=null, role=value)
+    BROKEN target=deposit_interest_rate <- year_daily_avg (alias=null, role=value)
+    BROKEN target=ftp_price <- year_daily_avg (alias=null, role=value)
+    BROKEN target=assessment_spread <- year_daily_avg (alias=null, role=value)
+  [b18] target=a_g_dp_deposit_report mappings=21 broken=9 aliasMap={P1=vt_a_g_dp_deposit_report_02_, T1=f_fi_crbs_subj_file_inf, P2=a_d_dm_org_inf} ddl=null
+    BROKEN target=line_name <- line_name (alias=null, role=value)
+    BROKEN target=perm_line <- perm_line (alias=null, role=condition)
+    BROKEN target=perm_line <- perm_line (alias=null, role=value)
+    BROKEN target=month_average_bal <- month_daily_avg (alias=null, role=value)
+    BROKEN target=quarter_average_bal <- quart_daily_avg (alias=null, role=value)
+    BROKEN target=year_average_bal <- year_daily_avg (alias=null, role=value)
+    BROKEN target=deposit_interest_rate <- year_daily_avg (alias=null, role=value)
+    BROKEN target=ftp_price <- year_daily_avg (alias=null, role=value)
+    BROKEN target=assessment_spread <- year_daily_avg (alias=null, role=value)
+  [b19] target=a_g_dp_deposit_report mappings=21 broken=6 aliasMap={P1=vt_a_g_dp_deposit_report_02_, T1=f_fi_crbs_subj_file_inf, P2=a_d_dm_org_inf} ddl=null
+    BROKEN target=month_average_bal <- month_daily_avg (alias=null, role=value)
+    BROKEN target=quarter_average_bal <- quart_daily_avg (alias=null, role=value)
+    BROKEN target=year_average_bal <- year_daily_avg (alias=null, role=value)
+    BROKEN target=deposit_interest_rate <- year_daily_avg (alias=null, role=value)
+    BROKEN target=ftp_price <- year_daily_avg (alias=null, role=value)
+    BROKEN target=assessment_spread <- year_daily_avg (alias=null, role=value)
+  [b20] target=a_g_dp_deposit_report mappings=21 broken=9 aliasMap={P1=vt_a_g_dp_deposit_report_02_, T1=f_fi_crbs_subj_file_inf, P2=a_d_dm_org_inf} ddl=null
+    BROKEN target=line_name <- line_name (alias=null, role=value)
+    BROKEN target=perm_line <- perm_line (alias=null, role=condition)
+    BROKEN target=perm_line <- perm_line (alias=null, role=value)
+    BROKEN target=month_average_bal <- month_daily_avg (alias=null, role=value)
+    BROKEN target=quarter_average_bal <- quart_daily_avg (alias=null, role=value)
+    BROKEN target=year_average_bal <- year_daily_avg (alias=null, role=value)
+    BROKEN target=deposit_interest_rate <- year_daily_avg (alias=null, role=value)
+    BROKEN target=ftp_price <- year_daily_avg (alias=null, role=value)
+    BROKEN target=assessment_spread <- year_daily_avg (alias=null, role=value)
+  [b21] target=a_g_dp_deposit_report mappings=21 broken=6 aliasMap={P1=vt_a_g_dp_deposit_report_02_, T1=f_fi_crbs_subj_file_inf, P2=a_d_dm_org_inf} ddl=null
+    BROKEN target=month_average_bal <- month_daily_avg (alias=null, role=value)
+    BROKEN target=quarter_average_bal <- quart_daily_avg (alias=null, role=value)
+    BROKEN target=year_average_bal <- year_daily_avg (alias=null, role=value)
+    BROKEN target=deposit_interest_rate <- year_daily_avg (alias=null, role=value)
+    BROKEN target=ftp_price <- year_daily_avg (alias=null, role=value)
+    BROKEN target=assessment_spread <- year_daily_avg (alias=null, role=value)
+=== PROC dwa_pid_a_g_ln_loan_acct_prft_sum ===
+  [b3] 无目标表或无SELECT: target=vt_a_g_ln_loan_acct_prft_sum_01_
+  [b4] target=vt_a_g_ln_loan_acct_prft_sum_01_ mappings=33 broken=0 aliasMap={T=a_d_ln_loan_acct_prft, ITNET=c_agt_itnet_loan_rcpt_inf} ddl=null
+  [b5] target=a_g_ln_loan_acct_prft_sum mappings=36 broken=0 aliasMap={T=vt_a_g_ln_loan_acct_prft_sum_01_} ddl=null
+  [b6] target=a_g_ln_loan_acct_prft_sum mappings=36 broken=38 aliasMap={T=vt_a_g_ln_loan_acct_prft_sum_01_, T1=null, CURRCY=c_com_exch_rate} ddl=null
+    BROKEN target=org_no <- prod_no (alias=null, role=condition)
+    BROKEN target=org_no <- org_no (alias=null, role=value)
+    BROKEN target=fiveclass_class <- fiveclass_class (alias=null, role=value)
+    BROKEN target=loan_type_cd <- loan_type_cd (alias=null, role=value)
+    BROKEN target=belo_line <- belo_line (alias=null, role=value)
+    BROKEN target=plus_minus_flag <- plus_minus_flag (alias=null, role=value)
+    BROKEN target=prod_no <- prod_no (alias=null, role=value)
+    BROKEN target=subj_no <- subj_no (alias=null, role=value)
+    BROKEN target=ftp_int_day <- ftp_int_day (alias=null, role=value)
+    BROKEN target=ftp_int_month <- ftp_int_month (alias=null, role=value)
+    BROKEN target=ftp_int_quar <- ftp_int_quar (alias=null, role=value)
+    BROKEN target=ftp_int_year <- ftp_int_day (alias=null, role=value)
+    BROKEN target=ftp_int_day_ajust <- ftp_int_day_ajust (alias=null, role=value)
+    BROKEN target=ftp_int_month_ajust <- ftp_int_month_ajust (alias=null, role=value)
+    BROKEN target=ftp_int_quar_ajust <- ftp_int_quar_ajust (alias=null, role=value)
+    BROKEN target=ftp_int_year_ajust <- ftp_int_year_ajust (alias=null, role=value)
+    BROKEN target=acc_int_day <- acc_int_day (alias=null, role=value)
+    BROKEN target=acc_int_month <- acc_int_month (alias=null, role=value)
+    BROKEN target=acc_int_quar <- acc_int_quar (alias=null, role=value)
+    BROKEN target=acc_int_year <- acc_int_year (alias=null, role=value)
+    BROKEN target=acc_int_day_ajust <- acc_int_day_ajust (alias=null, role=value)
+    BROKEN target=acc_int_month_ajust <- acc_int_month_ajust (alias=null, role=value)
+    BROKEN target=acc_int_quar_ajust <- acc_int_quar_ajust (alias=null, role=value)
+    BROKEN target=acc_int_year_ajust <- acc_int_year_ajust (alias=null, role=value)
+    BROKEN target=economy_cap_cost <- economy_cap_cost (alias=null, role=value)
+    BROKEN target=year_intst_income <- year_intst_income (alias=null, role=value)
+    BROKEN target=quar_intst_income <- quar_intst_income (alias=null, role=value)
+    BROKEN target=month_intst_income <- month_intst_income (alias=null, role=value)
+    BROKEN target=year_ftp_net_prft <- year_intst_income (alias=null, role=value)
+    BROKEN target=year_ftp_net_prft <- ftp_int_year_ajust (alias=null, role=value)
+    BROKEN target=quar_ftp_net_prft <- quar_intst_income (alias=null, role=value)
+    BROKEN target=quar_ftp_net_prft <- ftp_int_quar_ajust (alias=null, role=value)
+    BROKEN target=month_ftp_net_prft <- month_intst_income (alias=null, role=value)
+    BROKEN target=month_ftp_net_prft <- ftp_int_month_ajust (alias=null, role=value)
+    BROKEN target=lp_org_no <- lp_org_no (alias=null, role=value)
+    BROKEN target=whe_vld <- whe_vld (alias=null, role=value)
+    BROKEN target=whe_cdd <- whe_cdd (alias=null, role=value)
+    BROKEN target=data_sourc <- data_sourc (alias=null, role=value)
+  [b7] target=a_g_ln_loan_acct_prft_sum mappings=27 broken=0 aliasMap={T=a_d_ln_credit_card_acct_prft} ddl=null
+  [b8] target=a_g_ln_loan_acct_prft_sum mappings=18 broken=0 aliasMap={T=a_d_ln_bill_discnt_cash_prft} ddl=null
+=== PROC dwa_pid_a_g_ln_new_pord_sum ===
+  [b2] 无目标表或无SELECT: target=VT_A_G_LN_NEW_PORD_SUM
+  [b3] target=vt_a_g_ln_new_pord_sum mappings=38 broken=17 aliasMap={T=null} ddl=null
+    BROKEN target=expr_2 <- new_prod_no (alias=T, role=condition)
+    BROKEN target=new_prod_no <- new_prod_no (alias=T, role=value)
+    BROKEN target=org_no <- org_no (alias=T, role=value)
+    BROKEN target=fiveclass_class_cd <- fiveclass_class_cd (alias=T, role=value)
+    BROKEN target=loan_bal <- loan_bal (alias=T, role=value)
+    BROKEN target=nor_principal <- nor_principal (alias=T, role=value)
+    BROKEN target=overdue_principal <- overdue_principal (alias=T, role=value)
+    BROKEN target=slugg_principal <- slugg_principal (alias=T, role=value)
+    BROKEN target=doubt_acct_principal <- doubt_acct_principal (alias=T, role=value)
+    BROKEN target=vrfctn_principal <- vrfctn_principal (alias=T, role=value)
+    BROKEN target=vrfctn_intst <- vrfctn_intst (alias=T, role=value)
+    BROKEN target=overdue_intst <- overdue_intst (alias=T, role=value)
+    BROKEN target=off_bal_overdue_int <- off_bal_overdue_int (alias=T, role=value)
+    BROKEN target=risk_bal <- risk_bal (alias=T, role=value)
+    BROKEN target=overdue_1day_bal <- overdue_1day_bal (alias=T, role=value)
+    BROKEN target=overdue_30day_bal <- overdue_30day_bal (alias=T, role=value)
+    BROKEN target=int_income <- int_income (alias=T, role=value)
+  [b4] target=vt_a_g_ln_new_pord_sum mappings=38 broken=26 aliasMap={T=null, T1=null, T3=null, T4=null, T6=null} ddl=null
+    BROKEN target=expr_2 <- new_prod_no (alias=T, role=condition)
+    BROKEN target=new_prod_no <- new_prod_no (alias=T, role=value)
+    BROKEN target=org_no <- org_no (alias=T, role=value)
+    BROKEN target=expr_20 <- out_acct_amt (alias=T, role=condition)
+    BROKEN target=expr_20 <- rate_out_acct_amt (alias=T, role=value)
+    BROKEN target=expr_20 <- out_acct_amt (alias=T, role=value)
+    BROKEN target=expr_21 <- loan_bal (alias=T, role=condition)
+    BROKEN target=expr_21 <- loss_bal (alias=T, role=value)
+    BROKEN target=expr_21 <- loan_bal (alias=T, role=value)
+    BROKEN target=expr_22 <- loan_bal (alias=T, role=condition)
+    BROKEN target=expr_22 <- bad_bal (alias=T, role=value)
+    BROKEN target=expr_22 <- loan_bal (alias=T, role=value)
+    BROKEN target=expr_23 <- nor_bal (alias=T, role=condition)
+    BROKEN target=expr_23 <- nor_bal (alias=T, role=value)
+    BROKEN target=expr_24 <- end_cust_cnt (alias=T, role=condition)
+    BROKEN target=expr_24 <- end_cust_cnt (alias=T, role=value)
+    BROKEN target=risk_cust_cnt <- risk_cust_cnt (alias=T, role=value)
+    BROKEN target=overdue_1day_cust <- overdue_1day_cust (alias=T, role=value)
+    BROKEN target=overdue_30day_cust <- overdue_30day_cust (alias=T, role=value)
+    BROKEN target=bad_cust_cnt <- bad_cust_cnt (alias=T, role=value)
+    BROKEN target=loss_cust_cnt <- loss_cust_cnt (alias=T, role=value)
+    BROKEN target=int_rev <- int_rev (alias=T, role=value)
+    BROKEN target=expr_37 <- int_rev (alias=T, role=condition)
+    BROKEN target=expr_37 <- int_income (alias=T, role=value)
+    BROKEN target=expr_37 <- int_rev (alias=T, role=value)
+    BROKEN target=loan_profit <- loan_profit (alias=T, role=value)
+  [b5] target=vt_a_g_ln_new_pord_sum mappings=38 broken=16 aliasMap={T=null} ddl=null
+    BROKEN target=expr_2 <- new_prod_no (alias=T, role=condition)
+    BROKEN target=new_prod_no <- new_prod_no (alias=T, role=value)
+    BROKEN target=fiveclass_class_cd <- fiveclass_class_cd (alias=T, role=value)
+    BROKEN target=loan_bal <- loan_bal (alias=T, role=value)
+    BROKEN target=nor_principal <- nor_principal (alias=T, role=value)
+    BROKEN target=overdue_principal <- overdue_principal (alias=T, role=value)
+    BROKEN target=slugg_principal <- slugg_principal (alias=T, role=value)
+    BROKEN target=doubt_acct_principal <- doubt_acct_principal (alias=T, role=value)
+    BROKEN target=vrfctn_principal <- vrfctn_principal (alias=T, role=value)
+    BROKEN target=vrfctn_intst <- vrfctn_intst (alias=T, role=value)
+    BROKEN target=overdue_intst <- overdue_intst (alias=T, role=value)
+    BROKEN target=off_bal_overdue_int <- off_bal_overdue_int (alias=T, role=value)
+    BROKEN target=risk_bal <- risk_bal (alias=T, role=value)
+    BROKEN target=overdue_1day_bal <- overdue_1day_bal (alias=T, role=value)
+    BROKEN target=overdue_30day_bal <- overdue_30day_bal (alias=T, role=value)
+    BROKEN target=int_income <- int_income (alias=T, role=value)
+  [b6] target=vt_a_g_ln_new_pord_sum mappings=38 broken=25 aliasMap={T=null, T1=null, T3=null, T4=null, T6=null} ddl=null
+    BROKEN target=expr_2 <- new_prod_no (alias=T, role=condition)
+    BROKEN target=new_prod_no <- new_prod_no (alias=T, role=value)
+    BROKEN target=expr_20 <- out_acct_amt (alias=T, role=condition)
+    BROKEN target=expr_20 <- rate_out_acct_amt (alias=T, role=value)
+    BROKEN target=expr_20 <- out_acct_amt (alias=T, role=value)
+    BROKEN target=expr_21 <- loan_bal (alias=T, role=condition)
+    BROKEN target=expr_21 <- loss_bal (alias=T, role=value)
+    BROKEN target=expr_21 <- loan_bal (alias=T, role=value)
+    BROKEN target=expr_22 <- loan_bal (alias=T, role=condition)
+    BROKEN target=expr_22 <- bad_bal (alias=T, role=value)
+    BROKEN target=expr_22 <- loan_bal (alias=T, role=value)
+    BROKEN target=expr_23 <- nor_bal (alias=T, role=condition)
+    BROKEN target=expr_23 <- nor_bal (alias=T, role=value)
+    BROKEN target=expr_24 <- end_cust_cnt (alias=T, role=condition)
+    BROKEN target=expr_24 <- end_cust_cnt (alias=T, role=value)
+    BROKEN target=risk_cust_cnt <- risk_cust_cnt (alias=T, role=value)
+    BROKEN target=overdue_1day_cust <- overdue_1day_cust (alias=T, role=value)
+    BROKEN target=overdue_30day_cust <- overdue_30day_cust (alias=T, role=value)
+    BROKEN target=bad_cust_cnt <- bad_cust_cnt (alias=T, role=value)
+    BROKEN target=loss_cust_cnt <- loss_cust_cnt (alias=T, role=value)
+    BROKEN target=int_rev <- int_rev (alias=T, role=value)
+    BROKEN target=expr_37 <- int_rev (alias=T, role=condition)
+    BROKEN target=expr_37 <- int_income (alias=T, role=value)
+    BROKEN target=expr_37 <- int_rev (alias=T, role=value)
+    BROKEN target=loan_profit <- loan_profit (alias=T, role=value)
+  [b7] target=vt_a_g_ln_new_pord_sum mappings=38 broken=16 aliasMap={T=null} ddl=null
+    BROKEN target=expr_2 <- new_prod_no (alias=T, role=condition)
+    BROKEN target=new_prod_no <- new_prod_no (alias=T, role=value)
+    BROKEN target=fiveclass_class_cd <- fiveclass_class_cd (alias=T, role=value)
+    BROKEN target=loan_bal <- loan_bal (alias=T, role=value)
+    BROKEN target=nor_principal <- nor_principal (alias=T, role=value)
+    BROKEN target=overdue_principal <- overdue_principal (alias=T, role=value)
+    BROKEN target=slugg_principal <- slugg_principal (alias=T, role=value)
+    BROKEN target=doubt_acct_principal <- doubt_acct_principal (alias=T, role=value)
+    BROKEN target=vrfctn_principal <- vrfctn_principal (alias=T, role=value)
+    BROKEN target=vrfctn_intst <- vrfctn_intst (alias=T, role=value)
+    BROKEN target=overdue_intst <- overdue_intst (alias=T, role=value)
+    BROKEN target=off_bal_overdue_int <- off_bal_overdue_int (alias=T, role=value)
+    BROKEN target=risk_bal <- risk_bal (alias=T, role=value)
+    BROKEN target=overdue_1day_bal <- overdue_1day_bal (alias=T, role=value)
+    BROKEN target=overdue_30day_bal <- overdue_30day_bal (alias=T, role=value)
+    BROKEN target=int_income <- int_income (alias=T, role=value)
+  [b8] target=vt_a_g_ln_new_pord_sum mappings=38 broken=25 aliasMap={T=null, T1=null, T3=null, T4=null, T6=null} ddl=null
+    BROKEN target=expr_2 <- new_prod_no (alias=T, role=condition)
+    BROKEN target=new_prod_no <- new_prod_no (alias=T, role=value)
+    BROKEN target=expr_20 <- out_acct_amt (alias=T, role=condition)
+    BROKEN target=expr_20 <- rate_out_acct_amt (alias=T, role=value)
+    BROKEN target=expr_20 <- out_acct_amt (alias=T, role=value)
+    BROKEN target=expr_21 <- loan_bal (alias=T, role=condition)
+    BROKEN target=expr_21 <- loss_bal (alias=T, role=value)
+    BROKEN target=expr_21 <- loan_bal (alias=T, role=value)
+    BROKEN target=expr_22 <- loan_bal (alias=T, role=condition)
+    BROKEN target=expr_22 <- bad_bal (alias=T, role=value)
+    BROKEN target=expr_22 <- loan_bal (alias=T, role=value)
+    BROKEN target=expr_23 <- nor_bal (alias=T, role=condition)
+    BROKEN target=expr_23 <- nor_bal (alias=T, role=value)
+    BROKEN target=expr_24 <- end_cust_cnt (alias=T, role=condition)
+    BROKEN target=expr_24 <- end_cust_cnt (alias=T, role=value)
+    BROKEN target=risk_cust_cnt <- risk_cust_cnt (alias=T, role=value)
+    BROKEN target=overdue_1day_cust <- overdue_1day_cust (alias=T, role=value)
+    BROKEN target=overdue_30day_cust <- overdue_30day_cust (alias=T, role=value)
+    BROKEN target=bad_cust_cnt <- bad_cust_cnt (alias=T, role=value)
+    BROKEN target=loss_cust_cnt <- loss_cust_cnt (alias=T, role=value)
+    BROKEN target=int_rev <- int_rev (alias=T, role=value)
+    BROKEN target=expr_37 <- int_rev (alias=T, role=condition)
+    BROKEN target=expr_37 <- int_income (alias=T, role=value)
+    BROKEN target=expr_37 <- int_rev (alias=T, role=value)
+    BROKEN target=loan_profit <- loan_profit (alias=T, role=value)
+  [b9] target=a_g_ln_new_pord_sum mappings=38 broken=0 aliasMap={VT_A_G_LN_NEW_PORD_SUM=vt_a_g_ln_new_pord_sum} ddl=null
+=== PROC dwa_pid_a_g_ln_pri_loan_prod_bal_inf ===
+  [b2] 无目标表或无SELECT: target=VT_A_G_LN_PRI_LOAN_PROD_BAL_INF_01
+  [b3] target=vt_a_g_ln_pri_loan_prod_bal_inf_01 mappings=33 broken=0 aliasMap={O=c_org_org_inf, T=a_d_ln_pri_loan_dimen_config_bl, T1=null} ddl=null
+  [b4] target=vt_a_g_ln_pri_loan_prod_bal_inf_01 mappings=33 broken=16 aliasMap={O=c_org_org_inf, T=a_d_ln_pri_loan_dimen_config_bl, T1=null} ddl=null
+    BROKEN target=prod_name <- prod_name (alias=T1, role=value)
+    BROKEN target=fiveclass_class <- fiveclass_class (alias=T1, role=value)
+    BROKEN target=fiveclass_class_prey <- fiveclass_class_prey (alias=T1, role=value)
+    BROKEN target=fiveclass_class_preq <- fiveclass_class_preq (alias=T1, role=value)
+    BROKEN target=fiveclass_class_prem <- fiveclass_class_prem (alias=T1, role=value)
+    BROKEN target=fiveclass_class_estm <- fiveclass_class_estm (alias=T1, role=value)
+    BROKEN target=fiveclass_class_estq <- fiveclass_class_estq (alias=T1, role=value)
+    BROKEN target=over_date_se <- over_date_se (alias=T1, role=value)
+    BROKEN target=have_bal_acct_cnt <- have_bal_acct_cnt (alias=T1, role=value)
+    BROKEN target=loan_bal <- loan_bal (alias=T1, role=value)
+    BROKEN target=loan_amt <- loan_amt (alias=T1, role=value)
+    BROKEN target=year_daily_avg <- year_daily_avg (alias=T1, role=value)
+    BROKEN target=loan_amt_year <- thyear_cumul_delivery_amt (alias=T1, role=value)
+    BROKEN target=loan_amt_month <- thmonth_cumul_delivery_amt (alias=T1, role=value)
+    BROKEN target=loan_amt_week <- thweek_cumul_delivery_amt (alias=T1, role=value)
+    BROKEN target=loan_amt_day <- thday_cumul_delivery_amt (alias=T1, role=value)
+  [b5] target=vt_a_g_ln_pri_loan_prod_bal_inf_01 mappings=33 broken=1 aliasMap={T1=null, T=a_d_ln_pri_loan_dimen_config_bl} ddl=null
+    BROKEN target=tot_amt <- tot_amt (alias=T1, role=value)
+  [b6] target=a_g_ln_pri_loan_prod_bal_inf mappings=34 broken=0 aliasMap={VT_A_G_LN_PRI_LOAN_PROD_BAL_INF_01=vt_a_g_ln_pri_loan_prod_bal_inf_01} ddl=null
+12:02:33.289 [main] WARN com.hb.extractor.parser.JsqlSqlAnalyzer -- JsqlParser 解析失败（块将跳过）: net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "p2" <S_IDENTIFIER>
+    at line 27, column 58.
+
+Was expecting one of:
+
+    ")"
+    "."
+    "::"
+    "["
+    "^"
+ | preprocess 后 SQL 预览(前200字符): insert into pid.a_g_tot_brch_check 
+select date                                                                   as DATA_DT            
+      ,p3.level_scd_org_no                                     ...
+12:02:33.442 [main] WARN com.hb.extractor.parser.JsqlSqlAnalyzer -- JsqlParser 解析失败（块将跳过）: net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+    at line 2, column 1.
+
+Was expecting one of:
+
+    ","
+    "AS"
+    "DISABLE"
+    "ENABLE"
+    "LIKE"
+    <EOF>
+    <ST_SEMICOLON>
+ | preprocess 后 SQL 预览(前200字符): CREATE TEMPORARY TABLE PIDRPT.VT_A_OTHR_INDUSTRY_CLUSTER_ENT_INF_01
+(
+SELECT DISTINCT 
+CASE
+WHEN T.BIZCIRCLE_NAME IS NOT NULL 
+THEN '农批市场'
+WHEN T.ORG_NO = '0902'
+THEN '宁晋贷'
+ELSE T.INDUSTRY_CLUSTER_NAM...
+12:02:33.444 [main] WARN com.hb.extractor.parser.JsqlSqlAnalyzer -- JsqlParser 解析失败（块将跳过）: net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+    at line 2, column 1.
+
+Was expecting one of:
+
+    ","
+    "AS"
+    "DISABLE"
+    "ENABLE"
+    "LIKE"
+    <EOF>
+    <ST_SEMICOLON>
+ | preprocess 后 SQL 预览(前200字符): CREATE TEMPORARY TABLE PIDRPT.VT_A_OTHR_INDUSTRY_CLUSTER_ENT_INF_02
+(
+SELECT TAB.UNIFI_CREDIT_CD                                                              
+,SUM(TAB.CONTRACT_AMT)                   ...
+12:02:33.445 [main] WARN com.hb.extractor.parser.JsqlSqlAnalyzer -- JsqlParser 解析失败（块将跳过）: net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+    at line 2, column 1.
+
+Was expecting one of:
+
+    ","
+    "AS"
+    "DISABLE"
+    "ENABLE"
+    "LIKE"
+    <EOF>
+    <ST_SEMICOLON>
+ | preprocess 后 SQL 预览(前200字符): CREATE TEMPORARY TABLE PIDRPT.VT_A_OTHR_INDUSTRY_CLUSTER_ENT_INF_03
+(
+SELECT TAB.NUM_LIBRA_NO                                                                         
+,TAB.USCC                        ...
+GRAND TOTAL BROKEN = 925

@@ -1,0 +1,435 @@
+﻿diff --git a/proc-dependency-extractor/src/main/java/com/hb/extractor/parser/FieldMappingExtractor.java b/proc-dependency-extractor/src/main/java/com/hb/extractor/parser/FieldMappingExtractor.java
+index 62dc68f..69ec05d 100644
+--- a/proc-dependency-extractor/src/main/java/com/hb/extractor/parser/FieldMappingExtractor.java
++++ b/proc-dependency-extractor/src/main/java/com/hb/extractor/parser/FieldMappingExtractor.java
+@@ -16,6 +16,7 @@ import net.sf.jsqlparser.schema.Column;
+ import net.sf.jsqlparser.statement.Statement;
+ import net.sf.jsqlparser.statement.insert.Insert;
+ import net.sf.jsqlparser.statement.select.AllColumns;
++import net.sf.jsqlparser.statement.select.AllTableColumns;
+ import net.sf.jsqlparser.statement.select.FromItem;
+ import net.sf.jsqlparser.statement.select.Join;
+ import net.sf.jsqlparser.statement.select.ParenthesedSelect;
+@@ -89,6 +90,20 @@ public class FieldMappingExtractor {
+                                       String targetTableShort,
+                                       Map<String, String> aliasMap,
+                                       List<String> ddlFields) {
++        return extract(sqlBlock, targetTableShort, aliasMap, ddlFields, null);
++    }
++
++    /**
++     * 提取字段映射（带临时表列定义）。
++     *
++     * @param tempColumnDefs 临时表列定义（key=表短名小写, value=CREATE TEMP 内联列定义），
++     *                       用于多表 JOIN 裸列唯一匹配归属；可为 null
++     */
++    public List<FieldMapping> extract(String sqlBlock,
++                                      String targetTableShort,
++                                      Map<String, String> aliasMap,
++                                      List<String> ddlFields,
++                                      Map<String, List<String>> tempColumnDefs) {
+         List<FieldMapping> result = new ArrayList<>();
+         if (sqlBlock == null || sqlBlock.trim().isEmpty()) return result;
+ 
+@@ -150,16 +165,29 @@ public class FieldMappingExtractor {
+         // 收集 SelectItemInfo（保留原顺序）
+         List<SelectExprInfo> exprInfos = collectSelectExprs(selectItems);
+ 
++        // 裸列候选缓存（表短名→列名大写集合）: 多表 JOIN 裸列唯一匹配归属用, 惰性构建。
++        // 物理表列来自 table_column_meta, 临时表列来自 CREATE TEMP 内联定义（tempColumnDefs）。
++        // 仅在真正遇到多表裸列时才查库构建（memoized supplier, 匿名类闭包捕获 tempColumnDefs）。
++        final java.util.function.Supplier<java.util.Map<String, java.util.Set<String>>> bareColumnCacheRef =
++                new java.util.function.Supplier<java.util.Map<String, java.util.Set<String>>>() {
++                    private java.util.Map<String, java.util.Set<String>> cache;
++                    @Override
++                    public java.util.Map<String, java.util.Set<String>> get() {
++                        if (cache == null) cache = buildBareColumnCache(aliasMap, tempColumnDefs);
++                        return cache;
++                    }
++                };
++
+         // 决定 targetField 来源：优先 INSERT 的目标列，其次 DDL 字段列表
+         if (targetColumns != null && !targetColumns.isEmpty()) {
+             // INSERT 指定了目标列：按位置对应
+-            matchByTargetColumns(exprInfos, targetColumns, aliasMap, result);
++            matchByTargetColumns(exprInfos, targetColumns, aliasMap, bareColumnCacheRef, result);
+         } else if (ddlFields != null && !ddlFields.isEmpty()) {
+             // 有 DDL 字段列表：按三级优先匹配
+-            matchByDdlFields(exprInfos, ddlFields, aliasMap, result);
++            matchByDdlFields(exprInfos, ddlFields, aliasMap, bareColumnCacheRef, result);
+         } else {
+             // 无 DDL：按 SELECT 列原顺序，targetField 从 AS alias / alias.field 推断
+-            matchBySelectOnly(exprInfos, aliasMap, result);
++            matchBySelectOnly(exprInfos, aliasMap, bareColumnCacheRef, result);
+         }
+ 
+         // 子查询字段穿透解析: TAA.field / 裸字段 → 沿 UNION 各分支 SELECT 项解析到底层表字段
+@@ -257,18 +285,22 @@ public class FieldMappingExtractor {
+ 
+     /** INSERT 指定了目标列：按位置对应 */
+     private void matchByTargetColumns(List<SelectExprInfo> exprInfos, List<String> targetColumns,
+-                                       Map<String, String> aliasMap, List<FieldMapping> result) {
++                                       Map<String, String> aliasMap,
++                                       java.util.function.Supplier<java.util.Map<String, java.util.Set<String>>> bareColumnCacheRef,
++                                       List<FieldMapping> result) {
+         int n = Math.min(exprInfos.size(), targetColumns.size());
+         for (int i = 0; i < n; i++) {
+             SelectExprInfo info = exprInfos.get(i);
+-            FieldMapping fm = buildFieldMapping(info, targetColumns.get(i), aliasMap);
++            FieldMapping fm = buildFieldMapping(info, targetColumns.get(i), aliasMap, bareColumnCacheRef);
+             result.add(fm);
+         }
+     }
+ 
+     /** 有 DDL 字段列表：三级优先匹配（AS alias > alias.field > 位置） */
+     private void matchByDdlFields(List<SelectExprInfo> exprInfos, List<String> ddlFields,
+-                                   Map<String, String> aliasMap, List<FieldMapping> result) {
++                                   Map<String, String> aliasMap,
++                                   java.util.function.Supplier<java.util.Map<String, java.util.Set<String>>> bareColumnCacheRef,
++                                   List<FieldMapping> result) {
+         boolean[] used = new boolean[exprInfos.size()];  // 标记 SELECT 列是否已被用
+         // 第一遍：AS alias 等于 DDL 字段名
+         for (String ddlField : ddlFields) {
+@@ -306,7 +338,7 @@ public class FieldMappingExtractor {
+                 }
+             }
+             if (match != null) {
+-                result.add(buildFieldMapping(match, ddlField, aliasMap));
++                result.add(buildFieldMapping(match, ddlField, aliasMap, bareColumnCacheRef));
+             }
+             // DDL 多于 SELECT 列则跳过
+         }
+@@ -314,10 +346,12 @@ public class FieldMappingExtractor {
+ 
+     /** 无 DDL：按 SELECT 列原顺序 */
+     private void matchBySelectOnly(List<SelectExprInfo> exprInfos,
+-                                    Map<String, String> aliasMap, List<FieldMapping> result) {
++                                    Map<String, String> aliasMap,
++                                    java.util.function.Supplier<java.util.Map<String, java.util.Set<String>>> bareColumnCacheRef,
++                                    List<FieldMapping> result) {
+         for (SelectExprInfo info : exprInfos) {
+             String targetField = determineTargetField(info);
+-            result.add(buildFieldMapping(info, targetField, aliasMap));
++            result.add(buildFieldMapping(info, targetField, aliasMap, bareColumnCacheRef));
+         }
+     }
+ 
+@@ -330,7 +364,8 @@ public class FieldMappingExtractor {
+ 
+     /** 构造 FieldMapping，填充 sourceAlias/sourceTableShort/logicType/inputs */
+     private FieldMapping buildFieldMapping(SelectExprInfo info, String targetField,
+-                                            Map<String, String> aliasMap) {
++                                            Map<String, String> aliasMap,
++                                            java.util.function.Supplier<java.util.Map<String, java.util.Set<String>>> bareColumnCacheRef) {
+         FieldMapping fm = new FieldMapping();
+         fm.setTargetField(targetField);
+         fm.setFieldOrder(info.order);
+@@ -354,7 +389,7 @@ public class FieldMappingExtractor {
+         fm.setLogicType(analyzer.classifyLogicType(info.expression));
+ 
+         // inputs：从表达式递归提取字段引用
+-        fm.getInputs().addAll(buildInputs(info.expression, aliasMap, null));
++        fm.getInputs().addAll(buildInputs(info.expression, aliasMap, null, bareColumnCacheRef));
+ 
+         // 兜底：复杂表达式（CASE WHEN / 函数 / 算术）无顶层 alias.field，
+         // 若 sourceTableShort 仍为空，从 inputs 第一个非空来源表推断
+@@ -379,10 +414,12 @@ public class FieldMappingExtractor {
+      * @param expr              AST 表达式
+      * @param aliasMap          别名→表短名映射（不可为 null）
+      * @param singleSourceTable 单源表兜底（ref.alias 为 null 时使用；可为 null）
++     * @param bareColumnCacheRef 多表 JOIN 裸列唯一匹配缓存（可为 null 表示不做唯一匹配）
+      */
+     private List<TransformInput> buildInputs(Expression expr,
+                                               Map<String, String> aliasMap,
+-                                              String singleSourceTable) {
++                                              String singleSourceTable,
++                                              java.util.function.Supplier<java.util.Map<String, java.util.Set<String>>> bareColumnCacheRef) {
+         List<TransformInput> result = new ArrayList<>();
+         if (expr == null) return result;
+ 
+@@ -418,6 +455,20 @@ public class FieldMappingExtractor {
+                 if (onlyTable != null) {
+                     ti.setSourceTableShort(onlyTable);
+                 }
++            } else if (bareColumnCacheRef != null) {
++                // 多表 JOIN 裸列: 按列名在候选表中唯一匹配归属（物理表用 DDL 元数据、临时表用 CREATE TEMP 列定义）。
++                // 仅唯一命中才归属, 多表都有该列则保守置空（无法确定）。
++                String matched = matchFieldToTable(ref.field, bareColumnCacheRef.get());
++                if (matched != null) {
++                    ti.setSourceTableShort(matched);
++                    // 反填 alias 便于溯源（从 aliasMap 反查别名）
++                    for (java.util.Map.Entry<String, String> en : aliasMap.entrySet()) {
++                        if (matched.equals(en.getValue())) {
++                            ti.setSourceAlias(en.getKey());
++                            break;
++                        }
++                    }
++                }
+             }
+             dedup.put(key, ti);
+         }
+@@ -460,7 +511,7 @@ public class FieldMappingExtractor {
+         Map<String, String> effectiveMap = aliasMap != null ? aliasMap : new HashMap<>();
+         Expression expr = parseExpression(exprText);
+         if (expr == null) return new ArrayList<>();
+-        return buildInputs(expr, effectiveMap, singleSourceTable);
++        return buildInputs(expr, effectiveMap, singleSourceTable, null);
+     }
+ 
+     /** 解析表达式字符串为 AST（先 preprocess 占位符） */
+@@ -496,6 +547,36 @@ public class FieldMappingExtractor {
+         return cache;
+     }
+ 
++    /**
++     * 构建多表 JOIN 裸列唯一匹配的候选缓存（表短名→列名大写集合）。
++     * 物理表列来自 table_column_meta（DB 元数据）；临时表列来自 CREATE TEMP 内联列定义（tempColumnDefs）。
++     */
++    private java.util.Map<String, java.util.Set<String>> buildBareColumnCache(
++            Map<String, String> aliasMap, Map<String, List<String>> tempColumnDefs) {
++        java.util.Map<String, java.util.Set<String>> cache = new java.util.HashMap<>();
++        if (aliasMap == null || aliasMap.isEmpty()) return cache;
++        // 物理表: 查 DB 元数据（临时表在元数据表中无记录, 查出为空集合）
++        cache.putAll(buildDdlCache(aliasMap.values()));
++        // 临时表: 用 CREATE TEMP 内联列定义补充/覆盖
++        if (tempColumnDefs != null) {
++            for (java.util.Map.Entry<String, List<String>> en : tempColumnDefs.entrySet()) {
++                String tableShort = en.getKey();
++                // 仅当该表在本块 FROM/JOIN 中被引用时才参与候选
++                if (tableShort != null && aliasMap.containsValue(tableShort)) {
++                    java.util.Set<String> columns = cache.computeIfAbsent(tableShort, k -> new java.util.HashSet<>());
++                    if (en.getValue() != null) {
++                        for (String col : en.getValue()) {
++                            if (col != null) columns.add(col.toUpperCase());
++                        }
++                    }
++                }
++            }
++        }
++        // 剔除无列信息的表: 无法参与唯一匹配, 留着会让"其他表都没有该列"误判为唯一命中
++        cache.values().removeIf(java.util.Set::isEmpty);
++        return cache;
++    }
++
+     /**
+      * 多表场景下通过 DDL 字段列表匹配字段归属。
+      * @return 唯一匹配的 table_short;多重匹配或无匹配返回 null
+@@ -566,6 +647,16 @@ public class FieldMappingExtractor {
+                 }
+                 List<ResolvedRef> resolved = scopeColumns != null
+                         ? scopeColumns.get(ti.getSourceField()) : null;
++                if ((resolved == null || resolved.isEmpty()) && scopeColumns != null) {
++                    // 列名未直接命中: SELECT * 通配子查询单表来源 → 按列名穿透（外层 T3.PROM_ORG_NO → 单表.PROM_ORG_NO）
++                    List<ResolvedRef> star = scopeColumns.get("__star__");
++                    if (star != null && ti.getSourceField() != null) {
++                        resolved = new ArrayList<>();
++                        for (ResolvedRef rr : star) {
++                            resolved.add(new ResolvedRef(rr.sourceTableShort, ti.getSourceField(), rr.sourceAlias));
++                        }
++                    }
++                }
+                 if (resolved == null || resolved.isEmpty()) {
+                     // 查不到: 保持原样
+                     addPassthroughInput(dedup, null, ti.getSourceField(),
+@@ -598,8 +689,11 @@ public class FieldMappingExtractor {
+         for (FromItem fi : fromItems) {
+             if (!(fi instanceof ParenthesedSelect)) continue;
+             Alias a = fi.getAlias();
+-            if (a == null || a.getName() == null) continue;  // 无别名子查询无法被外层引用
+-            String scope = a.getName().toUpperCase();
++            boolean isMain = (fi == select.getFromItem());
++            // 主 FROM 无别名子查询: 用 "" scope 承接外层裸列引用（如 SELECT NVL(org_no,'') FROM (SELECT ...) ）
++            // JOIN 右侧无别名子查询无法安全匹配裸列, 仍跳过
++            if ((a == null || a.getName() == null) && !isMain) continue;
++            String scope = (a != null && a.getName() != null) ? a.getName().toUpperCase() : "";
+             Map<String, List<ResolvedRef>> scopeColumns =
+                     index.computeIfAbsent(scope, k -> new LinkedHashMap<>());
+             collectBranchColumns(((ParenthesedSelect) fi).getSelect(), scopeColumns, 0);
+@@ -607,9 +701,9 @@ public class FieldMappingExtractor {
+         return index;
+     }
+ 
+-    /** 遍历子查询内部各分支（PlainSelect / SetOperationList / 嵌套括号，深度 ≤2）建立列索引 */
++    /** 遍历子查询内部各分支（PlainSelect / SetOperationList / 嵌套括号，深度 ≤5）建立列索引 */
+     private void collectBranchColumns(Select sel, Map<String, List<ResolvedRef>> scopeColumns, int depth) {
+-        if (sel == null || depth > 2) return;
++        if (sel == null || depth > 5) return;
+         if (sel instanceof PlainSelect) {
+             indexBranchColumns((PlainSelect) sel, scopeColumns);
+         } else if (sel instanceof SetOperationList) {
+@@ -623,10 +717,84 @@ public class FieldMappingExtractor {
+ 
+     /** 单个分支: 遍历 SELECT 项，列名（AS 别名优先，其次裸列名）→ 项内字段引用解析到底层表 */
+     private void indexBranchColumns(PlainSelect branch, Map<String, List<ResolvedRef>> scopeColumns) {
++        indexBranchColumns(branch, scopeColumns, 0);
++    }
++
++    /**
++     * 带深度的分支索引。depth 递增用于嵌套子查询二级穿透：
++     * 分支 SELECT 引用子查询别名（如 t.fivclaid 中 t 是 FROM (子查询B) t）时，
++     * 递归索引子查询B 的列，把 t.fivclaid 解析为子查询B 内 FIVCLAID 列的底层表字段。
++     */
++    private void indexBranchColumns(PlainSelect branch, Map<String, List<ResolvedRef>> scopeColumns, int depth) {
+         Map<String, String> branchAliasMap = analyzer.extractAliasMap(branch);
++
++        // 嵌套子查询列索引: 子查询别名(大写) → 列名 → 底层表字段（二级穿透用）
++        // "" key 用于主 FROM 子查询的裸列引用: SQL 允许不带子查询别名前缀裸引用主 FROM 子查询的列
++        // （如 SELECT org_no FROM ( SELECT T01.org_no ... ) A——主 FROM 有别名 A 但引用是裸列）, 因此主 FROM 子查询
++        // 无论有无别名都建 "" 入口; JOIN 右侧仅有别名子查询（无别名不建, 避免误归属）
++        Map<String, Map<String, List<ResolvedRef>>> nestedIndex = new LinkedHashMap<>();
++        if (depth < 5) {
++            FromItem mainFrom = branch.getFromItem();
++            if (mainFrom instanceof ParenthesedSelect) {
++                Map<String, List<ResolvedRef>> nestedCols = new LinkedHashMap<>();
++                collectBranchColumns(((ParenthesedSelect) mainFrom).getSelect(), nestedCols, depth + 1);
++                nestedIndex.put("", nestedCols);
++                Alias mainAlias = mainFrom.getAlias();
++                if (mainAlias != null && mainAlias.getName() != null) {
++                    nestedIndex.put(mainAlias.getName().toUpperCase(), nestedCols);
++                }
++            }
++            if (branch.getJoins() != null) {
++                for (Join join : branch.getJoins()) {
++                    FromItem right = join.getRightItem();
++                    if (!(right instanceof ParenthesedSelect)) continue;
++                    Alias a = right.getAlias();
++                    if (a == null || a.getName() == null) continue;  // JOIN 右侧无别名不建裸列入口
++                    Map<String, List<ResolvedRef>> nestedCols = new LinkedHashMap<>();
++                    collectBranchColumns(((ParenthesedSelect) right).getSelect(), nestedCols, depth + 1);
++                    nestedIndex.put(a.getName().toUpperCase(), nestedCols);
++                }
++            }
++        }
++
+         for (SelectItem<?> item : branch.getSelectItems()) {
+             Expression expr = item.getExpression();
+-            if (expr == null || expr instanceof AllColumns) continue;  // SELECT * 无法按列名索引
++            if (expr == null) continue;
++            // 别名通配 a.*: 按前缀别名解析来源表（多表 JOIN 也可）, 记 __star__ 入口（表级）
++            if (expr instanceof AllTableColumns) {
++                Table prefix = ((AllTableColumns) expr).getTable();
++                String prefixName = prefix != null ? prefix.getName() : null;
++                if (prefixName != null) {
++                    String table = branchAliasMap.get(prefixName.toUpperCase());
++                    if (table != null) {
++                        scopeColumns.computeIfAbsent("__star__", k -> new ArrayList<>())
++                                .add(new ResolvedRef(table, "*", null));
++                    }
++                }
++                continue;
++            }
++            // 裸 SELECT *: 三种形态
++            if (expr instanceof AllColumns) {
++                FromItem mainFrom = branch.getFromItem();
++                if (mainFrom instanceof ParenthesedSelect && nestedIndex.containsKey("")) {
++                    // 主 FROM 是子查询: 整体冒泡内层已索引列（含 __star__）到当前 scope
++                    for (java.util.Map.Entry<String, List<ResolvedRef>> en : nestedIndex.get("").entrySet()) {
++                        List<ResolvedRef> target = scopeColumns.computeIfAbsent(en.getKey(), k -> new ArrayList<>());
++                        for (ResolvedRef rr : en.getValue()) {
++                            addResolvedRefIfAbsent(target, rr);
++                        }
++                    }
++                } else if (branchAliasMap.size() == 1) {
++                    // 单表来源: 记 __star__（原行为）
++                    String only = branchAliasMap.values().iterator().next();
++                    if (only != null) {
++                        scopeColumns.computeIfAbsent("__star__", k -> new ArrayList<>())
++                                .add(new ResolvedRef(only, "*", null));
++                    }
++                }
++                // 多物理表 + 裸 *: 列归属歧义, 保守跳过（防误归属）
++                continue;
++            }
+             String colName = null;
+             Alias a = item.getAlias();
+             if (a != null && a.getName() != null) {
+@@ -650,23 +818,80 @@ public class FieldMappingExtractor {
+                     String only = branchAliasMap.values().iterator().next();
+                     if (only != null) table = only;
+                 }
+-                if (table == null) continue;
++
+                 List<ResolvedRef> list = scopeColumns.computeIfAbsent(colName, k -> new ArrayList<>());
+-                boolean exists = false;
+-                for (ResolvedRef r : list) {
+-                    if (r.sourceTableShort.equals(table) && r.sourceField.equals(ref.field)
+-                            && java.util.Objects.equals(r.sourceAlias, ref.alias)) {
+-                        exists = true;
+-                        break;
++                if (table != null) {
++                    addResolvedRefIfAbsent(list, new ResolvedRef(table, ref.field, ref.alias));
++                    continue;
++                }
++                // table == null 且带别名: 别名是子查询 → 二级穿透, 解析为子查询列的底层引用
++                if (ref.alias != null && nestedIndex.containsKey(ref.alias)) {
++                    Map<String, List<ResolvedRef>> scopeIdx = nestedIndex.get(ref.alias);
++                    // 列名 key 统一小写: 引用侧(PROM_ORG_NO)与索引侧(prom_org_no)大小写对齐
++                    List<ResolvedRef> inner = ref.field != null
++                            ? scopeIdx.get(ref.field.toLowerCase()) : null;
++                    if (inner == null) {
++                        // 列名未直接命中: SELECT * 通配子查询 → 按列名穿透单表来源（如表为 VT/PID 表）
++                        List<ResolvedRef> star = scopeIdx.get("__star__");
++                        if (star != null) {
++                            inner = new ArrayList<>();
++                            for (ResolvedRef rr : star) {
++                                inner.add(new ResolvedRef(rr.sourceTableShort, ref.field, ref.alias));
++                            }
++                        }
++                    }
++                    if (inner != null) {
++                        for (ResolvedRef rr : inner) {
++                            addResolvedRefIfAbsent(list, rr);
++                        }
+                     }
+                 }
+-                if (!exists) {
+-                    list.add(new ResolvedRef(table, ref.field, ref.alias));
++                // table == null 且裸列: 主 FROM 无别名子查询 → 按列名穿透子查询列的底层引用
++                else if (ref.alias == null && nestedIndex.containsKey("")) {
++                    List<ResolvedRef> inner = nestedIndex.get("").get(ref.field.toLowerCase());
++                    if (inner == null) {
++                        // 列名未直接命中: 内层 a.* / 单表 * → 按列名穿透 __star__ 表级入口
++                        List<ResolvedRef> star = nestedIndex.get("").get("__star__");
++                        if (star != null && ref.field != null) {
++                            inner = new ArrayList<>();
++                            for (ResolvedRef rr : star) {
++                                inner.add(new ResolvedRef(rr.sourceTableShort, ref.field, rr.sourceAlias));
++                            }
++                        }
++                    }
++                    if (inner != null) {
++                        for (ResolvedRef rr : inner) {
++                            addResolvedRefIfAbsent(list, rr);
++                        }
++                    }
+                 }
+             }
+         }
+     }
+ 
++    /** 收集分支的 FROM 项（主表 + JOIN 右侧） */
++    private List<FromItem> collectBranchFromItems(PlainSelect branch) {
++        List<FromItem> items = new ArrayList<>();
++        if (branch.getFromItem() != null) items.add(branch.getFromItem());
++        if (branch.getJoins() != null) {
++            for (Join join : branch.getJoins()) {
++                if (join.getRightItem() != null) items.add(join.getRightItem());
++            }
++        }
++        return items;
++    }
++
++    /** 去重追加 ResolvedRef（table+field+alias 相同则跳过） */
++    private void addResolvedRefIfAbsent(List<ResolvedRef> list, ResolvedRef ref) {
++        for (ResolvedRef r : list) {
++            if (r.sourceTableShort.equals(ref.sourceTableShort) && r.sourceField.equals(ref.sourceField)
++                    && java.util.Objects.equals(r.sourceAlias, ref.sourceAlias)) {
++                return;
++            }
++        }
++        list.add(ref);
++    }
++
+     /** 追加穿透输入（按 table+field+role 去重） */
+     private void addPassthroughInput(LinkedHashMap<String, TransformInput> dedup,
+                                      String tableShort, String field, String alias,

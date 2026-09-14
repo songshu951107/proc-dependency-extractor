@@ -32,6 +32,26 @@ export function resyncAll() {
   return request({ url: '/impact/resync/all', method: 'post' })
 }
 
+// 异步后台全量同步 Neo4j（返回 taskId，前端轮询进度）
+export function startResyncAllAsync() {
+  return request({ url: '/impact/resync/all/async', method: 'post' })
+}
+
+// 查询异步全量同步任务进度
+export function getResyncTask(taskId) {
+  return request({ url: `/impact/resync/all/task/${taskId}`, method: 'get' })
+}
+
+// 查询最近一次全量同步任务进度
+export function getResyncLatest() {
+  return request({ url: '/impact/resync/all/task/latest', method: 'get' })
+}
+
+// 分页查询 Neo4j 同步日志（报错清单）
+export function getSyncLog(params) {
+  return request({ url: '/impact/sync-log', method: 'get', params })
+}
+
 export function getSyncStatus() {
   return request({ url: '/impact/sync-status', method: 'get' })
 }

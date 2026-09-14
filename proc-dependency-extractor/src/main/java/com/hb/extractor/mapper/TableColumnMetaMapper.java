@@ -38,6 +38,15 @@ public interface TableColumnMetaMapper extends BaseMapper<TableColumnMeta> {
     List<String> selectFieldNamesByFullTable(@Param("fullTableName") String fullTableName);
 
     /**
+     * NL2SQL：按完整表名(schema.table)查询字段元数据列表，用于血缘召回表补全字段。
+     * full_table_name 在库中为小写，这里统一小写匹配。
+     */
+    @Select("SELECT * FROM table_column_meta " +
+            "WHERE full_table_name = LOWER(#{fullTableName}) " +
+            "ORDER BY ordinal_position")
+    List<TableColumnMeta> selectColumnsByFullTable(@Param("fullTableName") String fullTableName);
+
+    /**
      * NL2SQL 召回：按中文 2-gram（匹配注释）或英文 token（匹配字段名）查询字段元数据。
      * @param grams  中文 2-gram 列表
      * @param tokens 英文/数字 token 列表（已小写）

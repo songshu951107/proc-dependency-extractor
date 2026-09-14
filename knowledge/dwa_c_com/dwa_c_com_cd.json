@@ -1,0 +1,221 @@
+{
+  "scriptName": "dwa_c_com_cd.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T00:00:00",
+  "businessScenario": "共性层通用业务-构建共性层统一代码表，合并自动编码（来自代码转换映射）和手工维护编码（来自配置）两类来源的码值数据",
+  "updateMethod": "每日全量（自动部分）+ 增量拉链（手工部分）",
+  "targetTable": "C_COM_CD",
+  "totalBlocks": 8,
+  "fdmScriptsAnalyzed": [],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "DELETE/INSERT",
+      "blockName": "全量加载自动编码部分",
+      "depth": 0,
+      "sqlCode": "DELETE FROM CDM.C_COM_CD WHERE handw_safeg_flag = '0';\n\nINSERT INTO CDM.C_COM_CD (en_tab_name, cn_tab_name, en_field_name, cn_field_name, cd_val, cd_descn, handw_safeg_flag, start_dt, end_dt)\nSELECT gene_st_en_tab_name, gene_st_cn_tab_name, gene_st_en_field_name, gene_st_cn_field_name, cd_val, cd_descn, '0', start_dt, end_dt\nFROM CDM.C_COM_CD_TRANS;",
+      "tracedSqlCode": "DELETE FROM CDM.C_COM_CD WHERE handw_safeg_flag = '0';\n\nINSERT INTO CDM.C_COM_CD (en_tab_name, cn_tab_name, en_field_name, cn_field_name, cd_val, cd_descn, handw_safeg_flag, start_dt, end_dt)\nSELECT gene_st_en_tab_name, gene_st_cn_tab_name, gene_st_en_field_name, gene_st_cn_field_name, cd_val, cd_descn, '0', start_dt, end_dt\nFROM CDM.C_COM_CD_TRANS;",
+      "businessScenario": "共性层代码表-每日全量加载自动编码数据：先删除所有自动生成的旧数据，再从代码转换映射表全量导入",
+      "sqlFunction": "全量数据加载",
+      "involvedTables": ["C_COM_CD_TRANS"],
+      "originalTables": ["C_COM_CD_TRANS"],
+      "tableJoinLogic": "直接从C_COM_CD_TRANS全量取数，字段做了一对一映射（gene_st_前缀变为无前缀）",
+      "queryDimensions": "英文表名、中文表名、英文字段名、中文字段名、代码值、代码描述、手工维护标志、开始日期、结束日期",
+      "tags": ["自动编码", "全量加载", "代码表"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "自动编码从代码转换映射表获取",
+          "derivedSql": "SELECT en_tab_name, cn_tab_name, en_field_name, cn_field_name, cd_val, cd_descn FROM C_COM_CD WHERE handw_safeg_flag = '0'",
+          "businessMeaning": "查询自动生成的代码值数据，这些数据来源于基础层标准化码值转换流程",
+          "sourceTable": "C_COM_CD",
+          "originalTable": "C_COM_CD"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "DELETE/UPDATE",
+      "blockName": "手工编码重跑预处理",
+      "depth": 0,
+      "sqlCode": "DELETE FROM CDM.C_COM_CD WHERE start_dt >= DATE '{ETL_TX_DT}' AND handw_safeg_flag = '1';\nUPDATE CDM.C_COM_CD SET end_dt = DATE '{MAX_DATE}' WHERE end_dt >= DATE '{ETL_TX_DT}' AND end_dt < DATE '{MAX_DATE}';",
+      "tracedSqlCode": "DELETE FROM CDM.C_COM_CD WHERE start_dt >= DATE '{ETL_TX_DT}' AND handw_safeg_flag = '1';\nUPDATE CDM.C_COM_CD SET end_dt = DATE '{MAX_DATE}' WHERE end_dt >= DATE '{ETL_TX_DT}' AND end_dt < DATE '{MAX_DATE}';",
+      "businessScenario": "共性层代码表-手工编码部分的拉链重跑预处理：删除当天新记录，重新打开已闭链记录",
+      "sqlFunction": "数据预处理（重跑支持）",
+      "involvedTables": ["C_COM_CD"],
+      "originalTables": ["C_COM_CD"],
+      "tableJoinLogic": "无关联，纯目标表维护操作，只处理手工维护标志为1的记录",
+      "queryDimensions": "开始日期、结束日期、手工维护标志",
+      "tags": ["重跑", "拉链", "手工编码"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "分标志位重跑模式",
+          "derivedSql": "DELETE FROM {目标表} WHERE start_dt >= '{ETL_TX_DT}' AND {标志字段} = '1';\nUPDATE {目标表} SET end_dt = '{MAX_DATE}' WHERE end_dt >= '{ETL_TX_DT}' AND end_dt < '{MAX_DATE}'",
+          "businessMeaning": "只对特定标志位的数据进行重跑预处理（如手工维护数据），与自动生成数据互不干扰",
+          "sourceTable": "C_COM_CD",
+          "originalTable": "C_COM_CD"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "CREATE TABLE",
+      "blockName": "创建手工编码临时表ST和VT",
+      "depth": 0,
+      "sqlCode": "CREATE TEMPORARY TABLE CDM.ST_C_COM_CD AS(SELECT en_tab_name, cn_tab_name, en_field_name, cn_field_name, cd_val, cd_descn, handw_safeg_flag FROM CDM.C_COM_CD LIMIT 0);\nCREATE TEMPORARY TABLE CDM.VT_C_COM_CD AS(SELECT en_tab_name, cn_tab_name, en_field_name, cn_field_name, cd_val, cd_descn, handw_safeg_flag FROM CDM.C_COM_CD LIMIT 0);",
+      "tracedSqlCode": "CREATE TEMPORARY TABLE CDM.ST_C_COM_CD AS(SELECT * FROM CDM.C_COM_CD LIMIT 0);\nCREATE TEMPORARY TABLE CDM.VT_C_COM_CD AS(SELECT * FROM CDM.C_COM_CD LIMIT 0);",
+      "businessScenario": "共性层代码表-创建手工编码的源数据临时表和处理结果临时表",
+      "sqlFunction": "临时表结构创建",
+      "involvedTables": ["C_COM_CD"],
+      "originalTables": ["C_COM_CD"],
+      "tableJoinLogic": "无关联，纯结构复制",
+      "queryDimensions": "英文表名、中文表名、英文字段名、中文字段名、代码值、代码描述、手工维护标志",
+      "tags": ["临时表", "ST表", "VT表", "手工编码"],
+      "derivedKnowledge": []
+    },
+    {
+      "blockIndex": 4,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "从代码转换映射表加载手工编码",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.ST_C_COM_CD (en_tab_name, cn_tab_name, en_field_name, cn_field_name, cd_val, cd_descn, handw_safeg_flag)\nSELECT T1.EN_TAB_NAME, T1.CN_TAB_NAME, T1.EN_FIELD_NAME, T1.CN_FIELD_NAME, T1.STAND_CD_VAL, T1.STAND_CD_DESCN, T1.HANDW_SAFEG_FLAG\nFROM CDM.C_COM_TRANS_CD T1\nWHERE T1.start_dt <= DATE'{ETL_TX_DT}' AND T1.end_dt > DATE'{ETL_TX_DT}' AND T1.HANDW_SAFEG_FLAG = '1';",
+      "tracedSqlCode": "INSERT INTO CDM.ST_C_COM_CD (en_tab_name, cn_tab_name, en_field_name, cn_field_name, cd_val, cd_descn, handw_safeg_flag)\nSELECT T1.EN_TAB_NAME, T1.CN_TAB_NAME, T1.EN_FIELD_NAME, T1.CN_FIELD_NAME, T1.STAND_CD_VAL, T1.STAND_CD_DESCN, T1.HANDW_SAFEG_FLAG\nFROM CDM.C_COM_TRANS_CD T1\nWHERE T1.start_dt <= DATE'{ETL_TX_DT}' AND T1.end_dt > DATE'{ETL_TX_DT}' AND T1.HANDW_SAFEG_FLAG = '1';",
+      "businessScenario": "共性层代码表-从代码转换映射表加载手工维护的代码数据，只取当前有效且标记为手工维护的记录",
+      "sqlFunction": "增量数据加载（拉链过滤）",
+      "involvedTables": ["C_COM_TRANS_CD"],
+      "originalTables": ["C_COM_TRANS_CD"],
+      "tableJoinLogic": "直接从C_COM_TRANS_CD读取，通过双时间过滤（start_dt/end_dt）和手工标志筛选有效数据",
+      "queryDimensions": "英文表名、中文表名、英文字段名、中文字段名、标准代码值、标准代码描述、手工维护标志",
+      "tags": ["手工编码", "配置加载", "拉链过滤"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "手工维护代码配置查询",
+          "derivedSql": "SELECT EN_TAB_NAME, EN_FIELD_NAME, STAND_CD_VAL, STAND_CD_DESCN FROM C_COM_TRANS_CD WHERE HANDW_SAFEG_FLAG = '1' AND start_dt <= '{日期}' AND end_dt > '{日期}'",
+          "businessMeaning": "查询当前有效的手工维护代码配置，用于共性层代码表的增量更新",
+          "sourceTable": "C_COM_TRANS_CD",
+          "originalTable": "C_COM_TRANS_CD"
+        }
+      ]
+    },
+    {
+      "blockIndex": 5,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "手工编码增量检测（EXCEPT ALL）",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.VT_C_COM_CD\nSELECT * FROM (\n  SELECT * FROM CDM.ST_C_COM_CD T\n  EXCEPT ALL\n  SELECT * FROM CDM.C_COM_CD F WHERE F.end_dt = DATE '{MAX_DATE}'\n) T01;",
+      "tracedSqlCode": "INSERT INTO CDM.VT_C_COM_CD\nSELECT * FROM (\n  SELECT * FROM CDM.ST_C_COM_CD T\n  EXCEPT ALL\n  SELECT * FROM CDM.C_COM_CD F WHERE F.end_dt = DATE '{MAX_DATE}'\n) T01;",
+      "businessScenario": "共性层代码表-手工编码增量检测：对比源数据与当前有效数据的差异，识别新增和变更的手工代码",
+      "sqlFunction": "增量数据检测",
+      "involvedTables": ["C_COM_CD"],
+      "originalTables": ["C_COM_CD"],
+      "tableJoinLogic": "通过EXCEPT ALL集合运算对比源数据与当前有效记录，差异即为增量",
+      "queryDimensions": "英文表名、中文表名、英文字段名、中文字段名、代码值、代码描述、手工维护标志",
+      "tags": ["增量检测", "EXCEPT ALL", "手工编码"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "手工编码拉链增量检测",
+          "derivedSql": "SELECT * FROM {ST表} EXCEPT ALL SELECT * FROM C_COM_CD WHERE end_dt = '{MAX_DATE}'",
+          "businessMeaning": "通过集合运算检测手工维护代码的新增和变更，用于驱动后续拉链处理",
+          "sourceTable": "C_COM_CD",
+          "originalTable": "C_COM_CD"
+        }
+      ]
+    },
+    {
+      "blockIndex": 6,
+      "parentBlockIndex": 0,
+      "blockType": "UPDATE",
+      "blockName": "手工编码闭链处理",
+      "depth": 0,
+      "sqlCode": "UPDATE CDM.C_COM_CD F SET F.end_dt = DATE '{ETL_TX_DT}'\nWHERE EXISTS(\n  SELECT 1 FROM CDM.VT_C_COM_CD T\n  WHERE F.end_dt = DATE '{MAX_DATE}'\n    AND T.en_tab_name = F.en_tab_name\n    AND T.en_field_name = F.en_field_name\n    AND T.cd_val = F.cd_val\n);",
+      "tracedSqlCode": "UPDATE CDM.C_COM_CD F SET F.end_dt = DATE '{ETL_TX_DT}'\nWHERE EXISTS(\n  SELECT 1 FROM CDM.VT_C_COM_CD T\n  WHERE F.end_dt = DATE '{MAX_DATE}'\n    AND T.en_tab_name = F.en_tab_name\n    AND T.en_field_name = F.en_field_name\n    AND T.cd_val = F.cd_val\n);",
+      "businessScenario": "共性层代码表-手工编码闭链：将存在变更的当前有效手工代码记录闭链，保留历史版本",
+      "sqlFunction": "拉链数据处理（闭链）",
+      "involvedTables": ["C_COM_CD"],
+      "originalTables": ["C_COM_CD"],
+      "tableJoinLogic": "通过EXISTS关联VT临时表，按表名+字段名+代码值作为业务主键，闭链匹配到的当前有效记录",
+      "queryDimensions": "英文表名、英文字段名、代码值、结束日期",
+      "tags": ["闭链", "拉链", "手工编码"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "手工代码闭链关联条件",
+          "derivedSql": "UPDATE C_COM_CD SET end_dt = '{ETL_TX_DT}' WHERE end_dt = '{MAX_DATE}' AND EXISTS(SELECT 1 FROM {VT表} T WHERE T.en_tab_name=C_COM_CD.en_tab_name AND T.en_field_name=C_COM_CD.en_field_name AND T.cd_val=C_COM_CD.cd_val)",
+          "businessMeaning": "以表名+字段名+代码值的三元组作为业务主键进行闭链匹配，确保代码值变更时正确追溯历史",
+          "sourceTable": "C_COM_CD",
+          "originalTable": "C_COM_CD"
+        }
+      ]
+    },
+    {
+      "blockIndex": 7,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "手工编码增量插入",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_COM_CD (en_tab_name, cn_tab_name, en_field_name, cn_field_name, cd_val, cd_descn, handw_safeg_flag, start_dt, end_dt)\nSELECT T.en_tab_name, T.cn_tab_name, T.en_field_name, T.cn_field_name, T.cd_val, T.cd_descn, T.handw_safeg_flag,\n  DATE '{ETL_TX_DT}', DATE '{MAX_DATE}'\nFROM CDM.VT_C_COM_CD T\nGROUP BY T.en_tab_name, T.cn_tab_name, T.en_field_name, T.cn_field_name, T.cd_val, T.cd_descn, T.handw_safeg_flag;",
+      "tracedSqlCode": "INSERT INTO CDM.C_COM_CD (en_tab_name, cn_tab_name, en_field_name, cn_field_name, cd_val, cd_descn, handw_safeg_flag, start_dt, end_dt)\nSELECT T.en_tab_name, T.cn_tab_name, T.en_field_name, T.cn_field_name, T.cd_val, T.cd_descn, T.handw_safeg_flag,\n  DATE '{ETL_TX_DT}', DATE '{MAX_DATE}'\nFROM CDM.VT_C_COM_CD T\nGROUP BY ...;",
+      "businessScenario": "共性层代码表-手工编码增量插入：将新增/变更的手工代码以新拉链形式插入目标表",
+      "sqlFunction": "拉链数据处理（增量插入）",
+      "involvedTables": ["C_COM_CD"],
+      "originalTables": ["C_COM_CD"],
+      "tableJoinLogic": "从VT临时表取增量数据，设置start_dt为数据日期、end_dt为MAX_DATE，GROUP BY去重后插入目标表",
+      "queryDimensions": "英文表名、中文表名、英文字段名、中文字段名、代码值、代码描述、手工维护标志、开始日期、结束日期",
+      "tags": ["增量插入", "拉链", "手工编码", "代码表"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "共性层代码表最终查询",
+          "derivedSql": "SELECT en_tab_name, en_field_name, cd_val, cd_descn FROM C_COM_CD WHERE start_dt <= '{日期}' AND end_dt > '{日期}'",
+          "businessMeaning": "查询共性层代码表当前有效的代码值，该表合并了自动编码（handw_safeg_flag='0'）和手工编码（handw_safeg_flag='1'）两种来源",
+          "sourceTable": "C_COM_CD",
+          "originalTable": "C_COM_CD"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["C_COM_CD_TRANS", "C_COM_TRANS_CD", "C_COM_CD"],
+  "allOriginalTables": ["C_COM_CD_TRANS", "C_COM_TRANS_CD", "C_COM_CD"],
+  "traceSummary": {
+    "totalFdmTables": 0,
+    "scriptsFound": 0,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "双来源编码合并规则",
+      "condition": "handw_safeg_flag = '0'（自动生成） vs '1'（手工维护）",
+      "description": "共性层代码表C_COM_CD的数据由两部分组成：自动编码（handw_safeg_flag='0'）来自C_COM_CD_TRANS全量加载，手工编码（handw_safeg_flag='1'）来自C_COM_TRANS_CD增量拉链"
+    },
+    {
+      "ruleName": "自动编码全量覆盖规则",
+      "condition": "先DELETE全部自动编码记录，再INSERT全量数据",
+      "description": "自动编码部分采用全量覆盖策略（先删后插），而非增量拉链，因为自动编码数据量相对固定且较小"
+    },
+    {
+      "ruleName": "手工编码拉链管理规则",
+      "condition": "F3无删除拉链：start_dt<=日期<end_dt时有效",
+      "description": "手工维护的编码采用拉链管理，支持追溯编码的历史变更，包括新增、修改和失效操作"
+    },
+    {
+      "ruleName": "手工编码配置来源规则",
+      "condition": "FROM C_COM_TRANS_CD WHERE HANDW_SAFEG_FLAG='1'",
+      "description": "手工编码需要人工在C_COM_TRANS_CD配置表中维护，通过配置驱动共性层代码表的手工编码数据"
+    },
+    {
+      "ruleName": "表名字段名命名规则",
+      "condition": "gene_st_前缀（转换映射表） vs 无前缀（代码表）",
+      "description": "C_COM_CD_TRANS使用gene_st_前缀表示共性层标准化，C_COM_CD去除前缀直接使用en_/cn_前缀"
+    }
+  ],
+  "codeValues": {
+    "handw_safeg_flag": {
+      "0": "自动生成",
+      "1": "手工维护"
+    }
+  }
+}

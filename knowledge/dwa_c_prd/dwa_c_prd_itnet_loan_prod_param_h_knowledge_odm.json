@@ -1,0 +1,178 @@
+{
+  "scriptName": "dwa_c_prd_itnet_loan_prod_param_h.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T10:30:00",
+  "businessScenario": "互联网贷款产品参数拉链表-基于信网贷产品基础信息维护贷款的拉链历史记录，支持渠道/类型/科目的码值映射",
+  "updateMethod": "每日全量（拉链表模式）",
+  "targetTable": "C_PRD_ITNET_LOAN_PROD_PARAM_H",
+  "totalBlocks": 3,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_PD_CFXF_PROD_BASE_INF",
+      "fdmScript": "dwa_f_pd_cfxf_prod_base_inf.py",
+      "found": true,
+      "tdmTable": "T_CFXF_PROD_CONFIG_ALL_{date}",
+      "odmTable": "O_CFXF_PROD_CONFIG_ALL",
+      "transformLogic": "F4带删除拉链，字段标准化：productno→prod_no, productname→prod_name, pd_blg→type_cd, loanused→usage_cd, zassure_type→guar_mode_cd, channel→chan_cd, chnl_sys→sourc_sys, wd_flag→itnet_loan_flag等"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "Step1-从信网贷产品基础信息加工产品参数",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_PRD_ITNET_LOAN_PROD_PARAM_H_01\nSELECT PROD_NO AS BUSS_CODE, PROD_NAME AS BUSS_NM, PROD_NO, PROD_NAME,\n       CASE WHEN CHAN_CD = '信保贷' OR CHAN_CD = '平安新模式' THEN '0202'\n            WHEN TYPE_CD = '联合贷' THEN '0203'\n            WHEN TYPE_CD = '助贷' THEN '0204'\n            WHEN TYPE_CD = '自营' THEN '0205'\n            ELSE TYPE_CD END TYPE_CD,\n       CASE WHEN CHAN_CD = '信保贷' OR CHAN_CD = '平安新模式' THEN '信保贷'\n            WHEN CHAN_CD = '助贷' THEN '联合助贷'\n            ELSE TYPE_CD END TYPE_NM,\n       CASE WHEN CHAN_CD = '信保贷' OR CHAN_CD = '平安新模式' THEN '个人信贷部'\n            WHEN CHAN_CD = '易鑫' THEN '信用卡部'\n            WHEN PROD_NO='4001' THEN '个人信贷部'\n            ELSE '互联网贷款部' END BELO_TO_DEPT_NAME,\n       '-',\n       CASE WHEN SOURC_SYS = 'DZ' THEN '-'\n            WHEN SOURC_SYS = 'MY' THEN '0092'\n            WHEN SOURC_SYS = 'XJ' THEN '0198'\n            ELSE '-' END ASSES_ORG_NO,\n       CASE WHEN SOURC_SYS = 'DZ' THEN 'UPEA'\n            WHEN SOURC_SYS = 'XJ' THEN 'CFXF'\n            WHEN SOURC_SYS = 'MY' THEN 'MYLN'\n            WHEN SOURC_SYS = 'XF' THEN 'XFLN'\n            ELSE SOURC_SYS END BELO_TO_ORG_NO,\n       '0310' AS LOAN_TYPE_CD,\n       CASE WHEN PROD_NO IN ('0201','0301','02013000') THEN '13030304' ELSE '-' END SUBJ_NO,\n       '13130201', '13130202', '13130203',\n       CASE WHEN USAGE_CD = '经营' THEN '2' ELSE '1' END LOAN_USE_TO_CD,\n       USAGE_CD AS LOAN_USE_TO_DESCN,\n       CASE WHEN GUAR_MODE_CD='保证' THEN '010'\n            WHEN GUAR_MODE_CD='信用' THEN '005'\n            WHEN GUAR_MODE_CD='抵押' THEN '003'\n            ELSE GUAR_MODE_CD END GUAR_MODE_CD,\n       GUAR_MODE_CD AS GUAR_MODE_DESCN,\n       ITNET_LOAN_FLAG\n  FROM FDM.F_PD_CFXF_PROD_BASE_INF\n WHERE START_DT <= DATE'{ETL_TX_DT}' AND END_DT > DATE'{ETL_TX_DT}'",
+      "tracedSqlCode": "INSERT INTO CDM.C_PRD_ITNET_LOAN_PROD_PARAM_H_01\nSELECT productno AS BUSS_CODE, productname AS BUSS_NM, productno AS PROD_NO, productname AS PROD_NAME,\n       CASE WHEN channel IN ('信保贷','平安新模式') THEN '0202'\n            WHEN pd_blg = '联合贷' THEN '0203'\n            WHEN pd_blg = '助贷' THEN '0204'\n            WHEN pd_blg = '自营' THEN '0205' ELSE pd_blg END TYPE_CD,\n       CASE WHEN channel IN ('信保贷','平安新模式') THEN '信保贷'\n            WHEN channel = '助贷' THEN '联合助贷' ELSE pd_blg END TYPE_NM,\n       CASE WHEN channel IN ('信保贷','平安新模式') THEN '个人信贷部'\n            WHEN channel = '易鑫' THEN '信用卡部'\n            WHEN productno='4001' THEN '个人信贷部'\n            ELSE '互联网贷款部' END BELO_TO_DEPT_NAME,\n       '-',\n       CASE WHEN chnl_sys='DZ' THEN '-' WHEN chnl_sys='MY' THEN '0092' WHEN chnl_sys='XJ' THEN '0198' ELSE '-' END ASSES_ORG_NO,\n       CASE WHEN chnl_sys='DZ' THEN 'UPEA' WHEN chnl_sys='XJ' THEN 'CFXF' WHEN chnl_sys='MY' THEN 'MYLN' WHEN chnl_sys='XF' THEN 'XFLN' ELSE chnl_sys END BELO_TO_ORG_NO,\n       '0310' AS LOAN_TYPE_CD,\n       CASE WHEN productno IN ('0201','0301','02013000') THEN '13030304' ELSE '-' END SUBJ_NO,\n       '13130201', '13130202', '13130203',\n       CASE WHEN loanused='经营' THEN '2' ELSE '1' END LOAN_USE_TO_CD,\n       loanused AS LOAN_USE_TO_DESCN,\n       CASE WHEN zassure_type='保证' THEN '010' WHEN zassure_type='信用' THEN '005' WHEN zassure_type='抵押' THEN '003' ELSE zassure_type END GUAR_MODE_CD,\n       zassure_type AS GUAR_MODE_DESCN,\n       wd_flag AS ITNET_LOAN_FLAG\n  FROM ODM.O_CFXF_PROD_CONFIG_ALL",
+      "businessScenario": "互联网贷款产品参数-将信网贷产品基础信息通过码值映射转换为标准化的产品参数表",
+      "sqlFunction": "数据转换+码值映射",
+      "involvedTables": ["O_CFXF_PROD_CONFIG_ALL"],
+      "originalTables": ["F_PD_CFXF_PROD_BASE_INF"],
+      "tableJoinLogic": "单表查询，通过CASE WHEN实现多维度码值映射：渠道映射产品类型、归属部门、渠道系统映射机构号、用途映射贷款用途代码、担保方式映射科目代码",
+      "queryDimensions": "产品编号、产品名称、产品类型代码/名称、互联网贷款标志、归属部门、评估机构号、归属机构号、贷款类型代码、科目号、贷款用途代码/名称、担保方式代码/名称",
+      "tags": ["互联网贷款", "产品参数", "拉链表", "信网贷", "码值映射", "渠道分类", "担保方式"],
+      "traceChains": [
+        {
+          "originalTable": "F_PD_CFXF_PROD_BASE_INF",
+          "fdmScript": "dwa_f_pd_cfxf_prod_base_inf.py",
+          "tdmTable": "T_CFXF_PROD_CONFIG_ALL_{date}",
+          "odmTable": "O_CFXF_PROD_CONFIG_ALL",
+          "fieldMappings": [
+            {"fdmField": "prod_no", "odmField": "productno", "description": "产品编号"},
+            {"fdmField": "prod_name", "odmField": "productname", "description": "产品名称"},
+            {"fdmField": "type_cd", "odmField": "pd_blg", "description": "类型代码（自营/联合贷/助贷等）"},
+            {"fdmField": "usage_cd", "odmField": "loanused", "description": "用途代码（经营/消费）"},
+            {"fdmField": "guar_mode_cd", "odmField": "zassure_type", "description": "担保方式代码（保证/信用/抵押）"},
+            {"fdmField": "chan_cd", "odmField": "channel", "description": "渠道代码（信保贷/易鑫/平安新模式等）"},
+            {"fdmField": "sourc_sys", "odmField": "chnl_sys", "description": "来源系统代码（DZ/MY/XJ/XF）"},
+            {"fdmField": "itnet_loan_flag", "odmField": "wd_flag", "description": "互联网贷款标志"},
+            {"fdmField": "circl_credit_flag", "odmField": "cycleflag", "description": "是否循环贷标志"},
+            {"fdmField": "coope_org", "odmField": "partner", "description": "合作机构"},
+            {"fdmField": "biz_mode_cd", "odmField": "business_type", "description": "业务模式代码"}
+          ],
+          "filterConditions": "FDM拉链：start_dt<=ETL_TX_DT AND end_dt>ETL_TX_DT"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "互联网贷款产品类型码值映射",
+          "derivedSql": "SELECT productno, productname, channel, pd_blg, CASE WHEN channel IN ('信保贷','平安新模式') THEN '0202' WHEN pd_blg='联合贷' THEN '0203' WHEN pd_blg='助贷' THEN '0204' WHEN pd_blg='自营' THEN '0205' ELSE pd_blg END AS prod_type_cd FROM O_CFXF_PROD_CONFIG_ALL",
+          "businessMeaning": "将信网贷产品按渠道和类型编码映射为标准化产品类型代码：信保贷=0202, 联合贷=0203, 助贷=0204, 自营=0205",
+          "sourceTable": "O_CFXF_PROD_CONFIG_ALL",
+          "originalTable": "F_PD_CFXF_PROD_BASE_INF"
+        },
+        {
+          "knowledgeName": "互联网贷款产品归属部门映射",
+          "derivedSql": "SELECT productno, productname, channel, CASE WHEN channel IN ('信保贷','平安新模式') THEN '个人信贷部' WHEN channel='易鑫' THEN '信用卡部' WHEN productno='4001' THEN '个人信贷部' ELSE '互联网贷款部' END AS belo_to_dept FROM O_CFXF_PROD_CONFIG_ALL",
+          "businessMeaning": "按产品渠道和产品号确定归属部门：信保贷/平安新模式→个人信贷部，易鑫→信用卡部，4001→个人信贷部，其他→互联网贷款部",
+          "sourceTable": "O_CFXF_PROD_CONFIG_ALL",
+          "originalTable": "F_PD_CFXF_PROD_BASE_INF"
+        },
+        {
+          "knowledgeName": "互联网贷款来源系统与机构号映射",
+          "derivedSql": "SELECT productno, chnl_sys, CASE chnl_sys WHEN 'DZ' THEN 'UPEA' WHEN 'XJ' THEN 'CFXF' WHEN 'MY' THEN 'MYLN' WHEN 'XF' THEN 'XFLN' ELSE chnl_sys END AS sourc_sys_name FROM O_CFXF_PROD_CONFIG_ALL",
+          "businessMeaning": "将信网贷产品来源系统代码映射为标准化系统名称：DZ→UPEA, XJ→CFXF, MY→MYLN, XF→XFLN",
+          "sourceTable": "O_CFXF_PROD_CONFIG_ALL",
+          "originalTable": "F_PD_CFXF_PROD_BASE_INF"
+        },
+        {
+          "knowledgeName": "贷款用途码值映射",
+          "derivedSql": "SELECT productno, loanused, CASE WHEN loanused='经营' THEN '2' ELSE '1' END AS loan_use_to_cd FROM O_CFXF_PROD_CONFIG_ALL",
+          "businessMeaning": "贷款用途中文映射为代码：经营=2, 其他=1（消费）",
+          "sourceTable": "O_CFXF_PROD_CONFIG_ALL",
+          "originalTable": "F_PD_CFXF_PROD_BASE_INF"
+        },
+        {
+          "knowledgeName": "担保方式码值映射",
+          "derivedSql": "SELECT productno, zassure_type, CASE WHEN zassure_type='保证' THEN '010' WHEN zassure_type='信用' THEN '005' WHEN zassure_type='抵押' THEN '003' ELSE zassure_type END AS guar_mode_cd FROM O_CFXF_PROD_CONFIG_ALL",
+          "businessMeaning": "担保方式中文映射为代码：保证=010, 信用=005, 抵押=003",
+          "sourceTable": "O_CFXF_PROD_CONFIG_ALL",
+          "originalTable": "F_PD_CFXF_PROD_BASE_INF"
+        },
+        {
+          "knowledgeName": "互联网贷款科目号固定值",
+          "derivedSql": "SELECT '0310' AS loan_type_cd, '13130201' AS overdue_subj_no, '13130202' AS slugg_subj_no, '13130203' AS doubt_acct_subj_no",
+          "businessMeaning": "互联网贷款产品固定科目：贷款类型0310，逾期科目13130201，呆滞科目13130202，呆账科目13130203",
+          "sourceTable": "O_CFXF_PROD_CONFIG_ALL",
+          "originalTable": "F_PD_CFXF_PROD_BASE_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT+UPDATE",
+      "blockName": "Step5/6-增量数据识别与拉链闭链",
+      "depth": 0,
+      "sqlCode": "/*Step5:增量数据*/\nINSERT INTO CDM.C_PRD_ITNET_LOAN_PROD_PARAM_H_02\nSELECT ... FROM CDM.C_PRD_ITNET_LOAN_PROD_PARAM_H_01 A EXCEPT ALL\nSELECT prod_no, prod_name, orig_prod_no, ... FROM CDM.C_PRD_ITNET_LOAN_PROD_PARAM_H B WHERE B.END_DT = '2099-12-31';\n\n/*Step6:闭链*/\nUPDATE CDM.C_PRD_ITNET_LOAN_PROD_PARAM_H A SET A.END_DT = DATE'{ETL_TX_DT}'\nWHERE EXISTS (SELECT '1' FROM C_PRD_ITNET_LOAN_PROD_PARAM_H_02 B\n              WHERE A.orig_prod_no = B.PROD_NO AND A.END_DT = '2099-12-31')",
+      "businessScenario": "互联网贷款产品参数-通过EXCEPT ALL对比识别增量变更数据，并对发生变化的历史记录进行闭链处理",
+      "sqlFunction": "增量识别+拉链维护",
+      "involvedTables": ["O_CFXF_PROD_CONFIG_ALL"],
+      "originalTables": ["F_PD_CFXF_PROD_BASE_INF"],
+      "tableJoinLogic": "通过EXCEPT ALL对比当天加工数据与拉链表当前有效记录（END_DT='2099-12-31'），识别新增/变更的产品；再用UPDATE将匹配到的旧记录闭链",
+      "queryDimensions": "产品编号、产品名称、产品类型代码/名称、归属部门、评估机构号、归属机构号、来源系统、贷款类型、科目号、互联网贷款标志",
+      "tags": ["增量识别", "拉链表", "闭链", "EXCEPT ALL"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "拉链表增量数据识别",
+          "derivedSql": "EXCEPT ALL用于比对两表数据差异，当天加工的新数据与拉链表中当前有效记录（END_DT='2099-12-31'）对比，差异即为增量",
+          "businessMeaning": "拉链表标准增量处理模式：先识别变更记录，再闭链旧记录，最后插入新记录",
+          "sourceTable": "O_CFXF_PROD_CONFIG_ALL",
+          "originalTable": "F_PD_CFXF_PROD_BASE_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "Step6-插入新增数据",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_PRD_ITNET_LOAN_PROD_PARAM_H\nSELECT BUSS_CODE, BUSS_NM, PROD_NO, PROD_NAME, TYPE_CD, TYPE_NM, ITNET_LOAN_FLAG,\n       BELO_TO_DEPT_NAME, ASSES_ORG_NO, BELO_TO_ORG_NO, SOURC_SYS, LOAN_TYPE_CD,\n       SUBJ_NO, OVERDUE_SUBJ_NO, SLUGG_SUBJ_NO, DOUBT_ACCT_SUBJ_NO,\n       LOAN_USE_TO_CD, LOAN_USE_TO_DESCN, GUAR_MODE_CD, GUAR_MODE_DESCN,\n       DATE'{ETL_TX_DT}' AS start_dt, '2099-12-31' AS end_dt\n  FROM CDM.C_PRD_ITNET_LOAN_PROD_PARAM_H_02",
+      "businessScenario": "互联网贷款产品参数-将增量数据插入拉链表主表，新记录开始日期为数据日期，结束日期为2099-12-31（当前有效）",
+      "sqlFunction": "拉链表数据插入",
+      "involvedTables": ["O_CFXF_PROD_CONFIG_ALL"],
+      "originalTables": ["F_PD_CFXF_PROD_BASE_INF"],
+      "tableJoinLogic": "单表插入，从增量临时表取数据写入拉链表主表",
+      "queryDimensions": "产品编号、产品名称、产品类型代码/名称、互联网贷款标志、归属部门、评估/归属机构号、来源系统、贷款类型代码、科目号、贷款用途代码、担保方式代码",
+      "tags": ["拉链表", "互联网贷款", "数据插入"]
+    }
+  ],
+  "allInvolvedTables": ["O_CFXF_PROD_CONFIG_ALL"],
+  "allOriginalTables": ["F_PD_CFXF_PROD_BASE_INF"],
+  "traceSummary": {
+    "totalFdmTables": 1,
+    "scriptsFound": 1,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "产品类型码值映射规则",
+      "condition": "chan_cd='信保贷'/'平安新模式'→0202, type_cd='联合贷'→0203, type_cd='助贷'→0204, type_cd='自营'→0205",
+      "description": "多渠道来源的产品统一映射为标准化产品类型代码，信保贷和平安新模式统一归属0202"
+    },
+    {
+      "ruleName": "归属部门映射规则",
+      "condition": "信保贷/平安新模式→个人信贷部, 易鑫→信用卡部, 4001→个人信贷部, 其他→互联网贷款部",
+      "description": "根据产品渠道和产品编号确定产品的归属管理部门"
+    },
+    {
+      "ruleName": "担保方式码值映射",
+      "condition": "保证→010, 信用→005, 抵押→003",
+      "description": "将中文担保方式描述转换为标准代码"
+    },
+    {
+      "ruleName": "固定贷款科目",
+      "condition": "LOAN_TYPE_CD='0310', OVERDUE='13130201', SLUGG='13130202', DOUBT='13130203'",
+      "description": "互联网贷款产品使用固定的一套会计科目代码"
+    },
+    {
+      "ruleName": "拉链表闭链规则",
+      "condition": "END_DT='2099-12-31'为当前有效，闭链时更新END_DT为数据日期",
+      "description": "增量到来时先将匹配的旧有效记录闭链（END_DT设为当日），再插入新记录（END_DT为2099-12-31）"
+    }
+  ]
+}

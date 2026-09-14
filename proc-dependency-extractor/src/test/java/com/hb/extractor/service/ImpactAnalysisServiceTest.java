@@ -18,6 +18,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -252,6 +253,243 @@ class ImpactAnalysisServiceTest {
                 "常量下游列不因字面量转换入图（值恒定，不受起点影响）");
     }
 
+    // ============ 临时表穿透口径（方案A：临时表不占深度预算） ============
+
+    /** 构造 Column map（colKey/name/tableFullName/temp，与 Cypher 返回结构一致） */
+    private Map<String, Object> col(String colKey, String tableFullName, boolean temp) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("colKey", colKey);
+        m.put("name", colKey.substring(colKey.lastIndexOf('.') + 1));
+        m.put("tableFullName", tableFullName);
+        m.put("temp", temp);
+        return m;
+    }
+
+    /** 构造 Transform 行（非 DIRECT / 非 LITERAL，走 Transform 节点分支） */
+    private Map<String, Object> transformRow(String transformId,
+                                             Collection<Map<String, Object>> inputs,
+                                             Collection<Map<String, Object>> outputs) {
+        Map<String, Object> row = new HashMap<>();
+        row.put("transformId", transformId);
+        row.put("expression", "expr_" + transformId.substring(0, 4));
+        row.put("logicType", "EXPRESSION");
+        row.put("procName", "proc_a");
+        row.put("inputs", new ArrayList<>(inputs));
+        row.put("outputs", new ArrayList<>(outputs));
+        return row;
+    }
+
+    private void injectMaxDepth(int value) throws Exception {
+        java.lang.reflect.Field f = ImpactAnalysisServiceImpl.class.getDeclaredField("maxAllowedDepth");
+        f.setAccessible(true);
+        f.setInt(impactService, value);
+    }
+
+    private ImpactAnalysisRequest fieldRequest(int maxDepth, String direction) {
+        ImpactAnalysisRequest req = new ImpactAnalysisRequest();
+        req.setSchema("CDM");
+        req.setTableShortName("SRC");
+        req.setFieldName("BALANCE");
+        req.setDirection(direction);
+        req.setMaxDepth(maxDepth);
+        return req;
+    }
+
+    /**
+     * T1 值通道临时表穿透：临时列不占深度预算（同轮继续扩展），
+     * maxDepth=1 时经 vt1→vt2 临时链仍应到达物理表列（depth=1），临时列 depth=0。
+     */
+    @Test
+    void testFieldLevel_TempColumnsPassThrough_DepthBudgetCountsPhysicalOnly() throws Exception {
+        injectMaxDepth(20);
+        // 兜底先注册（LIFO），具体 matcher 后注册优先生效
+        stubNeo4jQuery("", Collections.emptyList());
+        stubNeo4jQuerySeq("-[:INPUT_TO]->(t:Transform)", Arrays.asList(
+                Arrays.asList(transformRow("11111111111111111111111111111111",
+                        Arrays.asList(col("cdm.src.balance", "cdm.src", false)),
+                        Arrays.asList(col("pid.vt1.x", "pid.vt1", true)))),
+                Arrays.asList(transformRow("22222222222222222222222222222222",
+                        Arrays.asList(col("pid.vt1.x", "pid.vt1", true)),
+                        Arrays.asList(col("pid.vt2.y", "pid.vt2", true)))),
+                Arrays.asList(transformRow("33333333333333333333333333333333",
+                        Arrays.asList(col("pid.vt2.y", "pid.vt2", true)),
+                        Arrays.asList(col("pid.phys.z", "pid.phys", false))))
+        ));
+
+        ImpactAnalysisVO vo = impactService.analyze(fieldRequest(1, "DOWNSTREAM"));
+
+        var vt1 = vo.getNodes().stream().filter(n -> "pid.vt1.x".equals(n.getId())).findFirst();
+        var vt2 = vo.getNodes().stream().filter(n -> "pid.vt2.y".equals(n.getId())).findFirst();
+        var phys = vo.getNodes().stream().filter(n -> "pid.phys.z".equals(n.getId())).findFirst();
+        assertTrue(vt1.isPresent(), "临时列 vt1.x 应入图");
+        assertTrue(vt2.isPresent(), "穿透扩展临时列 vt2.y 应入图");
+        assertTrue(phys.isPresent(), "maxDepth=1 经临时链穿透后物理列 pid.phys.z 应出现");
+        assertEquals(0, vt1.get().getDepth(), "临时列穿透不占预算：depth=0");
+        assertEquals(0, vt2.get().getDepth(), "临时列穿透不占预算：depth=0");
+        assertEquals(1, phys.get().getDepth(), "物理列占 1 次预算：depth=1");
+    }
+
+    /**
+     * T2 物理表仍占预算：maxDepth=1 时只到第一个物理表列，第二个物理表列不出现。
+     */
+    @Test
+    void testFieldLevel_PhysicalColumnsConsumeDepthBudget() throws Exception {
+        injectMaxDepth(20);
+        stubNeo4jQuery("", Collections.emptyList());
+        stubNeo4jQuerySeq("-[:INPUT_TO]->(t:Transform)", Arrays.asList(
+                Arrays.asList(transformRow("11111111111111111111111111111111",
+                        Arrays.asList(col("cdm.src.balance", "cdm.src", false)),
+                        Arrays.asList(col("cdm.mid.b", "cdm.mid", false))))
+        ));
+
+        ImpactAnalysisVO vo = impactService.analyze(fieldRequest(1, "DOWNSTREAM"));
+
+        var mid = vo.getNodes().stream().filter(n -> "cdm.mid.b".equals(n.getId())).findFirst();
+        assertTrue(mid.isPresent());
+        assertEquals(1, mid.get().getDepth());
+        assertTrue(vo.getNodes().stream().noneMatch(n -> "cdm.far.c".equals(n.getId())),
+                "物理列每跳消耗预算：maxDepth=1 不得再扩一层到 cdm.far.c");
+    }
+
+    /**
+     * T3 第一轮行影响·临时表种子并入 layer=1（穿透）：起点 FILTERS→临时表→表内列
+     * 不占预算，值通道应从种子列继续穿透到物理表（depth=1）；临时表/列节点 depth=0。
+     */
+    @Test
+    void testFieldLevel_RowImpactTempTableSeedsMergeIntoFirstLayer() throws Exception {
+        injectMaxDepth(20);
+        Map<String, Object> filter = new HashMap<>();
+        filter.put("tableName", "pid.vt_t");
+        filter.put("shortName", "VT_T");
+        filter.put("tableTemp", true);
+        filter.put("role", "where_condition");
+        filter.put("clause", "balance > 0");
+        filter.put("procName", "proc_a");
+        filter.put("seq", 1);
+
+        stubNeo4jQuery("", Collections.emptyList());
+        stubNeo4jQuery("{col_key: $ck})-[f:FILTERS]->", Arrays.asList(filter));
+        stubNeo4jQuery("BELONGS_TO", Arrays.asList(col("pid.vt_t.k", "pid.vt_t", true)));
+        stubNeo4jQuerySeq("-[:INPUT_TO]->(t:Transform)", Arrays.asList(
+                Arrays.asList(transformRow("11111111111111111111111111111111",
+                        Arrays.asList(col("pid.vt_t.k", "pid.vt_t", true)),
+                        Arrays.asList(col("pid.phys2.m", "pid.phys2", false))))
+        ));
+
+        ImpactAnalysisVO vo = impactService.analyze(fieldRequest(1, "DOWNSTREAM"));
+
+        var tableNode = vo.getNodes().stream()
+                .filter(n -> "pid.vt_t".equals(n.getId()) && "TABLE".equals(n.getNodeLevel())).findFirst();
+        var seedCol = vo.getNodes().stream().filter(n -> "pid.vt_t.k".equals(n.getId())).findFirst();
+        var phys = vo.getNodes().stream().filter(n -> "pid.phys2.m".equals(n.getId())).findFirst();
+        assertTrue(tableNode.isPresent(), "maxDepth=1 时起点 FILTERS→临时表也应展开（临时表不占预算）");
+        assertTrue(seedCol.isPresent(), "临时表行影响展开列应入图");
+        assertEquals(0, tableNode.get().getDepth(), "临时表穿透：表 depth=0");
+        assertEquals(0, seedCol.get().getDepth(), "临时表行影响展开列 depth=0");
+        assertTrue(phys.isPresent(), "种子列并入 layer=1 后值通道穿透到物理列");
+        assertEquals(1, phys.get().getDepth(), "物理列占 1 次预算：depth=1");
+    }
+
+    /**
+     * T4 中间行影响通道激活：值通道到达列（depth=1）FILTERS→临时表，
+     * 临时表穿透预算 d<=maxDepth → 展开（旧口径 d+2>maxDepth 不展开）。
+     */
+    @Test
+    void testFieldLevel_MiddleRowImpactActivatedForTempTable() throws Exception {
+        injectMaxDepth(20);
+        Map<String, Object> filter = new HashMap<>();
+        filter.put("srcCol", "pid.mid_d.q");
+        filter.put("tableName", "pid.tmp2");
+        filter.put("shortName", "TMP2");
+        filter.put("tableTemp", true);
+        filter.put("role", "join_condition");
+        filter.put("clause", "k = m");
+        filter.put("procName", "proc_b");
+        filter.put("seq", 2);
+
+        stubNeo4jQuery("", Collections.emptyList());
+        stubNeo4jQuerySeq("-[:INPUT_TO]->(t:Transform)", Arrays.asList(
+                Arrays.asList(transformRow("11111111111111111111111111111111",
+                        Arrays.asList(col("cdm.src.balance", "cdm.src", false)),
+                        Arrays.asList(col("pid.mid_d.q", "pid.mid_d", false))))
+        ));
+        stubNeo4jQuery("UNWIND $cols", Arrays.asList(filter));
+        stubNeo4jQuery("BELONGS_TO", Arrays.asList(col("pid.tmp2.q2", "pid.tmp2", true)));
+
+        ImpactAnalysisVO vo = impactService.analyze(fieldRequest(1, "DOWNSTREAM"));
+
+        var tableNode = vo.getNodes().stream()
+                .filter(n -> "pid.tmp2".equals(n.getId()) && "TABLE".equals(n.getNodeLevel())).findFirst();
+        var expandedCol = vo.getNodes().stream().filter(n -> "pid.tmp2.q2".equals(n.getId())).findFirst();
+        assertTrue(tableNode.isPresent(), "值通道到达列 FILTERS→临时表应在预算内展开（穿透口径 d<=maxDepth）");
+        assertTrue(expandedCol.isPresent(), "临时表行影响展开列应入图");
+        assertEquals(1, tableNode.get().getDepth(), "表 depth=源列深度（穿透 +0）");
+        assertEquals(1, expandedCol.get().getDepth(), "展开列 depth=源列深度（穿透 +0）");
+        assertTrue(vo.getEdges().stream().anyMatch(e -> "FILTERS".equals(e.getEdgeType())
+                && "pid.mid_d.q".equals(e.getSource()) && "pid.tmp2".equals(e.getTarget())), "FILTERS 边应存在");
+        assertTrue(vo.getEdges().stream().anyMatch(e -> "ROW_IMPACT".equals(e.getEdgeType())
+                && "pid.tmp2".equals(e.getSource()) && "pid.tmp2.q2".equals(e.getTarget())), "ROW_IMPACT 边应存在");
+    }
+
+    /**
+     * T5 中间行影响·物理表预算：值通道到达列（depth=1）FILTERS→物理表，
+     * 物理表消耗 1 跳 → maxDepth=1 时超预算（d+1=2>1）不展开。
+     */
+    @Test
+    void testFieldLevel_MiddleRowImpactPhysicalTableRespectsBudget() throws Exception {
+        injectMaxDepth(20);
+        Map<String, Object> filter = new HashMap<>();
+        filter.put("srcCol", "pid.mid_d.q");
+        filter.put("tableName", "pid.phys3");
+        filter.put("shortName", "PHYS3");
+        filter.put("tableTemp", false);
+        filter.put("role", "join_condition");
+        filter.put("clause", "k = m");
+        filter.put("procName", "proc_b");
+        filter.put("seq", 2);
+
+        stubNeo4jQuery("", Collections.emptyList());
+        stubNeo4jQuerySeq("-[:INPUT_TO]->(t:Transform)", Arrays.asList(
+                Arrays.asList(transformRow("11111111111111111111111111111111",
+                        Arrays.asList(col("cdm.src.balance", "cdm.src", false)),
+                        Arrays.asList(col("pid.mid_d.q", "pid.mid_d", false))))
+        ));
+        stubNeo4jQuery("UNWIND $cols", Arrays.asList(filter));
+        stubNeo4jQuery("BELONGS_TO", Arrays.asList(col("pid.phys3.r", "pid.phys3", false)));
+
+        ImpactAnalysisVO vo = impactService.analyze(fieldRequest(1, "DOWNSTREAM"));
+
+        assertTrue(vo.getNodes().stream().noneMatch(n -> "pid.phys3".equals(n.getId())),
+                "物理表行影响展开消耗 1 跳预算：maxDepth=1、源列已 depth=1 时不得展开");
+    }
+
+    /**
+     * T6 上游方向临时列穿透：maxDepth=1 时经临时列回溯到物理上游列（depth=1）。
+     */
+    @Test
+    void testFieldLevel_UpstreamTempColumnsPassThrough() throws Exception {
+        injectMaxDepth(20);
+        stubNeo4jQuery("", Collections.emptyList());
+        stubNeo4jQuerySeq("<-[:OUTPUT_TO]-(t:Transform)", Arrays.asList(
+                Arrays.asList(transformRow("11111111111111111111111111111111",
+                        Arrays.asList(col("pid.vt9.y", "pid.vt9", true)),
+                        Arrays.asList(col("pid.tgt.z", "pid.tgt", false)))),
+                Arrays.asList(transformRow("22222222222222222222222222222222",
+                        Arrays.asList(col("cdm.src9.a", "cdm.src9", false)),
+                        Arrays.asList(col("pid.vt9.y", "pid.vt9", true))))
+        ));
+
+        ImpactAnalysisRequest req = fieldRequest(1, "UPSTREAM");
+        ImpactAnalysisVO vo = impactService.analyze(req);
+
+        var vt9 = vo.getNodes().stream().filter(n -> "pid.vt9.y".equals(n.getId())).findFirst();
+        var src9 = vo.getNodes().stream().filter(n -> "cdm.src9.a".equals(n.getId())).findFirst();
+        assertTrue(vt9.isPresent(), "上游临时列应入图");
+        assertEquals(0, vt9.get().getDepth(), "上游临时列穿透：depth=0");
+        assertTrue(src9.isPresent(), "maxDepth=1 经临时列穿透后上游物理列应出现");
+        assertEquals(1, src9.get().getDepth(), "上游物理列占 1 次预算：depth=1");
+    }
+
     /**
      * 手工构建 Neo4jClient fluent 链 mock（query→bind→to→fetch→all），
      * 按 cypher 片段区分返回结果——deep-stub 无法按链中方法参数区分。
@@ -268,5 +506,27 @@ class ImpactAnalysisServiceTest {
         when(bindSpec.to(anyString())).thenReturn(runnable);
         when(runnable.fetch()).thenReturn(fetchSpec);
         when(fetchSpec.all()).thenReturn(result);
+    }
+
+    /**
+     * stubNeo4jQuery 的按调用序版本：同一 cypher 片段的第 N 次调用返回第 N 个结果，
+     * 超出序列后返回空集——用于模拟 BFS 逐层扩展（每次 frontier 不同的链式返回）。
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void stubNeo4jQuerySeq(String cypherFragment, List<Collection<Map<String, Object>>> results) {
+        Neo4jClient.UnboundRunnableSpec unbound = mock(Neo4jClient.UnboundRunnableSpec.class);
+        Neo4jClient.OngoingBindSpec bindSpec = mock(Neo4jClient.OngoingBindSpec.class);
+        Neo4jClient.RunnableSpec runnable = mock(Neo4jClient.RunnableSpec.class);
+        Neo4jClient.RecordFetchSpec fetchSpec = mock(Neo4jClient.RecordFetchSpec.class);
+        when(neo4jClient.query(argThat((String c) -> c != null && c.contains(cypherFragment))))
+                .thenReturn(unbound);
+        when(unbound.bind(any())).thenReturn(bindSpec);
+        when(bindSpec.to(anyString())).thenReturn(runnable);
+        when(runnable.fetch()).thenReturn(fetchSpec);
+        java.util.concurrent.atomic.AtomicInteger call = new java.util.concurrent.atomic.AtomicInteger();
+        when(fetchSpec.all()).thenAnswer(inv -> {
+            int i = call.getAndIncrement();
+            return i < results.size() ? results.get(i) : Collections.emptyList();
+        });
     }
 }

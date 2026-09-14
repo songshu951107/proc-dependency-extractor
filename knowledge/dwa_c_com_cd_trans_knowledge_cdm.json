@@ -1,0 +1,180 @@
+{
+  "scriptName": "dwa_c_com_cd_trans.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "CDM",
+  "extractTime": "2026-05-12T00:00:00",
+  "businessScenario": "共性层代码转换映射表",
+  "updateMethod": "F3无删除拉链",
+  "targetTable": "C_COM_CD_TRANS",
+  "totalBlocks": 4,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_CO_TRANS_CD",
+      "fdmScript": null,
+      "found": false,
+      "tdmTable": null,
+      "odmTable": null,
+      "transformLogic": "基础层代码转换映射表（标准化码值），可能是手工维护的配置表"
+    },
+    {
+      "fdmTable": "F_CO_CD",
+      "fdmScript": null,
+      "found": false,
+      "tdmTable": null,
+      "odmTable": null,
+      "transformLogic": "基础层代码表（非标准化码值），可能是手工维护的配置表"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "插入基础层标准化后的码值",
+      "depth": 0,
+      "sqlCode": "INSERT INTO ST_C_COM_CD_TRANS SELECT T1.GENE_ST_EN_TAB_NAME, T1.GENE_ST_CN_TAB_NAME, T1.GENE_ST_EN_FIELD_NAME, T1.GENE_ST_CN_FIELD_NAME, T1.BASE_ST_EN_TAB_NAME, T1.BASE_ST_CN_TAB_NAME, T1.BASE_ST_EN_FIELD_NAME, T1.BASE_ST_CN_FIELD_NAME, T2.STAND_CD_VAL, T2.STAND_CD_DESC FROM C_COM_CD_TRANS_CONFIG T1 INNER JOIN FDM.F_CO_TRANS_CD T2 ON T1.BASE_ST_EN_TAB_NAME = T2.F_EN_TAB_NAME AND T1.BASE_ST_EN_FIELD_NAME = T2.F_EN_FIELD_NAME AND T2.start_dt <= DATE AND T2.end_dt > DATE",
+      "tracedSqlCode": null,
+      "businessScenario": "共性层代码管理-从代码转换配置表关联标准化码值表获取标准码值",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["C_COM_CD_TRANS_CONFIG", "F_CO_TRANS_CD"],
+      "originalTables": ["C_COM_CD_TRANS_CONFIG", "F_CO_TRANS_CD"],
+      "tableJoinLogic": "代码转换配置表 INNER JOIN 代码转换映射表 ON 基础层英文表名和字段名",
+      "queryDimensions": "共性层表名、共性层字段名、基础层表名、基础层字段名、标准码值、标准码值描述",
+      "tags": ["代码转换", "标准化码值", "码值映射", "配置表"],
+      "traceChains": [],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "标准化码值查询",
+          "derivedSql": "SELECT T1.BASE_ST_EN_TAB_NAME, T1.BASE_ST_EN_FIELD_NAME, T2.STAND_CD_VAL, T2.STAND_CD_DESC FROM C_COM_CD_TRANS_CONFIG T1 INNER JOIN F_CO_TRANS_CD T2 ON T1.BASE_ST_EN_TAB_NAME = T2.F_EN_TAB_NAME AND T1.BASE_ST_EN_FIELD_NAME = T2.F_EN_FIELD_NAME WHERE T2.start_dt <= 数据日期 AND T2.end_dt > 数据日期",
+          "businessMeaning": "根据基础层表名和字段名查询对应的标准码值和描述",
+          "sourceTable": "F_CO_TRANS_CD",
+          "originalTable": "F_CO_TRANS_CD"
+        },
+        {
+          "knowledgeName": "码值转换配置关联",
+          "derivedSql": "SELECT GENE_ST_EN_TAB_NAME, GENE_ST_EN_FIELD_NAME, BASE_ST_EN_TAB_NAME, BASE_ST_EN_FIELD_NAME FROM C_COM_CD_TRANS_CONFIG",
+          "businessMeaning": "获取共性层字段与基础层字段的映射配置关系",
+          "sourceTable": "C_COM_CD_TRANS_CONFIG",
+          "originalTable": "C_COM_CD_TRANS_CONFIG"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "插入基础层非标准化的码值",
+      "depth": 0,
+      "sqlCode": "INSERT INTO ST_C_COM_CD_TRANS SELECT T1.GENE_ST_EN_TAB_NAME, T1.GENE_ST_CN_TAB_NAME, T1.GENE_ST_EN_FIELD_NAME, T1.GENE_ST_CN_FIELD_NAME, T1.BASE_ST_EN_TAB_NAME, T1.BASE_ST_CN_TAB_NAME, T1.BASE_ST_EN_FIELD_NAME, T1.BASE_ST_CN_FIELD_NAME, T2.SRC_CD_VAL, T2.SRC_CD_DESC FROM C_COM_CD_TRANS_CONFIG T1 INNER JOIN FDM.F_CO_CD T2 ON T1.BASE_ST_EN_TAB_NAME = T2.F_EN_TAB_NAME AND T1.BASE_ST_EN_FIELD_NAME = T2.F_EN_FIELD_NAME AND T2.start_dt <= DATE AND T2.end_dt > DATE",
+      "tracedSqlCode": null,
+      "businessScenario": "共性层代码管理-从代码转换配置表关联非标准化码值表获取源码值",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["C_COM_CD_TRANS_CONFIG", "F_CO_CD"],
+      "originalTables": ["C_COM_CD_TRANS_CONFIG", "F_CO_CD"],
+      "tableJoinLogic": "代码转换配置表 INNER JOIN 代码表 ON 基础层英文表名和字段名",
+      "queryDimensions": "共性层表名、共性层字段名、基础层表名、基础层字段名、源码值、源码值描述",
+      "tags": ["代码转换", "非标准化码值", "源码值", "配置表"],
+      "traceChains": [],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "源码值查询",
+          "derivedSql": "SELECT T1.BASE_ST_EN_TAB_NAME, T1.BASE_ST_EN_FIELD_NAME, T2.SRC_CD_VAL, T2.SRC_CD_DESC FROM C_COM_CD_TRANS_CONFIG T1 INNER JOIN F_CO_CD T2 ON T1.BASE_ST_EN_TAB_NAME = T2.F_EN_TAB_NAME AND T1.BASE_ST_EN_FIELD_NAME = T2.F_EN_FIELD_NAME WHERE T2.start_dt <= 数据日期 AND T2.end_dt > 数据日期",
+          "businessMeaning": "根据基础层表名和字段名查询对应的源码值和描述（非标准化）",
+          "sourceTable": "F_CO_CD",
+          "originalTable": "F_CO_CD"
+        },
+        {
+          "knowledgeName": "码值来源系统查询",
+          "derivedSql": "SELECT F_EN_TAB_NAME, F_EN_FIELD_NAME, SRC_ABRE, SRC_EN_TAB_NAME, SRC_CD_VAL, SRC_CD_DESC FROM F_CO_CD WHERE start_dt <= 数据日期 AND end_dt > 数据日期",
+          "businessMeaning": "查询码值的来源系统信息，包括源系统简称、源系统表名、源码值等",
+          "sourceTable": "F_CO_CD",
+          "originalTable": "F_CO_CD"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "UPDATE",
+      "blockName": "闭链需要更新的数据",
+      "depth": 0,
+      "sqlCode": "UPDATE C_COM_CD_TRANS F SET F.end_dt = DATE WHERE EXISTS (SELECT 1 FROM VT_C_COM_CD_TRANS T WHERE F.end_dt = DATE 'MAX_DATE' AND T.gene_st_en_tab_name = F.gene_st_en_tab_name AND T.gene_st_en_field_name = F.gene_st_en_field_name AND T.cd_val = F.cd_val)",
+      "tracedSqlCode": null,
+      "businessScenario": "共性层代码管理-对已存在的码值记录进行闭链处理",
+      "sqlFunction": "数据更新",
+      "involvedTables": ["C_COM_CD_TRANS"],
+      "originalTables": ["C_COM_CD_TRANS"],
+      "tableJoinLogic": "目标表与临时表关联，匹配条件：共性层表名、共性层字段名、码值",
+      "queryDimensions": "共性层英文表名、共性层英文字段名、码值",
+      "tags": ["拉链更新", "闭链处理", "码值变更"],
+      "traceChains": [],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "码值变更检测",
+          "derivedSql": "SELECT T.gene_st_en_tab_name, T.gene_st_en_field_name, T.cd_val FROM VT_C_COM_CD_TRANS T WHERE EXISTS (SELECT 1 FROM C_COM_CD_TRANS F WHERE F.end_dt = '最大日期' AND T.gene_st_en_tab_name = F.gene_st_en_tab_name AND T.gene_st_en_field_name = F.gene_st_en_field_name AND T.cd_val = F.cd_val)",
+          "businessMeaning": "检测已存在但可能有变更的码值记录",
+          "sourceTable": "C_COM_CD_TRANS",
+          "originalTable": "C_COM_CD_TRANS"
+        }
+      ]
+    },
+    {
+      "blockIndex": 4,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "插入新增与修改的码值数据",
+      "depth": 0,
+      "sqlCode": "INSERT INTO C_COM_CD_TRANS SELECT T.gene_st_en_tab_name, T.gene_st_cn_tab_name, T.gene_st_en_field_name, T.gene_st_cn_field_name, T.base_st_en_tab_name, T.base_st_cn_tab_name, T.base_st_en_field_name, T.base_st_cn_field_name, T.cd_val, T.cd_descn, DATE, DATE 'MAX_DATE' FROM VT_C_COM_CD_TRANS T GROUP BY T.gene_st_en_tab_name, T.gene_st_cn_tab_name, T.gene_st_en_field_name, T.gene_st_cn_field_name, T.base_st_en_tab_name, T.base_st_cn_tab_name, T.base_st_en_field_name, T.base_st_cn_field_name, T.cd_val, T.cd_descn",
+      "tracedSqlCode": null,
+      "businessScenario": "共性层代码管理-将新增和修改的码值数据插入目标表",
+      "sqlFunction": "数据插入",
+      "involvedTables": ["C_COM_CD_TRANS"],
+      "originalTables": ["C_COM_CD_TRANS"],
+      "tableJoinLogic": "从临时表插入数据到目标表，按所有字段分组去重",
+      "queryDimensions": "共性层表名、字段名、基础层表名、字段名、码值、码值描述、开始日期、结束日期",
+      "tags": ["码值入库", "拉链新增", "码值管理"],
+      "traceChains": [],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "码值去重插入",
+          "derivedSql": "SELECT DISTINCT gene_st_en_tab_name, gene_st_en_field_name, cd_val, cd_descn FROM VT_C_COM_CD_TRANS",
+          "businessMeaning": "按共性层表名、字段名、码值去重获取唯一的码值记录",
+          "sourceTable": "VT_C_COM_CD_TRANS",
+          "originalTable": "VT_C_COM_CD_TRANS"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["C_COM_CD_TRANS_CONFIG", "F_CO_TRANS_CD", "F_CO_CD", "C_COM_CD_TRANS"],
+  "allOriginalTables": ["C_COM_CD_TRANS_CONFIG", "F_CO_TRANS_CD", "F_CO_CD", "C_COM_CD_TRANS"],
+  "traceSummary": {
+    "totalFdmTables": 2,
+    "scriptsFound": 0,
+    "scriptsNotFound": 2,
+    "notFoundTables": ["F_CO_TRANS_CD", "F_CO_CD"]
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "标准化码值优先原则",
+      "condition": "先插入标准化码值（F_CO_TRANS_CD），再插入非标准化码值（F_CO_CD）",
+      "description": "优先使用标准化后的码值，如无标准化则使用源系统原始码值"
+    },
+    {
+      "ruleName": "码值唯一性判断",
+      "condition": "共性层英文表名 + 共性层英文字段名 + 码值",
+      "description": "三个字段组合作为码值记录的唯一标识"
+    },
+    {
+      "ruleName": "拉链更新逻辑",
+      "condition": "新增数据start_dt=数据日期，end_dt=最大日期；变更数据先闭链再新增",
+      "description": "采用F3无删除拉链方式管理码值历史版本"
+    }
+  ],
+  "codeValues": {},
+  "tableDescriptions": {
+    "C_COM_CD_TRANS": "共性层代码转换映射表，存储共性层字段与基础层字段的码值映射关系",
+    "C_COM_CD_TRANS_CONFIG": "共性层代码转换配置表，定义共性层字段与基础层字段的映射配置",
+    "F_CO_TRANS_CD": "基础层代码转换映射表，存储标准化后的码值和描述",
+    "F_CO_CD": "基础层代码表，存储非标准化的源系统码值和描述"
+  }
+}

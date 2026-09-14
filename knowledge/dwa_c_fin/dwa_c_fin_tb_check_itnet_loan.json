@@ -1,0 +1,186 @@
+{
+  "scriptName": "dwa_c_fin_tb_check_itnet_loan.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T10:10:00",
+  "businessScenario": "财务管理系统总分核对-将互联网贷款共性层借据余额与核心分户账余额进行对比核对，支持多产品线分类",
+  "updateMethod": "每日全量",
+  "targetTable": "C_FIN_TB_CHECK",
+  "totalBlocks": 3,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_AC_CRBS_SUB_LDGR",
+      "fdmScript": "dwa_f_ac_crbs_sub_ldgr.py",
+      "found": true,
+      "tdmTable": "T_CRBS_ANBFH_${ETL_TX_DT}",
+      "odmTable": "O_CRBS_ANBFH",
+      "transformLogic": "从核心系统TDM分户账表（T_CRBS_ANBFH）拉链入FDM，通过F_CO_TRANS_CD转换币种（STAND_CD_TAB_NO='CRBS0016'），字段直接映射"
+    },
+    {
+      "fdmTable": "F_AC_CFXF_LOAN_RCPT",
+      "fdmScript": "dwa_f_ac_cfxf_loan_rcpt.py",
+      "found": true,
+      "tdmTable": "T_CFXF_ACCT_LOAN_${ETL_TX_DT}",
+      "odmTable": "O_CFXF_ACCT_LOAN",
+      "transformLogic": "从幸福消金TDM层（T_CFXF_ACCT_LOAN）拉链入FDM，字段直接映射（serialno→loan_acct_no等）"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "CREATE TABLE AS SELECT",
+      "depth": 0,
+      "blockName": "共性层互联网贷款余额提取（按数据源分类）",
+      "sqlCode": "CREATE TABLE VT_C_FIN_TB_CHECK_ITNET_LOAN_01 AS\n-- 蚂蚁借呗\nSELECT t.orig_prod_no, t.PROD_NO, t.PROD_NAME, t.data_sourc_tab_name, t.loan_bal\nFROM C_AGT_ITNET_LOAN_RCPT_INF T\nWHERE T.DATA_DT=当日 AND t.data_sourc_tab_name='F_EV_MYLN_DISTR_DTL'\n  AND (t.loan_bal<>0 OR REPLACE(t.clear_dt,'-','')>DATE'{年初}') AND NVL(loan_rcpt_sts_cd,'')<>'04'\n  AND t.comp_flag<>'1'\nUNION ALL\n-- 幸福消金\nSELECT ... FROM C_AGT_ITNET_LOAN_RCPT_INF T\nLEFT JOIN F_AC_CFXF_LOAN_RCPT A ON t.loan_rcpt_no=a.LOAN_ACCT_NO AND 拉链有效\nWHERE T.data_sourc_tab_name='F_AC_CFXF_LOAN_RCPT' AND a.BIZ_STS_CD<>'1' AND NVL(t.COMP_FLAG,'0')<>'1'\nUNION ALL\n-- 电子账户、小企业、小企业众商贷等...",
+      "tracedSqlCode": "从C_AGT_ITNET_LOAN_RCPT_INF按data_sourc_tab_name分类提取余额，其中幸福消金需LEFT JOIN ODM.O_CFXF_ACCT_LOAN排除业务状态为'1'的记录",
+      "businessScenario": "财务管理系统总分核对-从互联网贷款共性层按数据源分类提取余额数据，区分蚂蚁借呗、幸福消金、电子账户、小企业（金企贷/银保贷/微业贷）、众商贷等多个产品线",
+      "sqlFunction": "多表关联查询（多数据源UNION ALL汇总）",
+      "involvedTables": ["C_AGT_ITNET_LOAN_RCPT_INF", "O_CFXF_ACCT_LOAN"],
+      "originalTables": ["C_AGT_ITNET_LOAN_RCPT_INF", "F_AC_CFXF_LOAN_RCPT"],
+      "tableJoinLogic": "互联网贷款共性层 T 按data_sourc_tab_name分5组UNION ALL；幸福消金组 LEFT JOIN FDM信网贷借据 A 排除已作废业务",
+      "queryDimensions": "原始产品编号、产品编号、产品名称、数据源表名、贷款余额",
+      "tags": ["互联网贷款", "借呗", "幸福消金", "电子账户", "小企业贷款", "众商贷", "余额提取"],
+      "traceChains": [
+        {
+          "originalTable": "F_AC_CFXF_LOAN_RCPT",
+          "fdmScript": "dwa_f_ac_cfxf_loan_rcpt.py",
+          "tdmTable": "T_CFXF_ACCT_LOAN_${ETL_TX_DT}",
+          "odmTable": "O_CFXF_ACCT_LOAN",
+          "filterConditions": "biz_sts_cd <> '1'（排除已作废记录）",
+          "fieldMappings": [
+            {"fdmField": "loan_acct_no", "odmField": "serialno", "description": "贷款账号"},
+            {"fdmField": "biz_sts_cd", "odmField": "businessstatus", "description": "业务状态代码"},
+            {"fdmField": "loan_bal", "odmField": "balance", "description": "贷款余额"}
+          ]
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "互联网贷款产品线分类",
+          "derivedSql": "SELECT data_sourc_tab_name, SUM(loan_bal) FROM C_AGT_ITNET_LOAN_RCPT_INF WHERE DATA_DT=当日 AND loan_rcpt_sts_cd<>'04' AND (loan_bal<>0 OR clear_dt>年初) GROUP BY data_sourc_tab_name",
+          "businessMeaning": "按数据源表名分类汇总互联网贷款的余额，定位各产品线的贷款规模",
+          "sourceTable": "C_AGT_ITNET_LOAN_RCPT_INF"
+        },
+        {
+          "knowledgeName": "已核销借据排除",
+          "derivedSql": "SELECT * FROM C_AGT_ITNET_LOAN_RCPT_INF WHERE DATA_DT=当日 AND loan_rcpt_sts_cd <> '04' AND NVL(comp_flag,'0') <> '1'",
+          "businessMeaning": "排除状态为'04'（已核销）和非零代偿标志的借据记录",
+          "sourceTable": "C_AGT_ITNET_LOAN_RCPT_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "CREATE TABLE AS SELECT",
+      "depth": 0,
+      "blockName": "分户账余额提取（按产品分类标签）",
+      "sqlCode": "CREATE TABLE VT_C_FIN_TB_CHECK_ITNET_LOAN_02 AS\nSELECT CASE WHEN acct_no IN(...) THEN '01-众安贷' WHEN acct_cn_name LIKE '%微粒贷%' THEN '02-微粒贷' ... ELSE acct_no END LB,\n  SUM(DEBTOR_BAL - creditor_bal) debtor_bal\nFROM fdm.F_AC_CRBS_SUB_LDGR T\nWHERE start_dt<=当日 AND end_dt>当日\n  AND (账务机构号3-4位 IN ('92','96') OR 指定账号列表 OR 幸福消金特定账号)\n  AND T.subj_no LIKE '13%' AND T.SUBJ_NO NOT LIKE '1320%'\nGROUP BY LB\nUNION ALL\nSELECT '00-总和' LB, SUM(DEBTOR_BAL - creditor_bal)\nFROM fdm.F_AC_CRBS_SUB_LDGR T WHERE (相同条件)",
+      "tracedSqlCode": "从ODM.O_CRBS_ANBFH按复杂规则分类标签提取分户账余额（DEBTOR_BAL-creditor_bal），分类标签包括01-众安贷、02-微粒贷...00-总和等",
+      "businessScenario": "财务管理系统总分核对-从核心分户账按产品线分类提取网贷相关的分户账余额，通过账号和账户名规则匹配分类标签",
+      "sqlFunction": "多条件分类汇总查询",
+      "involvedTables": ["O_CRBS_ANBFH"],
+      "originalTables": ["F_AC_CRBS_SUB_LDGR"],
+      "tableJoinLogic": "单表查询，通过大量账号匹配和账户名LIKE规则进行分类标签映射",
+      "queryDimensions": "分类标签、借方-贷方净余额",
+      "tags": ["分户账", "互联网贷款", "产品分类", "余额"],
+      "traceChains": [
+        {
+          "originalTable": "F_AC_CRBS_SUB_LDGR",
+          "fdmScript": "dwa_f_ac_crbs_sub_ldgr.py",
+          "tdmTable": "T_CRBS_ANBFH_${ETL_TX_DT}",
+          "odmTable": "O_CRBS_ANBFH",
+          "filterConditions": "机构号3-4位='92'或'96'（互联网贷款机构），子科目号以13开头且非1320",
+          "fieldMappings": [
+            {"fdmField": "debtor_bal", "odmField": "JIEFYE", "description": "借方余额"},
+            {"fdmField": "creditor_bal", "odmField": "DAIFYE", "description": "贷方余额"},
+            {"fdmField": "subj_no", "odmField": "KMUHAO", "description": "科目编号"},
+            {"fdmField": "acct_no", "odmField": "ZHANGH", "description": "账号"},
+            {"fdmField": "acctg_org_no", "odmField": "ZHNGJG", "description": "账务机构号"},
+            {"fdmField": "acct_cn_name", "odmField": "ZHUZWM", "description": "账户中文名"}
+          ]
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "互联网贷款机构过滤",
+          "derivedSql": "SELECT * FROM O_CRBS_ANBFH WHERE SUBSTR(zhngjg,3,2) IN ('92','96') AND subj_no LIKE '13%' AND subj_no NOT LIKE '1320%'",
+          "businessMeaning": "筛选互联网贷款机构（机构号3-4位为92或96）的13科目（贷款科目，排除1320贴现）分户账记录",
+          "sourceTable": "O_CRBS_ANBFH",
+          "originalTable": "F_AC_CRBS_SUB_LDGR"
+        },
+        {
+          "knowledgeName": "互联网贷款产品线分类标签（按分户账）",
+          "derivedSql": "SELECT CASE WHEN acct_cn_name LIKE '%微粒贷%' THEN '02-微粒贷' WHEN acct_cn_name LIKE '%京东%' THEN '03-京东联合贷款' WHEN acct_cn_name LIKE '%易鑫%' THEN '08-易鑫' ... END AS product_line, SUM(jietye - daifye) AS net_bal FROM O_CRBS_ANBFH WHERE 机构过滤 AND 科目过滤 GROUP BY product_line",
+          "businessMeaning": "通过账户中文名和账号规则将分户账余额映射到各互联网贷款产品线",
+          "sourceTable": "O_CRBS_ANBFH"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "CREATE TABLE AS SELECT",
+      "depth": 0,
+      "blockName": "共性层余额产品分类汇总+比对入表",
+      "sqlCode": "-- SETP2: 共性余额分类\nCREATE TABLE VT_C_FIN_TB_CHECK_ITNET_LOAN_03 AS\nSELECT CASE WHEN DATA_SOURC_TAB_NAME IN('F_AC_UPEA_STAGES_INF') AND ORIG_PROD_NO IN('1078') THEN '01-众安贷'\n  WHEN ORIG_PROD_NO IN('1005','1007','2005') THEN '02-微粒贷' ... END AS FLG,\n  SUM(TT.LOAN_BAL) LOAN_BAL FROM VT_C_FIN_TB_CHECK_ITNET_LOAN_01 TT GROUP BY FLG\nUNION ALL SELECT '00-总和' FLG, SUM(TT.LOAN_BAL) FROM VT_C_FIN_TB_CHECK_ITNET_LOAN_01 TT;\n\n-- SETP3: 共性VS分户对比入表\nINSERT INTO CDM.C_FIN_TB_CHECK\nSELECT '40003', '共性互联网贷款与分户账余额核对', LEFT(T1.FLG,2), T1.FLG,\n  T1.LOAN_BAL, NVL(T2.debtor_bal,0),\n  CASE WHEN T1.FLG IN('14-如意贷','00-总和') THEN T1.LOAN_BAL-T2.debtor_bal+350 ELSE T1.LOAN_BAL-NVL(T2.debtor_bal,0) END, 当日\nFROM VT_C_FIN_TB_CHECK_ITNET_LOAN_03 T1\nLEFT JOIN VT_C_FIN_TB_CHECK_ITNET_LOAN_02 T2 ON T1.FLG=T2.LB",
+      "tracedSqlCode": "INSERT INTO CDM.C_FIN_TB_CHECK\nSELECT '40003', '共性互联网贷款与分户账余额核对', LEFT(T1.FLG,2), T1.FLG,\n  T1.LOAN_BAL AS dtl_acct_bal, NVL(T2.debtor_bal,0) AS gl_bal,\n  CASE WHEN T1.FLG IN('14-如意贷','00-总和') THEN T1.LOAN_BAL-T2.debtor_bal+350 ELSE T1.LOAN_BAL-NVL(T2.debtor_bal,0) END AS margin_val\nFROM 共性余额分类表 T1 LEFT JOIN 分户账余额表 T2 ON 分类标签匹配",
+      "businessScenario": "财务管理系统总分核对-将共性层余额按产品线分类汇总后与分户账余额对比，计算差异，如意贷特殊处理+350修正",
+      "sqlFunction": "多表关联查询（对账比较+差异计算）",
+      "involvedTables": ["C_AGT_ITNET_LOAN_RCPT_INF", "O_CRBS_ANBFH", "O_CFXF_ACCT_LOAN"],
+      "originalTables": ["C_AGT_ITNET_LOAN_RCPT_INF", "F_AC_CRBS_SUB_LDGR", "F_AC_CFXF_LOAN_RCPT"],
+      "tableJoinLogic": "共性余额分类临时表 LEFT JOIN 分户账余额分类临时表 ON 分类标签匹配",
+      "queryDimensions": "检核编号、产品线分类、共性余额、分户账余额、差异",
+      "tags": ["总分核对", "互联网贷款", "产品线", "余额对比", "差异检测"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "互联网贷款产品线映射（ORIG_PROD_NO→FLG）",
+          "derivedSql": "SELECT CASE WHEN orig_prod_no IN('1005','1007','2005') THEN '02-微粒贷' WHEN orig_prod_no IN('1006','1106','1206') THEN '03-京东联合贷款' WHEN orig_prod_no IN('3005','4112') THEN '04-冀速贷' WHEN orig_prod_no IN('2009','2109') THEN '05-网商贷' WHEN orig_prod_no='5001' THEN '06-360联合贷' WHEN orig_prod_no='5101' THEN '07-永安如意贷' WHEN orig_prod_no IN('1015','3101'...) THEN '08-易鑫' WHEN orig_prod_no IN('1301'...) THEN '09-抖音' WHEN orig_prod_no IN('1401'...) THEN '11-众邦' WHEN orig_prod_no IN('1088','1038'...) THEN '12-太保' WHEN data_sourc_tab_name='F_EV_MYLN_DISTR_DTL' THEN '13-借呗' WHEN data_sourc_tab_name='F_AC_SFLN_LOAN_RCPT_INF' THEN '21-小企业金企贷' WHEN data_sourc_tab_name='F_AC_SPLN_LOAN_RCPT' THEN '22-小企业银保贷' WHEN data_sourc_tab_name='F_AC_SILN_LOAN_RCPT' THEN '23-小企业微业贷' WHEN data_sourc_tab_name IN('F_AC_SCLN_LOAN_BASIC_INF'...) THEN '24-小企业众商贷' WHEN data_sourc_tab_name='F_AC_CFXF_LOAN_RCPT' AND orig_prod_no='4301' THEN '25幸福消金-网销个人短期经营贷款' END AS product_line FROM C_AGT_ITNET_LOAN_RCPT_INF",
+          "businessMeaning": "将互联网贷款的原始产品编号映射到标准产品线分类标签（01-众安贷至25-幸福消金）",
+          "sourceTable": "C_AGT_ITNET_LOAN_RCPT_INF"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["C_AGT_ITNET_LOAN_RCPT_INF", "O_CRBS_ANBFH", "O_CFXF_ACCT_LOAN"],
+  "allOriginalTables": ["C_AGT_ITNET_LOAN_RCPT_INF", "F_AC_CRBS_SUB_LDGR", "F_AC_CFXF_LOAN_RCPT", "F_EV_MYLN_DISTR_DTL", "F_AC_UPEA_STAGES_INF", "F_AC_SILN_LOAN_RCPT", "F_AC_SPLN_LOAN_RCPT", "F_AC_SFLN_LOAN_RCPT_INF", "F_AC_SCLN_LOAN_BASIC_INF", "F_AC_SCLN_DEBTS_CONVERTED_LOAN_BASIC_INF"],
+  "traceSummary": {
+    "totalFdmTables": 2,
+    "scriptsFound": 2,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "已核销借据排除",
+      "condition": "loan_rcpt_sts_cd <> '04'",
+      "description": "排除贷款状态为04（已核销）的借据记录"
+    },
+    {
+      "ruleName": "有效余额过滤",
+      "condition": "loan_bal <> 0 OR 结清日在年初之后",
+      "description": "保留有余额或年初之后结清的借据"
+    },
+    {
+      "ruleName": "互联网贷款机构过滤",
+      "condition": "账务机构号3-4位 IN ('92','96') OR 指定账号列表",
+      "description": "通过机构号和账号规则筛选互联网贷款的专用机构"
+    },
+    {
+      "ruleName": "13科目贷款",
+      "condition": "subj_no LIKE '13%' AND subj_no NOT LIKE '1320%'",
+      "description": "仅取13开头的贷款科目，排除1320贴现科目"
+    },
+    {
+      "ruleName": "如意贷差异修正",
+      "condition": "FLG IN ('14-如意贷','00-总和') 时 margin_val = T1.LOAN_BAL-T2.debtor_bal+350",
+      "description": "如意贷和总和分类的差异计算需额外+350修正值"
+    },
+    {
+      "ruleName": "冲账排除",
+      "condition": "LOAN_STS_CD<>'06'",
+      "description": "小企业贷款需排除贷款状态为06（冲账）的借据"
+    }
+  ]
+}

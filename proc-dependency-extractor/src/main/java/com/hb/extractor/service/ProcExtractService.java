@@ -3,6 +3,7 @@ package com.hb.extractor.service;
 import com.hb.extractor.dto.BatchExtractResult;
 import com.hb.extractor.dto.ScriptVO;
 import com.hb.extractor.entity.ProcInfo;
+import com.hb.extractor.entity.ProcParseFail;
 import com.hb.extractor.entity.ProcTableDependency;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.springframework.web.multipart.MultipartFile;
@@ -66,4 +67,19 @@ public interface ProcExtractService {
      * @param procName 存储过程名
      */
     ScriptVO getScript(String procName);
+
+    /**
+     * 分页查询解析失败清单
+     */
+    IPage<ProcParseFail> listParseFails(int pageNum, int pageSize, String procName, Boolean onlyUnresolved);
+
+    /**
+     * 标记一条解析失败为已处理
+     */
+    boolean resolveParseFail(Long id);
+
+    /**
+     * 重新解析单个存储过程（读取其源文件重跑，先删后插）
+     */
+    ProcInfo reparse(String procName);
 }

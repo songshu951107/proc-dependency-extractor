@@ -9,6 +9,7 @@
         <el-statistic :title="upstream ? '来源表数' : '影响表数'" :value="stats.affectedTableCount || 0" />
       </div>
       <div
+        v-if="stats.affectedFieldCount !== null && stats.affectedFieldCount !== undefined"
         class="stat-item"
         :class="{ clickable: clickable('affectedFieldCount') }"
         @click="handleClick('fields', stats.affectedFieldCount)"
@@ -26,6 +27,7 @@
         <el-statistic :title="upstream ? '最大来源层级' : '最大层级'" :value="stats.maxDepthReached || 0" />
       </div>
       <div
+        v-if="stats.showReports"
         class="stat-item"
         :class="{ clickable: clickable('affectedReportCount') }"
         @click="handleClick('reports', stats.affectedReportCount)"

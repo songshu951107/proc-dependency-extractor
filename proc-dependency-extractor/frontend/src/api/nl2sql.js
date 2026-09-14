@@ -1,7 +1,7 @@
 import request from './request'
 
 export function generate(data) {
-  return request({ url: '/nl2sql/generate', method: 'post', data })
+  return request({ url: '/nl2sql/generate', method: 'post', data, timeout: 180000 })
 }
 
 export function runEval() {

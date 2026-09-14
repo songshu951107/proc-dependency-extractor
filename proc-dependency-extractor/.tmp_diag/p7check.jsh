@@ -1,0 +1,6 @@
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
+String sql = new String(java.nio.file.Files.readAllBytes(java.nio.file.Path.of("D:/HB/work_zuoye/proc-dependency-extractor/.tmp_diag/block7.sql")), java.nio.charset.StandardCharsets.UTF_8).replace("\uFEFF", "");
+String processed = sql.replaceAll("(?:\\r?\\n[ \\t]*){2,}", "\n").replaceAll("(\\w)'\\{\\w+\\}'", "$1").replaceAll("(\\w)\\{\\w+\\}", "$1");
+try { Statement st = CCJSqlParserUtil.parse(processed); System.out.println("PARSE-OK: " + st.getClass().getSimpleName()); if (st instanceof net.sf.jsqlparser.statement.create.table.CreateTable) { var ct = (net.sf.jsqlparser.statement.create.table.CreateTable) st; System.out.println("TABLE: " + ct.getTable()); System.out.println("COLS: " + (ct.getColumnDefinitions() == null ? "null" : ct.getColumnDefinitions().size())); if (ct.getColumnDefinitions() != null && ct.getColumnDefinitions().size() > 1) { System.out.println("C1: [" + ct.getColumnDefinitions().get(0).getColumnName() + "]"); System.out.println("C2: [" + ct.getColumnDefinitions().get(1).getColumnName() + "]"); } } } catch (Exception e) { System.out.println("PARSE-FAIL: " + e.getMessage().split("\n")[0]); }
+/exit

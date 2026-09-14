@@ -665,4 +665,85 @@ class FieldMappingExtractorTest {
         assertTrue(dataDt.getInputs().stream().noneMatch(ti -> ti.getSourceTableShort() != null),
                 "data_dt 为字面量, 不应有表归属输入");
     }
+
+    // ===== 修复: 派生表子查询内 JOIN/WHERE 条件的作用域归属 =====
+
+    @Test
+    void testExtractConditionFields_DerivedSubqueryScopeAttribution() throws Exception {
+        // 块7真实形状: JOIN/WHERE 都在派生表内。T2.acct_no→vt_..._00(join), T1.dt→a_d_..._query(where)
+        String sql = "INSERT INTO cntd.vt_x_01 SELECT t1.a FROM ("
+                + "SELECT T1.acct_no, T1.dt FROM a_d_dp_deposit_org_dtl_query T1 "
+                + "LEFT JOIN vt_a_g_dp_deposit_prod_struc_sum_00 T2 ON T1.intal_acct_no_no = T2.acct_no "
+                + "WHERE T1.dt = DATE '2020-01-01') x";
+        Map<String, String> aliasMap = buildAliasMapByAnalyzer(sql);
+        Statement stmt = analyzer.parse(sql);
+        var select = (net.sf.jsqlparser.statement.select.PlainSelect)
+                ((net.sf.jsqlparser.statement.insert.Insert) stmt).getSelect().getSelectBody();
+
+        List<ConditionField> cfs = extractor.extractConditionFields(select, aliasMap);
+
+        // T2.acct_no → join_condition, 归属派生表内 vt_a_g_dp_deposit_prod_struc_sum_00（作用域映射）
+        ConditionField t2Acct = cfs.stream()
+                .filter(c -> "acct_no".equals(c.getSourceField()) && "join_condition".equals(c.getRole()))
+                .findFirst().orElse(null);
+        assertNotNull(t2Acct, "派生表内 JOIN 的 T2.acct_no 应被提取");
+        assertEquals("T2", t2Acct.getSourceAlias());
+        assertEquals("vt_a_g_dp_deposit_prod_struc_sum_00", t2Acct.getSourceTableShort(),
+                "T2 应解析到派生表内作用域 vt_..._00");
+        // T1.dt → where_condition, 归属 a_d_dp_deposit_org_dtl_query
+        ConditionField t1Dt = cfs.stream()
+                .filter(c -> "dt".equals(c.getSourceField()) && "T1".equals(c.getSourceAlias()))
+                .findFirst().orElse(null);
+        assertNotNull(t1Dt, "派生表内 WHERE 的 T1.dt 应被提取");
+        assertEquals("where_condition", t1Dt.getRole());
+        assertEquals("a_d_dp_deposit_org_dtl_query", t1Dt.getSourceTableShort());
+    }
+
+    @Test
+    void testExtractConditionFields_DerivedWhere_PassthroughNull() throws Exception {
+        // 平铺 SQL: 子查询内 WHERE v.acct_no=1 且外层无 filter，应正常归属子查询内表（回归，非幽灵列）
+        String sql = "INSERT INTO tgt SELECT v.acct_no FROM ("
+                + "SELECT T1.acct_no FROM rel_a T1 WHERE T1.k = 'A' "
+                + "UNION ALL "
+                + "SELECT T2.acct_no FROM rel_b T2 WHERE T2.k = 'B') v";
+        Map<String, String> aliasMap = buildAliasMapByAnalyzer(sql);
+        Statement stmt = analyzer.parse(sql);
+        var select = (net.sf.jsqlparser.statement.select.PlainSelect)
+                ((net.sf.jsqlparser.statement.insert.Insert) stmt).getSelect().getSelectBody();
+
+        List<ConditionField> cfs = extractor.extractConditionFields(select, aliasMap);
+
+        // 两个分支的 k 条件都被提取并各自归属（alias 不同 → 2 条）
+        long kCount = cfs.stream().filter(c -> "k".equals(c.getSourceField())).count();
+        assertEquals(2, kCount, "UNION 两个分支的 WHERE 条件都应提取");
+        ConditionField kRelA = cfs.stream().filter(c -> "k".equals(c.getSourceField())
+                && "T1".equals(c.getSourceAlias())).findFirst().orElse(null);
+        assertNotNull(kRelA);
+        assertEquals("rel_a", kRelA.getSourceTableShort(), "T1.k 应归属 rel_a（作用域内表）");
+    }
+
+    @Test
+    void testExtractConditionFields_SameAliasFieldCrossScopeMerges() throws Exception {
+        // 同 alias+field+role 跨作用域: 按 uk_block_cond(alias,field,role) 去重合并为 1 条
+        // （uk 不含 source_table_short，若按 resolvedTable 拆行会触发唯一键冲突——实现已对齐 DB 约束回退）
+        String sql = "INSERT INTO tgt SELECT a FROM ("
+                + "SELECT T1.x FROM rel_a T1 WHERE T1.k = 'A' "
+                + "UNION ALL "
+                + "SELECT T1.y FROM rel_b T1 WHERE T1.k = 'B') u";
+        Map<String, String> aliasMap = buildAliasMapByAnalyzer(sql);
+        Statement stmt = analyzer.parse(sql);
+        var select = (net.sf.jsqlparser.statement.select.PlainSelect)
+                ((net.sf.jsqlparser.statement.insert.Insert) stmt).getSelect().getSelectBody();
+
+        List<ConditionField> cfs = extractor.extractConditionFields(select, aliasMap);
+
+        // alias=T1, field=k, role=where_condition 两作用域同键 → 合并 1 条, clause 分号拼接
+        List<ConditionField> kCfs = cfs.stream()
+                .filter(c -> "k".equals(c.getSourceField()))
+                .toList();
+        assertEquals(1, kCfs.size(), "同 alias+field+role 跨作用域应按 uk_block_cond 合并为 1 条");
+        assertNotNull(kCfs.get(0).getClause());
+        assertTrue(kCfs.get(0).getClause().contains("="),
+                "合并条件应保留 clause 原文: " + kCfs.get(0).getClause());
+    }
 }

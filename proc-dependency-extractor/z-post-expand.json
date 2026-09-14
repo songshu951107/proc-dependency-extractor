@@ -1,0 +1,14 @@
+{
+  "caseTexts": [],
+  "nodeTextsSample": [
+    "存储过程依赖表名提取系统",
+    "选择 Schema",
+    "涉及 proc 数",
+    "筛选 Schema",
+    "Press enter or space to select a node. You can then use the arrow keys to move the node around. You can then use the arrow keys to move the node around, press delete to remove it and press escape to cancel.",
+    "Press enter or space to select an edge. You can then press delete to remove it or press escape to cancel.",
+    "GCLUSTERDB",
+    "PERFORMANCE_SCHEMA"
+  ],
+  "nodeTextsCount": 457
+}

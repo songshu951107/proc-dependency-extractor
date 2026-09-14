@@ -1,6 +1,6 @@
 // 影响分析清单化展示的纯函数工具：层级计算（最长路径+临时表/Transform穿透）、清单行推导、链路回溯
 
-const REASON_ORDER = ['值影响', '行过滤·JOIN', '行过滤·WHERE']
+export const REASON_ORDER = ['值影响', '行过滤·JOIN', '行过滤·WHERE']
 const FILTERS_ROLE_TO_REASON = {
   join_condition: '行过滤·JOIN',
   where_condition: '行过滤·WHERE'
@@ -18,6 +18,26 @@ export function isTempFieldName(nodeId) {
 export function isTempNode(node) {
   if (!node) return false
   return node.isTemp === true || isTempFieldName(node.id)
+}
+
+/**
+ * 展示层级预算规则：最长路径层级（computeLongestDepth）在预算内直接用；
+ * 超预算时取 min(最长路, 选深)——选深范围内最长路径长度。
+ * 例：字段最长路=6、首达=4——选深度 5 时展示 5（选深内最长），
+ * 选深度 10 时展示 6（最长路本身 ≤ 选深，不触发回落）。
+ * 此前回落到 BFS 首达深度会导致多路径字段跳过中间层（如 5 跳路径存在
+ * 却被压到首达 4 层）。fallbackDepth 保留用于 longest 为 null 的兜底。
+ * @param longest 最长路径层级（无则 null）
+ * @param fallbackDepth 后端 BFS 首达深度（无则 undefined，仅 longest=null 时兜底）
+ * @param maxDepth 用户选择的深度预算
+ * @return 展示层级
+ */
+export function capLevelToBudget(longest, fallbackDepth, maxDepth) {
+  if (maxDepth == null || longest == null || longest <= maxDepth) return longest
+  // 最长路超预算：取选深作为展示层级（选深范围内最长路径长度 ≤ 选深），
+  // 而非回落到 BFS 首达深度（会跳过中间层，如 5 跳路径存在却压到首达 4 层）。
+  // fallbackDepth 保留参数兼容性，但不再用于决定展示层级。
+  return maxDepth
 }
 
 /**
@@ -140,12 +160,13 @@ function bfsShallowDepth(nodeMap, edges, startId, isTransparent) {
  * ROW_IMPACT 展开到受影响表的所有列；下游继续传播时再遇 FILTERS 按角色重新打标。
  * 行生成：到达边（DERIVED_FROM/OUTPUT_TO/ROW_IMPACT）触发行，行 key=(procName, targetId) 去重，
  * reasons = 字段标签集合（按 REASON_ORDER 排序），同一字段多原因聚合一行；
- * 无标签字段不生成行（可达判据）。level 仍取最长路径层级。
+ * 无标签字段不生成行（可达判据）。level 取最长路径层级，超预算（maxDepth）时
+ * 回落到后端 BFS 首达深度（capLevelToBudget）。
  * 补充行：仅产临时表的 proc（非临时交付物字段级血缘缺失）补临时表行（temp=true，
  * level 用非透明跳数），保证清单覆盖全部受影响脚本、与 stats 一致。
  * @return [{ procName, table, field, reasons: string[], level, targetId, temp }] 按 level/表/字段排序
  */
-export function buildFieldImpactRows(nodes, edges, startFieldId) {
+export function buildFieldImpactRows(nodes, edges, startFieldId, maxDepth) {
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
   const depth = computeLongestDepth(nodes, edges, startFieldId,
     n => n.nodeLevel === 'TRANSFORM' || isTempNode(n))
@@ -164,6 +185,21 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
     }
   }
   const reasonOf = (e) => FILTERS_ROLE_TO_REASON[e.role] || VALUE_REASON
+
+  // 纯值通道可达集合：起点沿值边(INPUT_TO/OUTPUT_TO/DERIVED_FROM 等非行边)能到达的节点，
+  // 用于约束"值影响"标签——只有值通道能连回起点的字段才计入值影响，
+  // 避免孤悬的值边(来源值链回不到起点)导致"原因列标了值影响、路径表却无对应传播段"。
+  const valueReach = new Set([startFieldId])
+  const vq = [startFieldId]
+  while (vq.length) {
+    const c = vq.pop()
+    for (const e of (outEdges.get(c) || [])) {
+      if (e.edgeType === 'FILTERS' || e.edgeType === 'ROW_IMPACT') continue
+      if (valueReach.has(e.target)) continue
+      valueReach.add(e.target)
+      vq.push(e.target)
+    }
+  }
 
   const reasonMap = new Map() // fieldId -> Set<reason>
   const visited = new Set()   // `${fieldId}|${reason}`
@@ -228,17 +264,18 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
       procName: e.procName || '-',
       table: parts.length >= 2 ? `${parts[0]}.${parts[1]}` : t.id,
       field: parts[parts.length - 1],
-      reasons: REASON_ORDER.filter(r => reasonMap.get(t.id).has(r)),
-      level: depth.get(t.id),
+      reasons: REASON_ORDER.filter(r => reasonMap.get(t.id).has(r) && (r !== VALUE_REASON || valueReach.has(t.id))),
+      level: capLevelToBudget(depth.get(t.id), t.depth, maxDepth),
       targetId: t.id,
       temp: false
     })
   }
   // 补充行：仅产临时表的 proc（其非临时交付物字段级血缘缺失，链路止于临时表）。
-  // 只为"无非临时行"的 proc 生成临时表行，避免临时中转节点大量入表；层级用非透明跳数。
+  // 只为"无非临时行"的 proc 生成临时表行，避免临时中转节点大量入表；
+  // level 与物理行同口径（折叠临时表/Transform 的跳数）——此前用不折叠 rawDepth，
+  // 导致卡片最大层级(11)与表格层级tab(5)口径不一致
   const procsWithRows = new Set(rows.map(r => r.procName))
   if (rows.length) {
-    const rawDepth = computeLongestDepth(nodes, edges, startFieldId, () => false)
     for (const e of edges) {
       if (e.edgeType !== 'DERIVED_FROM' && e.edgeType !== 'OUTPUT_TO' && e.edgeType !== 'ROW_IMPACT') continue
       const procName = e.procName || '-'
@@ -254,8 +291,8 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
         procName,
         table: parts.length >= 2 ? `${parts[0]}.${parts[1]}` : t.id,
         field: parts[parts.length - 1],
-        reasons: REASON_ORDER.filter(r => reasonMap.get(t.id).has(r)),
-        level: rawDepth.get(t.id),
+        reasons: REASON_ORDER.filter(r => reasonMap.get(t.id).has(r) && (r !== VALUE_REASON || valueReach.has(t.id))),
+        level: capLevelToBudget(depth.get(t.id), t.depth, maxDepth),
         targetId: t.id,
         temp: true
       })
@@ -269,18 +306,23 @@ export function buildFieldImpactRows(nodes, edges, startFieldId) {
 /**
  * 表级数据构建（规格 §4.2，迁移并改造原 ImpactAnalysis.vue buildWithoutTemp）。
  * 在全图（含临时表）上算最长路径（临时表透明=穿透），返回行+全图（弹窗链路需要含临时表）。
- * @param impactedByDepth 后端 result.impactedByDepth
+ * 最长路径层级超预算（maxDepth）时回落到 impactedByDepth 的 BFS 首达层键（capLevelToBudget）。
+ * @param impactedByDepth 后端 result.impactedByDepth（depth键 → 该层首达表）
  * @param sourceLayer 源表层级（可选；源表不在 impactedByDepth 中时用于补充节点）
+ * @param maxDepth 用户选择的深度预算（可选）
  * @return { rows: [{procName, table, level, targetId}], nodes, edges, depthMap }
  *   nodes/edges 为含临时表的全图（节点含 temp/scriptFile/shortName），行只含非临时表
  */
-export function buildTableImpactData(sourceTable, impactedByDepth, sourceLayer) {
-  // 全图邻接与信息
+export function buildTableImpactData(sourceTable, impactedByDepth, sourceLayer, maxDepth) {
+  // 全图邻接与信息 + 首达层索引（表名 → BFS 首达深度键，预算回落的 fallback）
   const tableInfoMap = {}
+  const firstArrival = new Map()
   const allEdges = []
-  for (const tables of Object.values(impactedByDepth || {})) {
+  for (const [depthKey, tables] of Object.entries(impactedByDepth || {})) {
+    const d = Number(depthKey)
     for (const t of tables) {
       tableInfoMap[t.name] = t
+      if (!firstArrival.has(t.name) || d < firstArrival.get(t.name)) firstArrival.set(t.name, d)
       if (t.impactSource) allEdges.push({ source: t.impactSource, target: t.name })
     }
   }
@@ -317,7 +359,7 @@ export function buildTableImpactData(sourceTable, impactedByDepth, sourceLayer) 
     const key = `${procName}|${e.target}`
     if (seen.has(key)) continue
     seen.add(key)
-    rows.push({ procName, table: e.target, level: depthMap.get(e.target), targetId: e.target })
+    rows.push({ procName, table: e.target, level: capLevelToBudget(depthMap.get(e.target), firstArrival.get(e.target), maxDepth), targetId: e.target })
   }
   rows.sort((a, b) => a.level - b.level || a.table.localeCompare(b.table))
   return { rows, nodes: allNodes, edges: allEdges, depthMap }
@@ -328,11 +370,12 @@ export function buildTableImpactData(sourceTable, impactedByDepth, sourceLayer) 
  * 从起点沿血缘反向传播：入边 OUTPUT_TO 进入链路 Transform，其每个 INPUT_TO 输入字段
  * 为来源候选；入边 DERIVED_FROM 的源字段为来源候选。值来源恒标"值影响"——
  * 条件字段已走行血缘 FILTERS 通道，不混入值溯源清单。
- * level = 反向最长路径的非透明跳数（临时表/Transform 穿透）。
+ * level = 反向最长路径的非透明跳数（临时表/Transform 穿透），超预算（maxDepth）时
+ * 回落到后端 BFS 首达深度（capLevelToBudget）。
  * 行 key=(procName, 来源字段) 去重，reasons 聚合；仅产临时来源的 proc 补临时行。
  * @return [{ procName, table, field, reasons: string[], level, targetId, temp, upstream: true }]
  */
-export function buildFieldSourceRows(nodes, edges, startFieldId) {
+export function buildFieldSourceRows(nodes, edges, startFieldId, maxDepth) {
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
   // 反向图最长深度：层级 = 距起点的上游跳数
   const revEdges = edges.map(e => ({ ...e, source: e.target, target: e.source }))
@@ -415,16 +458,15 @@ export function buildFieldSourceRows(nodes, edges, startFieldId) {
       table: parts.length >= 2 ? `${parts[0]}.${parts[1]}` : s.id,
       field: parts[parts.length - 1],
       reasons: REASON_ORDER.filter(r => reasonMap.get(s.id).has(r)),
-      level: depth.get(s.id),
+      level: capLevelToBudget(depth.get(s.id), s.depth, maxDepth),
       targetId: s.id,
       temp: false,
       upstream: true
     })
   }
-  // 补充行：仅临时表来源的 proc
+  // 补充行：仅临时表来源的 proc（level 同样用折叠口径，与下游清单一致）
   const procsWithRows = new Set(rows.map(r => r.procName))
   if (rows.length) {
-    const rawDepth = computeLongestDepth(nodes, revEdges, startFieldId, () => false)
     for (const e of edges) {
       if (e.edgeType !== 'INPUT_TO' && e.edgeType !== 'DERIVED_FROM') continue
       const procName = e.procName || '-'
@@ -442,7 +484,7 @@ export function buildFieldSourceRows(nodes, edges, startFieldId) {
         table: parts.length >= 2 ? `${parts[0]}.${parts[1]}` : s.id,
         field: parts[parts.length - 1],
         reasons: REASON_ORDER.filter(r => reasonMap.get(s.id).has(r)),
-        level: rawDepth.get(s.id),
+        level: capLevelToBudget(depth.get(s.id), s.depth, maxDepth),
         targetId: s.id,
         temp: true,
         upstream: true
@@ -496,12 +538,19 @@ export function traceDownstreamSubgraph(nodes, edges, fromId, procName) {
  * @param {number} maxSteps 单路径物理步上限（防异常环/爆炸）
  * @param {number} preferLevel 优先展示的跳数（=清单行 level）：该行归入第 N 层级
  *        的依据是 N 跳路径，须优先展示；短路径过多时按行数升序会将其截掉
+ * @param {number} maxDepth 深度预算（用户选深）：超预算的路径不展示——超预算字段的
+ *        行已回落到首达层级，其"长路前缀+短路下游"拼接出的超预算路径与展示层级不符
  * @return {Array<Array<{hop, from, to, type, procName?, expression?, role?, clause?, expanded?, dF, dT}>>}
- *         路径数组（≤5 条，优先 preferLevel 跳，其余按行数升序），每条按起点→目标排列；type: FILTERS/VALUE/DIRECT
+ *         路径数组（≤5 条，仅预算内路径，优先 preferLevel 跳，其余按行数升序），每条按起点→目标排列；type: FILTERS/VALUE/DIRECT
  */
-export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16, preferLevel) {
+export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16, preferLevel, maxDepth) {
   if (!targetId || !sourceId || targetId === sourceId) return []
   const nodeById = new Map(nodes.map(n => [n.id, n]))
+  // 深度校验统一折叠口径（computeLongestDepth，与清单 level 同源）：后端原始 depth 是
+  // BFS 首达层，值+行混合链路（第二轮行影响边）下不沿路径单调，直接校验会误剪
+  // "值到达列→FILTERS→表→ROW_IMPACT"路径，导致 路径表行数 < 层级跳数
+  const foldedDepth = computeLongestDepth(nodes, edges, sourceId,
+    n => n.nodeLevel === 'TRANSFORM' || isTempNode(n))
   const inByTarget = new Map()
   for (const e of edges) {
     if (!inByTarget.has(e.target)) inByTarget.set(e.target, [])
@@ -510,35 +559,67 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16, p
   const MAX_PATHS = 5
   // 收集上限须大于展示条数：短路径数量超过展示上限时会截断更长（更深层级）的路径，
   // 导致路径表最大跳数 < 层级（先收集全部再按折叠后行数排序截取）
-  const COLLECT_LIMIT = 100
+  const COLLECT_LIMIT = 300
   const paths = []
+  // 防爆炸安全阀（防异常环/指数级简单路径）：DFS 访问次数上限
+  let dfsOps = 0
+  const DFS_OPS_CAP = 200_000
+  // 物理步预算随层级放大：深层路径经 临时表/Transform 穿透后物理步数可达展示行数的 2~3 倍，
+  // 固定 maxSteps=16 会截断第 8+ 层的最长路径（出现 层级8/路径表7行 的错位）
+  const stepBudget = Math.max(maxSteps, (preferLevel || 0) * 3)
+  // 折叠跳数预算 = 清单行的展示层级：DFS 期间按折叠口径（FILTERS+ROW_IMPACT 合并为 1 行、
+  // 临时表中转穿透 +0）增量累计，超过预算的分支直接剪掉。
+  // 必要性：此前只在收集后过滤，DFS 的"最深前驱优先"会先烧完 ops 上限、只捞到长路，
+  // 导致"最长路超预算→回落首达层级"的字段（如 depth=3/level=10）路径表为空——
+  // 其预算内的短路（3 跳）根本未被搜索到。剪枝后搜索空间收敛到预算内，短路立即可得。
+  const hopBudget = preferLevel != null && preferLevel > 0 ? preferLevel : Infinity
+  // 临时表中转判定：路径中的临时节点（非目标）在折叠时并入下一行，不计跳
+  const isTempMid = id => id !== targetId && isTempNode(nodeById.get(id))
 
-  function dfs(nodeId, steps, visited) {
+  // 增量折叠：把新步 N（from→nodeId）prepend 到既有路径前，返回折叠后总跳数与该路径
+  // 最前端折叠步的类型（供下一步继续判定合并）。与下方 folding 段同规则：
+  // A) 前一步为 FILTERS 且新步为 ROW_IMPACT → 合并为 1 行（行影响一段）；
+  // B) 新步落在临时表中转节点 → 并入前一步（穿透 +0）。
+  function foldPrepend(hops, frontType, type, nodeId) {
+    if (hops === 0) return { hops: 1, frontType: type }
+    if (type === 'FILTERS' && frontType === 'ROW_IMPACT') return { hops, frontType: 'FILTERS' }
+    if (isTempMid(nodeId)) return { hops, frontType: type === 'FILTERS' ? 'FILTERS' : frontType }
+    return { hops: hops + 1, frontType: type }
+  }
+
+  function dfs(nodeId, steps, visited, foldedHops, frontType) {
+    if (dfsOps++ > DFS_OPS_CAP) return
     if (paths.length >= COLLECT_LIMIT) return
     if (nodeId === sourceId) {
       paths.push(steps.slice().reverse())
       return
     }
-    if (steps.length >= maxSteps || visited.has(nodeId)) return
+    if (steps.length >= stepBudget || visited.has(nodeId)) return
     const n = nodeById.get(nodeId)
     if (!n) return
     visited.add(nodeId)
-    const dT = n.depth
+    const dT = foldedDepth.get(nodeId) ?? n.depth
     const push = (from, type, extra) => {
-      const dF = nodeById.get(from)?.depth
-      // 前驱深度校验：递减（dT-1，含 行链条件列→表）/ 穿透（dT，临时表列中转）；null 宽松放行（由成功条件裁剪）
-      const ok = dF == null || dT == null || dF === dT - 1 || dF === dT
-      if (!ok) return
+      // 折叠跳数剪枝：超预算的（前缀）路径不参与展示——其展示层级已回落到首达深度，
+      // 拼接出的超预算长路与层级 tab 不符。剪枝同时把搜索空间压到预算内，
+      // 避免 ops 上限被深层分支耗尽而搜不到预算内短路。
+      const folded = foldPrepend(foldedHops, frontType, type, nodeId)
+      if (folded.hops > hopBudget) return
+      const dF = foldedDepth.get(from) ?? nodeById.get(from)?.depth
       steps.push({ from, to: nodeId, type, dF: dF ?? null, dT: dT ?? null, ...extra })
-      dfs(from, steps, visited)
+      dfs(from, steps, visited, folded.hops, folded.frontType)
       steps.pop()
     }
+    // 前驱候选统一收集后按深度降序探索：更深前驱的路径更长，
+    // 优先探索保证与层级对齐的最长路径在收集上限内被发现
+    // （否则热点表的海量浅层条件列短路径先灌满 COLLECT_LIMIT，深层路径被截掉）
+    const cands = []
     if (n.nodeLevel === 'TABLE') {
       // 表只走 FILTERS 入边（条件列）
       for (const fe of (inByTarget.get(nodeId) || [])) {
         if (fe.edgeType !== 'FILTERS') continue
         if (nodeById.get(fe.source)?.nodeLevel === 'FIELD') {
-          push(fe.source, 'FILTERS', { role: fe.role, clause: fe.clause, procName: fe.procName })
+          cands.push({ from: fe.source, type: 'FILTERS', extra: { role: fe.role, clause: fe.clause, procName: fe.procName } })
         }
       }
     } else {
@@ -549,20 +630,31 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16, p
         if (sn.nodeLevel === 'TRANSFORM') {
           for (const te of (inByTarget.get(e.source) || [])) {
             if (nodeById.get(te.source)?.nodeLevel === 'FIELD') {
-              push(te.source, 'VALUE', { procName: sn.procName || e.procName, expression: sn.expression || sn.label })
+              cands.push({ from: te.source, type: 'VALUE', extra: { procName: sn.procName || e.procName, expression: sn.expression || sn.label } })
             }
           }
         } else if (sn.nodeLevel === 'FIELD') {
-          push(e.source, 'DIRECT', { procName: e.procName })
+          cands.push({ from: e.source, type: 'DIRECT', extra: { procName: e.procName } })
         } else if (sn.nodeLevel === 'TABLE' && e.edgeType === 'ROW_IMPACT') {
-          push(e.source, 'ROW_IMPACT', { role: e.role, procName: e.procName })
+          cands.push({ from: e.source, type: 'ROW_IMPACT', extra: { role: e.role, procName: e.procName } })
         }
       }
     }
+    // 值通道(DIRECT/VALUE)优先于行通道(ROW_IMPACT)探索——dep_avg 同时有
+    // DIRECT 前驱(inf_.dep_avg, depth=5)和 ROW_IMPACT 前驱(TABLE, depth=6)，
+    // 纯 depth 降序会让行通道先搜，海量 FILTERS 路径灌满 COLLECT_LIMIT，
+    // 值路径分支根本未被探索。同类型内仍按 depth 降序，保持最长路径优先。
+    cands.sort((a, b) => {
+      const aRow = a.type === 'ROW_IMPACT' ? 1 : 0
+      const bRow = b.type === 'ROW_IMPACT' ? 1 : 0
+      if (aRow !== bRow) return aRow - bRow
+      return (foldedDepth.get(b.from) ?? -1) - (foldedDepth.get(a.from) ?? -1)
+    })
+    for (const c of cands) push(c.from, c.type, c.extra)
     visited.delete(nodeId)
   }
 
-  dfs(targetId, [], new Set())
+  dfs(targetId, [], new Set(), 0, null)
   // 展示形态：每跳恰好一行（= 跨表传播一段），仅 行过滤 / 值传播 两类标签，不展示临时表列，
   // 跳数与清单层级 tab 同口径（穿透临时表 + 行展开不占跳）。
   // 合并规则：
@@ -573,7 +665,7 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16, p
   //      行通道穿透（FILTERS→临时表→展开→值穿透）整体折叠为 起点列→首个物理到达列，
   //      clause 承条件、expression 合并值表达式。
   // 跳号 = 折叠后步序号，与层级 tab 对齐。
-  const isTempMid = id => id !== targetId && isTempNode(nodeById.get(id))
+  // 注：合并规则与 DFS 内 foldPrepend（剪枝用的增量折叠）必须保持一致
   const folded = paths.map(p => {
     const folded = []
     for (const s of p) {
@@ -615,10 +707,14 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16, p
       return { ...s, from: sourceId, type: 'FILTERS', expanded: true, hop }
     })
   })
-  // 先折叠再排序截取：优先展示跳数 == preferLevel（清单行 level）的路径——
-  // 该行归入第 N 层级的依据是 N 跳路径；短路径过多时纯升序会将其截掉，
-  // 造成"3 跳直达却归第 4 层"的困惑。无匹配时回退按行数升序。
-  return folded
+  // 先折叠再过滤排序截取：
+  // 1) 预算过滤：maxDepth 内的路径才展示——超预算字段的最长路（长路前缀+短路下游拼接）
+  //    与回落后的展示层级不符，只保留预算内路径；
+  // 2) 优先展示跳数 == preferLevel（清单行 level）的路径——
+  //    该行归入第 N 层级的依据是 N 跳路径；短路径过多时纯升序会将其截掉，
+  //    造成"3 跳直达却归第 4 层"的困惑。无匹配时回退按行数升序。
+  const filtered = folded.filter(p => maxDepth == null || p.length <= maxDepth)
+  const sorted = filtered
     .sort((a, b) => {
       if (preferLevel != null) {
         const am = a.length === preferLevel ? 0 : 1
@@ -627,7 +723,24 @@ export function traceHopPaths(nodes, edges, targetId, sourceId, maxSteps = 16, p
       }
       return a.length - b.length
     })
-    .slice(0, MAX_PATHS)
+  let result = sorted.slice(0, MAX_PATHS)
+  // 类型多样性补底：若结果全为行过滤路径而候选中存在含值步骤(VALUE/DIRECT)的路径，
+  // 用最短的值路径替换最后一条——确保原因列标了"值影响"时路径表至少展示一条值传播路径，
+  // 避免值路径被海量行路径挤出 MAX_PATHS。
+  const hasValueStep = p => p.some(s => s.type === 'VALUE' || s.type === 'DIRECT')
+  if (result.length >= 2 && !result.some(hasValueStep)) {
+    const valuePath = filtered.filter(hasValueStep)
+      .sort((a, b) => {
+        if (preferLevel != null) {
+          const am = a.length === preferLevel ? 0 : 1
+          const bm = b.length === preferLevel ? 0 : 1
+          if (am !== bm) return am - bm
+        }
+        return a.length - b.length
+      })[0]
+    if (valuePath) result[result.length - 1] = valuePath
+  }
+  return result
 }
 
 /**

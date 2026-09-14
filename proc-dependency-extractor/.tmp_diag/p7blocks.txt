@@ -1,0 +1,4386 @@
+﻿@@BLOCK dwa_a_d_pt_pos_merch_info_sum | 3@@	CREATE TABLE {PID}.TMP_A_D_POS_MERCH_DEPOSIT_GR                                               
+
+  AS SELECT T1.ORG_NO
+
+           ,NVL(SUM(T3.BAL_GR),0) AS BAL
+
+           ,NVL(SUM(T3.BAL_GR_MAVG),0) AS BAL_MAVG		   
+
+           ,NVL(SUM(T3.BAL_GR_YAVG),0) AS BAL_YAVG		   		   
+
+     FROM
+
+          (SELECT T1.ORG_NO
+
+                 ,T1.CUST_NO
+
+            FROM (SELECT *,ROW_NUMBER()OVER(PARTITION BY CUST_NO ORDER BY CUST_NO) NM  
+
+                  FROM {PID}.A_D_PT_POS_MERCH_INFO 
+
+                  WHERE TX_DT={ETL_TX_DT}
+
+  		          AND BELO_LINE='01'
+
+                    )T1
+
+             WHERE T1.NM='1'
+
+              GROUP BY 1,2) T1 
+
+           LEFT JOIN (SELECT T1.CUST_NO AS C_CUSNO
+
+                         ,SUM(T1.BAL_RMB) AS BAL_GR
+
+						 ,SUM(T1.MONTH_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_MAVG
+
+						 ,SUM(T1.YEAR_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_YAVG					 
+
+                    FROM {PID}.A_D_DP_DEPOSIT_ACCT_INF T1
+
+                     WHERE T1.DATA_DT={ETL_TX_DT}
+
+                        AND ((PROD_NO IN ('1016','1023','2017') OR LENGTH(PROD_NO) = '13') 
+
+						                 OR T1.DATA_SOURC_TAB_NAME<>'F_AC_CTDS_LDR_ACCT')
+
+                    GROUP BY 1
+
+                            )T3
+
+    ON T1.CUST_NO=T3.C_CUSNO
+
+    GROUP BY T1.ORG_NO
+@@BLOCK dwa_a_d_pt_pos_merch_info_sum | 5@@	CREATE TABLE {PID}.TMP_A_D_POS_MERCH_DEPOSIT_GRHY                                               
+
+  AS SELECT T1.ORG_NO
+
+           ,NVL(SUM(T3.BAL_GR),0) AS BAL
+
+           ,NVL(SUM(T3.BAL_GR_MAVG),0) AS BAL_MAVG		   
+
+           ,NVL(SUM(T3.BAL_GR_YAVG),0) AS BAL_YAVG	
+
+     FROM
+
+          (SELECT T1.ORG_NO
+
+                 ,T1.CUST_NO
+
+            FROM (SELECT *,ROW_NUMBER()OVER(PARTITION BY CUST_NO ORDER BY CUST_NO) NM  
+
+                  FROM {PID}.A_D_PT_POS_MERCH_INFO 
+
+                  WHERE TX_DT={ETL_TX_DT}
+
+  		          AND BELO_LINE='01'
+
+				  AND TXN_AMT_YEAR>=0.01
+
+                    )T1
+
+             WHERE T1.NM='1'
+
+              GROUP BY 1,2) T1 
+
+           LEFT JOIN (SELECT T1.CUST_NO AS C_CUSNO
+
+                         ,SUM(T1.BAL_RMB) AS BAL_GR
+
+						 ,SUM(T1.MONTH_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_MAVG
+
+						 ,SUM(T1.YEAR_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_YAVG	
+
+                    FROM {PID}.A_D_DP_DEPOSIT_ACCT_INF T1
+
+                     WHERE T1.DATA_DT={ETL_TX_DT}
+
+                        AND ((PROD_NO IN ('1016','1023','2017') OR LENGTH(PROD_NO) = '13') 
+
+						                 OR T1.DATA_SOURC_TAB_NAME<>'F_AC_CTDS_LDR_ACCT')
+
+                    GROUP BY 1
+
+                            )T3
+
+    ON T1.CUST_NO=T3.C_CUSNO
+
+    GROUP BY T1.ORG_NO
+@@BLOCK dwa_a_d_pt_pos_merch_info_sum | 7@@	CREATE TABLE {PID}.TMP_A_D_POS_MERCH_DEPOSIT_GRXZ                                               
+
+  AS SELECT T1.ORG_NO
+
+           ,NVL(SUM(T3.BAL_GR),0) AS BAL
+
+           ,NVL(SUM(T3.BAL_GR_MAVG),0) AS BAL_MAVG		   
+
+           ,NVL(SUM(T3.BAL_GR_YAVG),0) AS BAL_YAVG	
+
+     FROM
+
+          (SELECT T1.ORG_NO
+
+                 ,T1.CUST_NO
+
+            FROM (SELECT *,ROW_NUMBER()OVER(PARTITION BY CUST_NO ORDER BY CUST_NO) NM  
+
+                  FROM {PID}.A_D_PT_POS_MERCH_INFO 
+
+                  WHERE TX_DT={ETL_TX_DT}
+
+  		          AND BELO_LINE='01'
+
+				  AND ISXZ='1'
+
+                    )T1
+
+             WHERE T1.NM='1'
+
+              GROUP BY 1,2) T1 
+
+           LEFT JOIN (SELECT T1.CUST_NO AS C_CUSNO
+
+                         ,SUM(T1.BAL_RMB) AS BAL_GR
+
+						 ,SUM(T1.MONTH_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_MAVG
+
+						 ,SUM(T1.YEAR_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_YAVG	
+
+                    FROM {PID}.A_D_DP_DEPOSIT_ACCT_INF T1
+
+                     WHERE T1.DATA_DT={ETL_TX_DT}
+
+                        AND ((PROD_NO IN ('1016','1023','2017') OR LENGTH(PROD_NO) = '13') 
+
+						                 OR T1.DATA_SOURC_TAB_NAME<>'F_AC_CTDS_LDR_ACCT')
+
+                    GROUP BY 1
+
+                            )T3
+
+    ON T1.CUST_NO=T3.C_CUSNO
+
+    GROUP BY T1.ORG_NO
+@@BLOCK dwa_a_d_pt_pos_merch_info_sum | 9@@	CREATE TABLE {PID}.TMP_A_D_POS_MERCH_DEPOSIT_GRYX                                               
+
+  AS SELECT T1.ORG_NO
+
+           ,NVL(SUM(T3.BAL_GR),0) AS BAL
+
+           ,NVL(SUM(T3.BAL_GR_MAVG),0) AS BAL_MAVG		   
+
+           ,NVL(SUM(T3.BAL_GR_YAVG),0) AS BAL_YAVG	
+
+     FROM
+
+          (SELECT T1.ORG_NO
+
+                 ,T1.CUST_NO
+
+            FROM (SELECT *,ROW_NUMBER()OVER(PARTITION BY CUST_NO ORDER BY CUST_NO) NM  
+
+                  FROM {PID}.A_D_PT_POS_MERCH_INFO 
+
+                  WHERE TX_DT={ETL_TX_DT}
+
+  		          AND BELO_LINE='01'
+
+				  AND TXN_NUM_3M>=15
+
+				  AND TXN_AMT_3M>=3000
+
+                    )T1
+
+             WHERE T1.NM='1'
+
+              GROUP BY 1,2) T1 
+
+           LEFT JOIN (SELECT T1.CUST_NO AS C_CUSNO
+
+                         ,SUM(T1.BAL_RMB) AS BAL_GR
+
+						 ,SUM(T1.MONTH_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_MAVG
+
+						 ,SUM(T1.YEAR_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_YAVG	
+
+                    FROM {PID}.A_D_DP_DEPOSIT_ACCT_INF T1
+
+                     WHERE T1.DATA_DT={ETL_TX_DT}
+
+                        AND ((PROD_NO IN ('1016','1023','2017') OR LENGTH(PROD_NO) = '13') 
+
+						                 OR T1.DATA_SOURC_TAB_NAME<>'F_AC_CTDS_LDR_ACCT')
+
+                    GROUP BY 1
+
+                            )T3
+
+    ON T1.CUST_NO=T3.C_CUSNO
+
+    GROUP BY T1.ORG_NO
+@@BLOCK dwa_a_d_pt_pos_merch_info_sum | 11@@	CREATE TABLE {PID}.TMP_A_D_POS_MERCH_DEPOSIT_DG                                               
+
+  AS SELECT T1.ORG_NO
+
+           ,NVL(SUM(T3.BAL_GR),0) AS BAL
+
+           ,NVL(SUM(T3.BAL_GR_MAVG),0) AS BAL_MAVG		   
+
+           ,NVL(SUM(T3.BAL_GR_YAVG),0) AS BAL_YAVG	
+
+     FROM
+
+          (SELECT T1.ORG_NO
+
+                 ,T1.ACCT_NO
+
+            FROM (SELECT *,ROW_NUMBER()OVER(PARTITION BY ACCT_NO ORDER BY ACCT_NO) NM  
+
+                  FROM {PID}.A_D_PT_POS_MERCH_INFO 
+
+                  WHERE TX_DT={ETL_TX_DT}
+
+  		          AND BELO_LINE='02'
+
+                    )T1
+
+             WHERE T1.NM='1'
+
+              GROUP BY 1,2) T1 
+
+           LEFT JOIN (SELECT T1.CUST_ACCT_NO AS C_CUSNO
+
+                         ,SUM(T1.BAL_RMB) AS BAL_GR
+
+						 ,SUM(T1.MONTH_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_MAVG
+
+						 ,SUM(T1.YEAR_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_YAVG	
+
+                    FROM {PID}.A_D_DP_DEPOSIT_ACCT_INF T1
+
+                     WHERE T1.DATA_DT={ETL_TX_DT}
+
+                        AND ((PROD_NO IN ('1016','1023','2017') OR LENGTH(PROD_NO) = '13') 
+
+						                 OR T1.DATA_SOURC_TAB_NAME<>'F_AC_CTDS_LDR_ACCT')
+
+                    GROUP BY 1
+
+                            )T3
+
+    ON T1.ACCT_NO=T3.C_CUSNO
+
+    GROUP BY T1.ORG_NO
+@@BLOCK dwa_a_d_pt_pos_merch_info_sum | 13@@	CREATE TABLE {PID}.TMP_A_D_POS_MERCH_DEPOSIT_DGHY                                               
+
+  AS SELECT T1.ORG_NO
+
+           ,NVL(SUM(T3.BAL_GR),0) AS BAL
+
+           ,NVL(SUM(T3.BAL_GR_MAVG),0) AS BAL_MAVG		   
+
+           ,NVL(SUM(T3.BAL_GR_YAVG),0) AS BAL_YAVG	
+
+     FROM
+
+          (SELECT T1.ORG_NO
+
+                 ,T1.ACCT_NO
+
+            FROM (SELECT *,ROW_NUMBER()OVER(PARTITION BY ACCT_NO ORDER BY ACCT_NO) NM  
+
+                  FROM {PID}.A_D_PT_POS_MERCH_INFO 
+
+                  WHERE TX_DT={ETL_TX_DT}
+
+  		          AND BELO_LINE='02'
+
+				  AND TXN_AMT_YEAR>=0.01
+
+                    )T1
+
+             WHERE T1.NM='1'
+
+              GROUP BY 1,2) T1 
+
+           LEFT JOIN (SELECT T1.CUST_ACCT_NO AS C_CUSNO
+
+                         ,SUM(T1.BAL_RMB) AS BAL_GR
+
+						 ,SUM(T1.MONTH_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_MAVG
+
+						 ,SUM(T1.YEAR_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_YAVG	
+
+                    FROM {PID}.A_D_DP_DEPOSIT_ACCT_INF T1
+
+                     WHERE T1.DATA_DT={ETL_TX_DT}
+
+                        AND ((PROD_NO IN ('1016','1023','2017') OR LENGTH(PROD_NO) = '13') 
+
+						                 OR T1.DATA_SOURC_TAB_NAME<>'F_AC_CTDS_LDR_ACCT')
+
+                    GROUP BY 1
+
+                            )T3
+
+    ON T1.ACCT_NO=T3.C_CUSNO
+
+    GROUP BY T1.ORG_NO
+@@BLOCK dwa_a_d_pt_pos_merch_info_sum | 15@@	CREATE TABLE {PID}.TMP_A_D_POS_MERCH_DEPOSIT_DGXZ                                               
+
+  AS SELECT T1.ORG_NO
+
+           ,NVL(SUM(T3.BAL_GR),0) AS BAL
+
+           ,NVL(SUM(T3.BAL_GR_MAVG),0) AS BAL_MAVG		   
+
+           ,NVL(SUM(T3.BAL_GR_YAVG),0) AS BAL_YAVG	
+
+     FROM
+
+          (SELECT T1.ORG_NO
+
+                 ,T1.ACCT_NO
+
+            FROM (SELECT *,ROW_NUMBER()OVER(PARTITION BY ACCT_NO ORDER BY ACCT_NO) NM  
+
+                  FROM {PID}.A_D_PT_POS_MERCH_INFO 
+
+                  WHERE TX_DT={ETL_TX_DT}
+
+  		          AND BELO_LINE='02'
+
+				  AND ISXZ='1'
+
+                    )T1
+
+             WHERE T1.NM='1'
+
+              GROUP BY 1,2) T1 
+
+           LEFT JOIN (SELECT T1.CUST_ACCT_NO AS C_CUSNO
+
+                         ,SUM(T1.BAL_RMB) AS BAL_GR
+
+						 ,SUM(T1.MONTH_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_MAVG
+
+						 ,SUM(T1.YEAR_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_YAVG	
+
+                    FROM {PID}.A_D_DP_DEPOSIT_ACCT_INF T1
+
+                     WHERE T1.DATA_DT={ETL_TX_DT}
+
+                        AND ((PROD_NO IN ('1016','1023','2017') OR LENGTH(PROD_NO) = '13') 
+
+						                 OR T1.DATA_SOURC_TAB_NAME<>'F_AC_CTDS_LDR_ACCT')
+
+                    GROUP BY 1
+
+                            )T3
+
+    ON T1.ACCT_NO=T3.C_CUSNO
+
+    GROUP BY T1.ORG_NO
+@@BLOCK dwa_a_d_pt_pos_merch_info_sum | 17@@	CREATE TABLE {PID}.TMP_A_D_POS_MERCH_DEPOSIT_DGYX                                               
+
+  AS SELECT T1.ORG_NO
+
+           ,NVL(SUM(T3.BAL_GR),0) AS BAL
+
+           ,NVL(SUM(T3.BAL_GR_MAVG),0) AS BAL_MAVG		   
+
+           ,NVL(SUM(T3.BAL_GR_YAVG),0) AS BAL_YAVG	
+
+     FROM
+
+          (SELECT T1.ORG_NO
+
+                 ,T1.ACCT_NO
+
+            FROM (SELECT *,ROW_NUMBER()OVER(PARTITION BY ACCT_NO ORDER BY ACCT_NO) NM  
+
+                  FROM {PID}.A_D_PT_POS_MERCH_INFO 
+
+                  WHERE TX_DT={ETL_TX_DT}
+
+  		          AND BELO_LINE='02'
+
+				  AND TXN_NUM_3M>=15
+
+				  AND TXN_AMT_3M>=3000
+
+                    )T1
+
+             WHERE T1.NM='1'
+
+              GROUP BY 1,2) T1 
+
+           LEFT JOIN (SELECT T1.CUST_ACCT_NO AS C_CUSNO
+
+                         ,SUM(T1.BAL_RMB) AS BAL_GR
+
+						 ,SUM(T1.MONTH_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_MAVG
+
+						 ,SUM(T1.YEAR_DAILY_AVG_DEPOSIT_BAL_RMB) AS BAL_GR_YAVG	
+
+                    FROM {PID}.A_D_DP_DEPOSIT_ACCT_INF T1
+
+                     WHERE T1.DATA_DT={ETL_TX_DT}
+
+                       
+
+                        AND ((PROD_NO IN ('1016','1023','2017') OR LENGTH(PROD_NO) = '13') 
+
+						                 OR T1.DATA_SOURC_TAB_NAME<>'F_AC_CTDS_LDR_ACCT')
+
+                    GROUP BY 1
+
+                            )T3
+
+    ON T1.ACCT_NO=T3.C_CUSNO
+
+    GROUP BY T1.ORG_NO
+@@BLOCK dwa_c_agt_credit_card_acct_calcu_base | 3@@	CREATE TABLE {CDM}.VT_C_AGT_CREDIT_CARD_ACCT_CALCU_BASE_INIT_01 (
+
+       acct_no VARCHAR(100)  comment '账号'
+
+      ,today_bal DECIMAl(24,2) comment''
+
+      ,bal_month_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_quart_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_half_year_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_year_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_month_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_quart_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_half_year_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_year_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_roll_month_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_roll_quart_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_roll_half_year_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_roll_year_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_roll_month_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_roll_quart_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_roll_half_year_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_roll_year_daily_avg DECIMAl(24,2) comment''
+
+)
+@@BLOCK dwa_c_agt_credit_card_acct_calcu_base | 5@@	CREATE TABLE {CDM}.VT_C_AGT_CREDIT_CARD_ACCT_CALCU_BASE_INIT_02 (
+
+       acct_no VARCHAR(100)  comment '账号'
+
+      ,today_over_pay DECIMAl(24,2) comment''
+
+      ,over_pay_month_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_quart_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_half_year_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_year_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_month_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_quart_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_half_year_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_year_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_roll_month_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_roll_quart_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_roll_half_year_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_roll_year_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_roll_month_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_roll_quart_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_roll_half_year_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_roll_year_daily_avg DECIMAl(24,2) comment''
+
+)
+@@BLOCK dwa_c_agt_credit_card_acct_calcu_base | 7@@	CREATE TABLE {CDM}.VT_C_AGT_CREDIT_CARD_ACCT_CALCU_BASE_INIT_03 (
+
+       acct_no VARCHAR(100)  comment '账号'
+
+      ,today_stages_bal  DECIMAl(24,2)   COMMENT  '当日分期余额'
+
+      ,stages_bal_month_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额月积数'
+
+      ,stages_bal_quart_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额季积数'
+
+      ,stages_bal_half_year_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额半年积数'
+
+      ,stages_bal_year_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额年积数'
+
+      ,stages_bal_month_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额月日均'
+
+      ,stages_bal_quart_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额季日均'
+
+      ,stages_bal_half_year_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额半年日均'
+
+      ,stages_bal_year_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额年日均'
+
+      ,stages_bal_roll_month_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额滚动月积数'
+
+      ,stages_bal_roll_quart_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额滚动季积数'
+
+      ,stages_bal_roll_half_year_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额滚动半年积数'
+
+      ,stages_bal_roll_year_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额滚动年积数'
+
+      ,stages_bal_roll_month_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额滚动月日均'
+
+      ,stages_bal_roll_quart_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额滚动季日均'
+
+      ,stages_bal_roll_half_year_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额滚动半年日均'
+
+      ,stages_bal_roll_year_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额滚动年日均'
+
+   
+
+)
+@@BLOCK dwa_c_agt_credit_card_acct_calcu_base_stand | 3@@	CREATE TABLE {CDM}.VT_C_AGT_CREDIT_CARD_ACCT_CALCU_BASE_INIT_STAND_01 (
+
+       acct_no VARCHAR(100)  comment '账号'
+
+      ,today_bal DECIMAl(24,2) comment''
+
+      ,bal_month_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_quart_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_half_year_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_year_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_month_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_quart_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_half_year_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_year_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_roll_month_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_roll_quart_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_roll_half_year_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_roll_year_calcu_base DECIMAl(24,2) comment''
+
+      ,bal_roll_month_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_roll_quart_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_roll_half_year_daily_avg DECIMAl(24,2) comment''
+
+      ,bal_roll_year_daily_avg DECIMAl(24,2) comment''
+
+)
+@@BLOCK dwa_c_agt_credit_card_acct_calcu_base_stand | 5@@	CREATE TABLE {CDM}.VT_C_AGT_CREDIT_CARD_ACCT_CALCU_BASE_INIT_STAND_02 (
+
+       acct_no VARCHAR(100)  comment '账号'
+
+      ,today_over_pay DECIMAl(24,2) comment''
+
+      ,over_pay_month_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_quart_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_half_year_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_year_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_month_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_quart_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_half_year_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_year_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_roll_month_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_roll_quart_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_roll_half_year_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_roll_year_calcu_base DECIMAl(24,2) comment''
+
+      ,over_pay_roll_month_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_roll_quart_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_roll_half_year_daily_avg DECIMAl(24,2) comment''
+
+      ,over_pay_roll_year_daily_avg DECIMAl(24,2) comment''
+
+)
+@@BLOCK dwa_c_agt_credit_card_acct_calcu_base_stand | 7@@	CREATE TABLE {CDM}.VT_C_AGT_CREDIT_CARD_ACCT_CALCU_BASE_INIT_STAND_03 (
+
+       acct_no VARCHAR(100)  comment '账号'	   
+
+      ,today_stages_bal  DECIMAl(24,2)   COMMENT  '当日分期余额'
+
+      ,stages_bal_month_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额月积数'
+
+      ,stages_bal_quart_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额季积数'
+
+      ,stages_bal_half_year_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额半年积数'
+
+      ,stages_bal_year_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额年积数'
+
+      ,stages_bal_month_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额月日均'
+
+      ,stages_bal_quart_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额季日均'
+
+      ,stages_bal_half_year_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额半年日均'
+
+      ,stages_bal_year_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额年日均'
+
+      ,stages_bal_roll_month_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额滚动月积数'
+
+      ,stages_bal_roll_quart_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额滚动季积数'
+
+      ,stages_bal_roll_half_year_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额滚动半年积数'
+
+      ,stages_bal_roll_year_calcu_base  DECIMAl(24,2)   COMMENT  '分期余额滚动年积数'
+
+      ,stages_bal_roll_month_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额滚动月日均'
+
+      ,stages_bal_roll_quart_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额滚动季日均'
+
+      ,stages_bal_roll_half_year_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额滚动半年日均'
+
+      ,stages_bal_roll_year_daily_avg  DECIMAl(24,2)   COMMENT  '分期余额滚动年日均'
+
+   
+
+)
+@@BLOCK dwa_c_agt_deposit_acct_intst | 3@@	CREATE TABLE {CDM}.VT_C_AGT_DEPOSIT_ACCT_INTST_temp_01 
+SELECT  T.LIABI_ACCT_NO       
+       ,T.OPEN_ACCT_ORG_NO   
+       ,T.CURRCY_CD              as CURRCY_CD  
+       ,T2.ACCINT          as ACCINT     
+       ,date'{ETL_TX_DT}'  as DATA_DT    
+  FROM fdm.F_AC_CRBS_DEPOSIT_ACCT T  
+  LEFT JOIN (
+               SELECT  b.LIABI_ACCT_NO 
+                      ,SUM(CASE WHEN b.RECEN_UPDATE_DT > '{ETL_TX_DT}'   
+                                THEN c.ACCRU_INT+c.LAST_DAY_ACCRU_INT 
+                                ELSE b.ACCRU_INT 
+                           end  
+                           ) AS ACCINT
+                 FROM fdm.F_AC_CRBS_ACCT_ACCRU_DEF      b 
+                 left join fdm.F_AC_CRBS_ACCT_ACCRU_DEF c 
+                   ON b.LIABI_ACCT_NO = c.LIABI_ACCT_NO
+                  AND b.INT_CD = c.INT_CD
+                  and c.start_dt <= date'{ETL_TX_DT}'-1 
+                  and c.end_dt>date'{ETL_TX_DT}'-1
+                WHERE b.start_dt <= '{ETL_TX_DT}' and b.end_dt>'{ETL_TX_DT}'
+                  AND ( b.INT_CD='INTERT' OR b.INT_CD ='MATINT' OR b.INT_CD = 'MATINR' )   
+                  AND b.ACCRU_INT_FLAG='1'    
+                GROUP BY b.LIABI_ACCT_NO
+            ) T2
+    ON T.LIABI_ACCT_NO= T2.LIABI_ACCT_NO 
+
+ WHERE (T.ACCT_STS_CD='A'  OR (T.ACCT_STS_CD ='C' and t.ACCT_ACCT_CANCE_DT>='{ETL_TX_DT}'))
+   AND T.start_dt <= '{ETL_TX_DT}' 
+   and T.end_dt>'{ETL_TX_DT}'
+   AND (T.PROD_CD NOT IN ('1021','1022','1027','1028') OR T.DEPOSIT_TERM_CD NOT LIKE '%D')
+@@BLOCK dwa_c_agt_deposit_acct_intst | 5@@	CREATE TABLE {CDM}.VT_C_AGT_DEPOSIT_ACCT_INTST_temp_02 
+SELECT  T.LIABI_ACCT_NO      
+       ,T.OPEN_ACCT_ORG_NO   
+       ,T.CURRCY_CD                   as CURRCY_CD  
+       ,T2.ACCINT               as ACCINT     
+       ,date'{ETL_TX_DT}'-1     as DATA_DT    
+  FROM fdm.F_AC_CRBS_DEPOSIT_ACCT T 
+  LEFT JOIN (
+              SELECT b.LIABI_ACCT_NO 
+                    ,SUM(CASE WHEN b.RECEN_UPDATE_DT > date'{ETL_TX_DT}'-1   
+                              THEN c.ACCRU_INT+c.LAST_DAY_ACCRU_INT 
+                              ELSE b.ACCRU_INT
+                         end  
+                         ) AS ACCINT
+                FROM fdm.F_AC_CRBS_ACCT_ACCRU_DEF      b 
+                left join fdm.F_AC_CRBS_ACCT_ACCRU_DEF c 
+                  ON b.LIABI_ACCT_NO = c.LIABI_ACCT_NO
+                 AND b.INT_CD = c.INT_CD
+                 and c.start_dt <= date'{ETL_TX_DT}'-2 and c.end_dt>date'{ETL_TX_DT}'-2
+               WHERE b.start_dt <= date'{ETL_TX_DT}'-1 and b.end_dt>date'{ETL_TX_DT}'-1
+                 AND ( b.INT_CD='INTERT' OR b.INT_CD ='MATINT' OR b.INT_CD = 'MATINR' )   
+                 AND b.ACCRU_INT_FLAG='1'    
+               GROUP BY b.LIABI_ACCT_NO
+             ) T2
+        ON T.LIABI_ACCT_NO= T2.LIABI_ACCT_NO 
+
+ WHERE (T.ACCT_STS_CD='A'  OR (T.ACCT_STS_CD ='C' and t.ACCT_ACCT_CANCE_DT>=date'{ETL_TX_DT}'-1))
+   AND T.start_dt <= date'{ETL_TX_DT}'-1 
+   and T.end_dt>date'{ETL_TX_DT}'-1
+   AND (T.PROD_CD NOT IN ('1021','1022','1027','1028') OR T.DEPOSIT_TERM_CD NOT LIKE '%D')
+@@BLOCK dwa_c_agt_deposit_acct_intst | 7@@	CREATE TABLE {CDM}.VT_C_AGT_DEPOSIT_ACCT_INTST_temp_03
+SELECT  T.LIABI_ACCT_NO      
+       ,T.OPEN_ACCT_ORG_NO   
+       ,T.CURRCY_CD                   as CURRCY_CD  
+       ,T2.ACCINT               as ACCINT     
+       ,date'{I_LME_DT}'     as DATA_DT    
+  FROM fdm.F_AC_CRBS_DEPOSIT_ACCT T 
+  LEFT JOIN (
+              SELECT b.LIABI_ACCT_NO 
+                    ,SUM(CASE WHEN b.RECEN_UPDATE_DT > date'{I_LME_DT}'   
+                              THEN c.ACCRU_INT+c.LAST_DAY_ACCRU_INT 
+                              ELSE b.ACCRU_INT
+                         end  
+                         ) AS ACCINT
+                FROM fdm.F_AC_CRBS_ACCT_ACCRU_DEF      b 
+                left join fdm.F_AC_CRBS_ACCT_ACCRU_DEF c 
+                  ON b.LIABI_ACCT_NO = c.LIABI_ACCT_NO
+                 AND b.INT_CD = c.INT_CD
+                 and c.start_dt <= date'{I_LME_DT}'-1 and c.end_dt>date'{I_LME_DT}'-1
+               WHERE b.start_dt <= date'{I_LME_DT}' and b.end_dt> date'{I_LME_DT}'
+                 AND ( b.INT_CD='INTERT' OR b.INT_CD ='MATINT' OR b.INT_CD = 'MATINR' )   
+                 AND b.ACCRU_INT_FLAG='1'    
+               GROUP BY b.LIABI_ACCT_NO
+             ) T2
+        ON T.LIABI_ACCT_NO= T2.LIABI_ACCT_NO 
+
+ WHERE (T.ACCT_STS_CD='A'  OR (T.ACCT_STS_CD ='C' and t.ACCT_ACCT_CANCE_DT>=date'{I_LME_DT}'))
+   AND T.start_dt <= date'{I_LME_DT}'
+   and T.end_dt>date'{I_LME_DT}'
+   AND (T.PROD_CD NOT IN ('1021','1022','1027','1028') OR T.DEPOSIT_TERM_CD NOT LIKE '%D')
+@@BLOCK dwa_c_agt_deposit_acct_intst | 9@@	CREATE TABLE  {CDM}.VT_C_AGT_DEPOSIT_ACCT_INTST_temp_04
+select t.DATA_DT,     
+       t.acct_no,    
+       t.OPEN_ACCT_ORG_NO, 
+       t.currcy_cd,  
+       t.today_accru_intst,  
+       nvl(T.ACCINT, 0) - nvl(T3.ACCINT, 0) as thmonth_accru_intst, 
+       t.curr_accru_intst  
+  from (SELECT T1.DATA_DT as DATA_DT,
+               nvl(T1.LIABI_ACCT_NO, T2.LIABI_ACCT_NO) as acct_no,
+               nvl(T1.OPEN_ACCT_ORG_NO, T2.OPEN_ACCT_ORG_NO) AS OPEN_ACCT_ORG_NO,
+               nvl(T1.CURRCY_CD, T2.CURRCY_CD) as currcy_cd,
+               T1.ACCINT,
+               nvl(T1.ACCINT, 0) - nvl(T2.ACCINT, 0) as today_accru_intst,
+               
+               nvl(T1.ACCINT, 0) as curr_accru_intst
+          FROM {CDM}.VT_C_AGT_DEPOSIT_ACCT_INTST_temp_01 T1   
+          FULL JOIN {CDM}.VT_C_AGT_DEPOSIT_ACCT_INTST_temp_02 T2   
+            ON T1.LIABI_ACCT_NO = T2.LIABI_ACCT_NO
+           AND T1.OPEN_ACCT_ORG_NO = T2.OPEN_ACCT_ORG_NO ) t
+  left join {CDM}.VT_C_AGT_DEPOSIT_ACCT_INTST_temp_03 T3  
+    on t.acct_no = T3.LIABI_ACCT_NO
+   AND t.OPEN_ACCT_ORG_NO = T3.OPEN_ACCT_ORG_NO
+@@BLOCK dwa_c_agt_deposit_acct_intst | 11@@	CREATE TABLE  {CDM}.VT_C_AGT_DEPOSIT_ACCT_INTST_temp_05
+ SELECT  date'{ETL_TX_DT}'  as DATA_DT    
+        ,T.OPEN_ACCT_ORG_NO                        
+        ,T.LIABI_ACCT_NO AS acct_no
+        ,T.CURRCY_CD                   as CURRCY_CD  
+        ,T2.today_paid_intst    
+		,T2.thmonth_paid_intst  
+	 FROM fdm.F_AC_CRBS_DEPOSIT_ACCT T 
+     INNER JOIN (
+                   SELECT  LIABI_ACCT_NO
+				          ,acct_currcy_cd
+						  ,SUM(CASE WHEN trade_day_term = '{ETL_TX_DT}'  THEN actual_int_amt 
+                                 ELSE 0   END) AS today_paid_intst   
+                          ,SUM(actual_int_amt) AS thmonth_paid_intst  
+
+         FROM FDM.F_EV_CRBS_DEPOSIT_ACCT_INT_PAY_DTL                   
+        WHERE etl_tx_dt BETWEEN DATE '{I_LME_DT}' AND DATE '{ETL_TX_DT}'+1  
+          AND trade_day_term BETWEEN '{I_MB_DT}' AND '{ETL_TX_DT}'        
+        GROUP BY liabi_acct_no ,acct_currcy_cd
+		       ) T2
+        ON T.LIABI_ACCT_NO = T2.LIABI_ACCT_NO 
+		AND T.CURRCY_CD=T2.acct_currcy_cd
+     WHERE T.start_dt <= '{ETL_TX_DT}' and T.end_dt>'{ETL_TX_DT}'
+@@BLOCK dwa_c_agt_insac_acct_calcu_base | 3@@	CREATE TABLE {CDM}.C_AGT_INSAC_ACCT_CALCU_BASE_TEMP AS
+ SELECT DATE '{ETL_TX_DT}' AS data_dt      
+       ,TAB.insac_polic_serial_no          
+       ,TAB.insac_polic_prem               
+       ,TAB.prem_month_calcu_base          
+       ,TAB.prem_quart_calcu_base          
+       ,TAB.prem_half_year_calcu_base      
+       ,TAB.prem_year_calcu_base           
+       ,TAB.prem_roll_month_calcu_base     
+       ,TAB.prem_roll_quart_calcu_base     
+       ,TAB.prem_roll_half_year_calcu_base 
+       ,TAB.prem_roll_year_calcu_base      
+       ,ROUND(TAB.prem_month_calcu_base /(DATE '{ETL_TX_DT}' - DATE '{I_MB_DT}' + 1) ,2) AS prem_month_daily_avg        
+       ,ROUND(TAB.prem_quart_calcu_base /(DATE '{ETL_TX_DT}' - DATE '{I_QB_DT}' + 1) ,2) AS prem_quart_daily_avg         
+       ,ROUND(TAB.prem_half_year_calcu_base /(DATE '{ETL_TX_DT}' - DATE '{I_HB_DT}' + 1) ,2) AS prem_half_year_daily_avg      
+       ,ROUND(TAB.prem_year_calcu_base  /(DATE '{ETL_TX_DT}' - DATE '{I_YB_DT}' + 1) ,2) AS prem_year_daily_avg       
+       ,ROUND(TAB.prem_roll_month_calcu_base /(DATE('{ETL_TX_DT}') - DATE '{I_MMTTM_DT}' + 1) ,2) AS prem_roll_month_daily_avg     
+       ,ROUND(TAB.prem_roll_quart_calcu_base /(DATE('{ETL_TX_DT}') - DATE '{I_MQTTQ_DT}' + 1) ,2) AS prem_roll_quart_daily_avg     
+       ,ROUND(TAB.prem_roll_half_year_calcu_base /(DATE('{ETL_TX_DT}') - DATE '{I_MATTH_DT}' + 1) ,2) AS prem_roll_half_year_daily_avg  
+       ,ROUND(TAB.prem_roll_year_calcu_base  /(DATE('{ETL_TX_DT}') - DATE '{I_MATTY_DT}' + 1) ,2) AS prem_roll_year_daily_avg      
+FROM (SELECT T01.insac_polic_serial_no             
+            ,SUM(CASE WHEN T01.end_dt > DATE '{ETL_TX_DT}' and DATE '{ETL_TX_DT}' >= '20230306' AND t01.dt_flag = '1' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN T01.insac_polic_prem
+                      WHEN T01.end_dt > DATE '{ETL_TX_DT}' and DATE '{ETL_TX_DT}' < '20230306' AND t01.dt_flag = '2' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN T01.insac_polic_prem    
+                      ELSE 0.00 
+                 END) AS insac_polic_prem           
+            ,SUM(CASE WHEN T01.start_dt < DATE '{I_MB_DT}' AND T01.end_dt_n > DATE '{I_MB_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - DATE '{I_MB_DT}') * T01.insac_polic_prem
+                      WHEN T01.start_dt >= DATE '{I_MB_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')  
+                           THEN (T01.end_dt_n - T01.start_dt) * T01.insac_polic_prem
+                      ELSE 0.00 
+                 END) AS prem_month_calcu_base      
+            ,SUM(CASE WHEN T01.start_dt < DATE '{I_QB_DT}' AND T01.end_dt_n > DATE '{I_QB_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_N - DATE '{I_QB_DT}') * T01.insac_polic_prem
+                      WHEN T01.start_dt >= DATE '{I_QB_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - T01.start_dt) * T01.insac_polic_prem
+                      ELSE 0.00 
+                 END) AS prem_quart_calcu_base      
+            ,SUM(CASE WHEN T01.start_dt < DATE '{I_HB_DT}' AND T01.end_dt_n > DATE '{I_HB_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - DATE '{I_HB_DT}') * T01.insac_polic_prem
+                      WHEN T01.start_dt >= DATE '{I_HB_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - T01.start_dt) * T01.insac_polic_prem
+                      ELSE 0.00 
+                 END)  AS  prem_half_year_calcu_base  
+            ,SUM(CASE WHEN T01.start_dt < DATE '{I_YB_DT}' AND T01.end_dt_n > DATE '{I_YB_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - DATE '{I_YB_DT}') * T01.insac_polic_prem
+                      WHEN T01.start_dt >= DATE '{I_YB_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - T01.start_dt) * T01.insac_polic_prem
+                      ELSE 0.00 
+                 END) AS prem_year_calcu_base       
+            ,SUM(CASE WHEN T01.start_dt < DATE '{I_MMTTM_DT}' AND T01.end_dt_n > DATE '{I_MMTTM_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - DATE '{I_MMTTM_DT}') * T01.insac_polic_prem
+                      WHEN T01.start_dt >= DATE '{I_MMTTM_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - T01.start_dt) * T01.insac_polic_prem
+                      ELSE 0.00 
+                 END) AS prem_roll_month_calcu_base    
+            ,SUM(CASE WHEN T01.start_dt < DATE '{I_MQTTQ_DT}' AND T01.end_dt_n > DATE '{I_MQTTQ_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - DATE '{I_MQTTQ_DT}') * T01.insac_polic_prem
+                      WHEN T01.start_dt >= DATE '{I_MQTTQ_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - T01.start_dt) * T01.insac_polic_prem
+                      ELSE 0.00 
+                 END)  AS  prem_roll_quart_calcu_base    
+            ,SUM(CASE WHEN T01.start_dt < DATE '{I_MATTH_DT}' AND T01.end_dt_n > DATE '{I_MATTH_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - DATE '{I_MATTH_DT}') * T01.insac_polic_prem
+                      WHEN T01.start_dt >= DATE '{I_MATTH_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - T01.start_dt) * T01.insac_polic_prem
+                      ELSE 0.00 
+                 END)  AS  prem_roll_half_year_calcu_base  
+            ,SUM(CASE WHEN T01.start_dt < DATE '{I_MATTY_DT}' AND T01.end_dt_n > DATE '{I_MATTY_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - DATE '{I_MATTY_DT}') * T01.insac_polic_prem
+                      WHEN T01.start_dt >= DATE '{I_MATTY_DT}' AND T01.STS_CD IN ('5','12','21','24','25','26')
+                           THEN (T01.end_dt_n - T01.start_dt) * T01.insac_polic_prem
+                      ELSE 0.00 
+                 END) AS prem_roll_year_calcu_base      
+      FROM (   SELECT T1.key_serial_no AS insac_polic_serial_no 
+                          ,CASE
+                             WHEN T1.start_dt <= DATE '{I_MATTY_DT}' THEN
+                              DATE '{I_MATTY_DT}'
+                             WHEN T1.start_dt > T2.start_dt AND T1.start_dt < T2.end_dt THEN
+                              T1.start_dt
+                             WHEN T1.start_dt <= T2.start_dt AND T1.end_dt > T2.start_dt THEN
+                              T2.start_dt
+                           END AS start_dt
+                          ,CASE
+                             WHEN T1.end_dt < T2.end_dt THEN
+                              T1.end_dt
+                             ELSE
+                              T2.end_dt
+                           END AS END_DT 
+                          ,CASE
+                             WHEN T1.start_dt >= T2.start_dt AND T1.start_dt < T2.end_dt AND
+                                  T1.end_dt >= T2.end_dt AND T2.end_dt <> DATE
+                              '{MAX_DATE}' AND T2.end_dt <= DATE '{ETL_TX_DT}' THEN
+                              T2.end_dt
+                             WHEN T1.start_dt <= T2.start_dt AND T1.end_dt >= T2.end_dt AND
+                                  T1.end_dt = DATE '{MAX_DATE}' AND T2.end_dt <> DATE
+                              '{MAX_DATE}' AND T2.end_dt <= DATE '{ETL_TX_DT}' THEN
+                              T2.end_dt
+                             WHEN T1.start_dt > T2.start_dt AND T1.start_dt < T2.end_dt AND
+                                  T1.end_dt >= T2.end_dt AND T2.end_dt = DATE
+                              '{MAX_DATE}' THEN
+                              DATE '{ETL_TX_DT}' + 1
+                             WHEN T1.end_dt > DATE '{ETL_TX_DT}' THEN
+                              DATE '{ETL_TX_DT}' + 1
+                             ELSE
+                              T1.end_dt
+                           END AS end_dt_n
+                          ,T1.cumul_alre_pay_fees AS insac_polic_prem
+                          ,T2.sts_cd 
+                          ,'1' AS dt_flag
+                       
+                       
+                       
+                       
+                      FROM {FDM}.F_PT_BICS_QUERY_CUST_INF T1 
+                      LEFT JOIN {FDM}.F_CT_BICS_INSAC_POLIC T2 
+                        ON T1.key_serial_no = T2.key_serial_no
+                       AND T2.start_dt <= DATE  '{ETL_TX_DT}'
+                       AND T2.end_dt > '20230306'
+                       AND ((T1.start_dt > T2.start_dt AND T1.start_dt < T2.end_dt) OR
+                           (T1.start_dt <= T2.start_dt AND T1.end_dt >= T2.start_dt))
+                       AND T2.del_flag <> 'D'
+                     INNER JOIN {FDM}.F_CT_BICS_INSAC_POLIC T3 
+                        ON T2.key_serial_no = T3.key_serial_no
+                       AND T3.start_dt <= DATE '{ETL_TX_DT}'
+                       AND T3.end_dt > DATE '{ETL_TX_DT}'
+                       AND T3.del_flag <> 'D'
+                     INNER JOIN {FDM}.F_PT_BICS_QUERY_CUST_INF T4 
+                        ON T1.key_serial_no = T4.key_serial_no
+                       AND T4.start_dt <= DATE '{ETL_TX_DT}'
+                       AND T4.end_dt > DATE '{ETL_TX_DT}'
+                     WHERE T1.end_dt > DATE '{I_MATTY_DT}'
+                       AND T1.start_dt <= DATE '{ETL_TX_DT}'
+                       AND T1.end_dt > '20230306'
+                    UNION ALL
+                    SELECT T2.key_serial_no AS insac_polic_serial_no 
+                          ,T2.start_dt
+                          ,T2.end_dt
+                          ,CASE
+                             WHEN T2.end_dt > DATE '20230305' THEN
+                              DATE '20230306'
+                             ELSE
+                              T2.end_dt
+                           END AS end_dt_n
+                          ,T2.prem AS insac_polic_prem
+                          ,T2.sts_cd
+                          ,'2' AS dt_flag
+                      FROM {FDM}.F_CT_BICS_INSAC_POLIC T2 
+                     INNER JOIN {FDM}.F_CT_BICS_INSAC_POLIC T3 
+                        ON T2.key_serial_no = T3.key_serial_no
+                       AND T3.start_dt <= DATE '{ETL_TX_DT}'
+                       AND T3.end_dt > DATE '{ETL_TX_DT}'
+                       AND T3.del_flag <> 'D'
+                     INNER JOIN {FDM}.F_PT_BICS_QUERY_CUST_INF T4 
+                        ON T2.key_serial_no = T4.key_serial_no
+                       AND T4.start_dt <= DATE '{ETL_TX_DT}'
+                       AND T4.end_dt > DATE '{ETL_TX_DT}'
+                     WHERE T2.end_dt > DATE '{I_MATTY_DT}'
+                       AND T2.start_dt <= DATE '{ETL_TX_DT}'
+                       AND T2.start_dt < DATE '20230306'
+                       AND T2.del_flag <> 'D'
+            ) T01
+           GROUP BY T01.insac_polic_serial_no
+    ) AS  TAB
+@@BLOCK dwa_c_agt_loan_collateral_inf | 3@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_COLLATERAL_INF_01 AS
+
+SELECT guar_contract_no,guar_no,obj_service_num
+
+  FROM (SELECT
+
+	         T1.guar_contract_no          
+
+	        ,T1.guar_no                   
+
+	        ,T1.obj_service_num           
+
+	        ,ROW_NUMBER() OVER(PARTITION BY guar_no ORDER BY obj_service_num ASC) num
+
+	     FROM {FDM}.F_CT_CRMS_LOAN_GUAR_CONTRACT_AND_GUAR_RELA T1
+
+        WHERE T1.obj_type_cd = 'BusinessContract'
+
+	      AND T1.del_flag<>'D'
+
+	      AND T1.start_dt <= '{ETL_TX_DT}'
+
+	      AND T1.end_dt > '{ETL_TX_DT}') T
+
+WHERE T.num=1
+@@BLOCK dwa_c_agt_loan_collateral_inf | 5@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_COLLATERAL_INF_02 AS
+
+SELECT
+
+	 T1.collateral_no          
+
+	,T1.into_list_dt           
+
+	,T1.out_list_dt            
+
+	FROM (
+
+		SELECT
+
+			 T1.collateral_no          
+
+			,T1.into_list_dt           
+
+			,T1.out_list_dt            
+
+			,ROW_NUMBER() OVER(PARTITION BY T1.collateral_no ORDER BY T1.update_dt DESC) rn
+
+		FROM {FDM}.F_EV_CRMS_LOAN_BIZ_GUAR_OUT_INTO_LIST_BOOK T1   
+
+		WHERE T1.etl_tx_dt <= '{ETL_TX_DT}'
+
+	) T1
+
+	WHERE T1.rn = 1
+@@BLOCK dwa_c_agt_loan_guar_contract_inf | 3@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_GUAR_CONTRACT_INF_01 AS
+
+SELECT
+
+	 T1.guar_contract_no
+
+	,SUM(T2.evalu_val) AS evalu_val         
+
+	,SUM(T2.affir_val) AS affir_val         
+
+	FROM {FDM}.F_CT_CRMS_LOAN_GUAR_CONTRACT_AND_GUAR_RELA T1
+
+	LEFT JOIN {FDM}.F_RE_CRMS_LOAN_BIZ_GUAR_INF T2
+
+	  ON T1.guar_no = T2.collateral_no
+
+	 AND T2.del_flag<>'D'
+
+	 AND T2.start_dt <= '{ETL_TX_DT}'
+
+	 AND T2.end_dt > '{ETL_TX_DT}'
+
+	
+
+ WHERE T1.obj_type_cd = 'BusinessContract'
+
+	 AND T1.start_dt <= '{ETL_TX_DT}'
+
+	 AND T1.end_dt > '{ETL_TX_DT}'
+
+	 AND T1.del_flag<>'D'
+
+ GROUP BY T1.guar_contract_no
+@@BLOCK dwa_c_agt_loan_guar_contract_inf | 5@@	create table {CDM}.VT_C_AGT_LOAN_GUAR_CONTRACT_INF_02 as 
+
+select 
+
+	  cust_no            
+
+    , related_cust_no    
+
+    , related_rela_cd	 
+
+	, cust_name          
+
+	, row_number() over(partition by cust_no, related_cust_no order by update_dt desc) rn
+
+from {FDM}.F_PT_CRMS_LOAN_BIZ_CUST_RELATED_RELA
+
+where del_flag <> 'D' and   start_dt<= '{ETL_TX_DT}' and end_dt > '{ETL_TX_DT}' and vld_flag = '1'
+@@BLOCK dwa_c_agt_loan_guar_contract_inf | 7@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_GUAR_CONTRACT_INF_03 AS
+
+SELECT T01.guar_contract_no                        
+
+      ,CAST('BZ' AS VARCHAR(10)) AS GUAR_TYPE     
+
+	  ,T02.cust_no                                
+
+	  ,T02.cust_name                              
+
+	  ,T02.related_rela_cd                        
+
+FROM  {FDM}.F_CT_CRMS_LOAN_BIZ_GUAR_CONTRACT T01 
+
+LEFT JOIN {CDM}.VT_C_AGT_LOAN_GUAR_CONTRACT_INF_02 T02 
+
+       ON T01.cust_no = T02.cust_no AND T01.bonds_cust_no = T02.related_cust_no AND T02.rn = 1
+
+WHERE  T01.guar_contract_no LIKE 'BZ%'
+
+      AND T01.del_flag <> 'D' AND  T01.start_dt<= '{ETL_TX_DT}' AND T01.end_dt > '{ETL_TX_DT}'
+
+UNION ALL 
+
+SELECT T01.guar_contract_no                        
+
+      ,CAST('DY' AS VARCHAR(10)) AS GUAR_TYPE     
+
+	  ,T02.cust_no                                
+
+	  ,T02.cust_name                              
+
+	  ,T02.related_rela_cd                        
+
+FROM  {FDM}.F_CT_CRMS_LOAN_BIZ_GUAR_CONTRACT T01 
+
+LEFT JOIN {CDM}.VT_C_AGT_LOAN_GUAR_CONTRACT_INF_02 T02 
+
+       ON T01.cust_no = T02.cust_no AND T01.bonds_cust_no = T02.related_cust_no AND T02.rn = 1
+
+WHERE  T01.guar_contract_no LIKE 'DY%'               
+
+      AND T01.del_flag <> 'D' AND  T01.start_dt<= '{ETL_TX_DT}' AND T01.end_dt > '{ETL_TX_DT}'
+
+UNION ALL 
+
+SELECT T01.guar_contract_no                        
+
+      ,CAST('ZY' AS VARCHAR(10)) AS GUAR_TYPE     
+
+	  ,T02.cust_no                                
+
+	  ,T02.cust_name                              
+
+	  ,T02.related_rela_cd                        
+
+FROM  {FDM}.F_CT_CRMS_LOAN_BIZ_GUAR_CONTRACT T01 
+
+LEFT JOIN {CDM}.VT_C_AGT_LOAN_GUAR_CONTRACT_INF_02 T02 
+
+       ON T01.cust_no = T02.cust_no AND T01.bonds_cust_no = T02.related_cust_no AND T02.rn = 1
+
+WHERE  T01.guar_contract_no LIKE 'ZY%'               
+
+      AND T01.del_flag <> 'D' AND  T01.start_dt<= '{ETL_TX_DT}' AND T01.end_dt > '{ETL_TX_DT}'
+@@BLOCK dwa_c_agt_loan_rcpt_calcu_base | 3@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_RCPT_CALCU_BASE_01 AS
+
+SELECT
+
+	 T1.loan_loan_rcpt_no   
+
+	,T1.currcy_cd	          
+
+	,T1.nor_principal       
+
+	,T1.overdue_principal   
+
+	,T1.slugg_principal     
+
+	,T1.doubt_acct_principal   
+
+	,T1.p_amtz_int             
+
+	,T1.start_dt
+
+	,T1.end_dt
+
+	,CASE
+
+		WHEN T1.end_dt > DATE '{ETL_TX_DT}'
+
+			THEN DATE '{ETL_TX_DT}' + 1
+
+		ELSE
+
+			T1.end_dt
+
+		END AS end_dt_n        
+
+	,CASE
+
+		WHEN REPLACE(T1.start_dt,'-','') < T1.last_finan_trade_day AND T2.nor_principal IS NOT NULL
+
+			THEN T2.nor_principal  
+
+		ELSE
+
+			T1.nor_principal
+
+		END AS nor_firstdaybal                 
+
+	,CASE
+
+		WHEN REPLACE(T1.start_dt,'-','') < T1.last_finan_trade_day AND T2.overdue_principal IS NOT NULL
+
+			THEN T2.overdue_principal
+
+		ELSE
+
+			T1.overdue_principal
+
+		END AS overdue_firstdaybal                 
+
+	,CASE
+
+		WHEN REPLACE(T1.start_dt,'-','') < T1.last_finan_trade_day AND T2.slugg_principal IS NOT NULL
+
+			THEN T2.slugg_principal
+
+		ELSE
+
+			T1.slugg_principal
+
+		END AS slugg_firstdaybal                 
+
+	,CASE
+
+		WHEN REPLACE(T1.start_dt,'-','') < T1.last_finan_trade_day AND T2.doubt_acct_principal IS NOT NULL
+
+			THEN T2.doubt_acct_principal
+
+		ELSE
+
+			T1.doubt_acct_principal
+
+		END AS doubt_acct_firstdaybal                 
+
+	,CASE
+
+		WHEN REPLACE(T1.start_dt,'-','') < T1.last_finan_trade_day AND T2.p_amtz_int IS NOT NULL
+
+			THEN T2.p_amtz_int
+
+		ELSE
+
+			T1.p_amtz_int
+
+		END AS p_amtz_firstdaybal                 
+
+	,CASE
+
+		WHEN T1.acctg_class_cd in ('1411','1333')
+
+			THEN '1'
+
+		ELSE
+
+			'0'
+
+		END AS trade_flag	                  
+
+		
+
+FROM {FDM}.F_AC_CRBS_LOAN_ACCT T1   
+
+ 
+
+LEFT JOIN {FDM}.F_AC_CRBS_LOAN_ACCT_LAST_DAY_BAL_INF T2 
+
+  ON T2.loan_rcpt_no = T1.loan_loan_rcpt_no
+
+ AND T1.start_dt BETWEEN T2.start_dt AND T2.end_dt-1
+
+ 
+
+WHERE T1.end_dt > DATE '{I_MATTY_DT}'
+
+  AND T1.start_dt <= DATE '{ETL_TX_DT}'
+
+	AND T1.acctg_class_cd <> 'scf1189'
+
+  AND T1.del_flag <> 'D'
+@@BLOCK dwa_c_agt_loan_rcpt_calcu_base | 5@@	CREATE TABLE CDM.VT_C_AGT_LOAN_RCPT_CALCU_BASE_02(
+
+	loan_loan_rcpt_no VARCHAR(100) NOT NULL COMMENT '借据编号',
+
+	amt_type_cd VARCHAR(60) NOT NULL COMMENT '金额类型代码',
+
+	currcy_cd VARCHAR(60) DEFAULT NULL COMMENT '币种代码',
+
+	bal DECIMAL(24,2) DEFAULT NULL COMMENT '余额',
+
+	month_accum DECIMAL(24,2) DEFAULT NULL COMMENT '月积数',
+
+	qua_accum DECIMAL(24,2) DEFAULT NULL COMMENT '季积数',
+
+	hyear_accum DECIMAL(24,2) DEFAULT NULL COMMENT '半年积数',
+
+	year_accum DECIMAL(24,2) DEFAULT NULL COMMENT '年积数',
+
+	rollm_accum DECIMAL(24,2) DEFAULT NULL COMMENT '滚动月积数',
+
+	rollq_accum DECIMAL(24,2) DEFAULT NULL COMMENT '滚动季积数',
+
+	rollh_accum DECIMAL(24,2) DEFAULT NULL COMMENT '滚动半年积数',
+
+	rolly_accum DECIMAL(24,2) DEFAULT NULL COMMENT '滚动年积数',
+
+	data_sourc_tab_name VARCHAR(50) DEFAULT NULL COMMENT '数据来源表名'
+
+) COMMENT '贷款借据积数临时表'
+
+DISTRIBUTED BY ('loan_loan_rcpt_no')
+@@BLOCK dwa_c_agt_loan_rcpt_calcu_base | 13@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_RCPT_CALCU_BASE_03 AS
+
+SELECT
+
+	 T1.loan_rcpt_no as loan_rcpt_no   
+
+	,'156' AS currcy_cd	 
+
+	,T1.tot_bal AS tot_bal        
+
+	,T1.start_dt
+
+	,T1.end_dt
+
+	,CASE
+
+		WHEN T1.end_dt > DATE '{ETL_TX_DT}'
+
+			THEN DATE '{ETL_TX_DT}' + 1
+
+		ELSE
+
+			T1.end_dt
+
+		END AS end_dt_n        
+
+FROM {FDM}.F_AC_CRMS_LOAN_BIZ_LOAN_RCPT  T1
+
+ 
+
+WHERE T1.end_dt > DATE '{I_MATTY_DT}'
+
+  AND T1.start_dt <= DATE '{ETL_TX_DT}'
+
+  AND T1.CONTRACT_NO LIKE 'FC%'
+
+  AND T1.acctg_subj_no='1189'
+@@BLOCK dwa_C_AGT_LOAN_RCPT_INTST | 3@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_RCPT_INTST_temp_01 AS
+
+SELECT  distinct 
+
+	 T1.loan_rcpt_no
+
+	,T1.currcy_cd
+
+	,T1.acctg_class_cd
+
+	,T1.curr_recvbl_intst		        
+
+	,T1.curr_recvbl_intst - T1.last_day_recvbl_intst AS today_recvbl_intst   
+
+	,T1.curr_recvbl_intst - T1.last_month_recvbl_intst AS thmonth_recvbl_intst   
+
+FROM (
+
+	SELECT
+
+		 T.loan_loan_rcpt_no AS loan_rcpt_no
+
+		,T.currcy_cd
+
+		,T.ACCTG_CLASS_CD   
+
+		,SUM(
+
+		 CASE
+
+		 	WHEN '{ETL_TX_DT}' BETWEEN T.start_dt AND T.end_dt - 1
+
+		 		THEN NVL(T.recvbl_penal_int,0)+ NVL(T.recvbl_discnt_int,0) + NVL(T.recvbl_overdue_int,0)
+
+		 	ELSE
+
+		 		0
+
+		 END ) AS curr_recvbl_intst		        
+
+		,SUM(
+
+		 CASE
+
+		 	WHEN '{I_LAST_DT}' BETWEEN T.start_dt AND T.end_dt - 1
+
+		 		THEN NVL(T.recvbl_penal_int,0)+ NVL(T.recvbl_discnt_int,0) + NVL(T.recvbl_overdue_int,0)
+
+		 	ELSE
+
+		 		0
+
+		 END ) AS last_day_recvbl_intst	      
+
+		,SUM(
+
+		 CASE
+
+		 	WHEN '{I_LME_DT}' BETWEEN T.start_dt AND T.end_dt - 1
+
+		 		THEN NVL(T.recvbl_penal_int,0)+ NVL(T.recvbl_discnt_int,0) + NVL(T.recvbl_overdue_int,0)
+
+		 	ELSE
+
+		 		0
+
+		 END ) AS last_month_recvbl_intst	      
+
+	  FROM {FDM}.F_AC_CRBS_LOAN_ACCT T  
+
+	
+
+	 WHERE T.start_dt <= '{ETL_TX_DT}'
+
+	   AND T.end_dt > '{I_LME_DT}'
+
+	   AND T.del_flag <> 'D'
+
+	 GROUP BY T.loan_loan_rcpt_no,T.currcy_cd,T.ACCTG_CLASS_CD
+
+)T1
+
+
+
+LEFT JOIN (
+
+           SELECT DISTINCT PROD_CLASS_CD1,BIZ_CD_RULE 
+
+           FROM {FDM}.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ   
+
+           WHERE PROD_FEATU_CD = 'LIXISR'
+
+             AND PROD_EVENT_MODE_CD = 'ADD'
+
+             AND date '{ETL_TX_DT}' BETWEEN START_DT AND END_DT -1
+
+           ) T4
+
+ON T1.ACCTG_CLASS_CD = T4.PROD_CLASS_CD1
+
+LEFT JOIN {FDM}.F_CO_CRBS_BIZ_CD T5     
+
+ON T4.BIZ_CD_RULE = T5.BIZ_CD
+
+AND date '{ETL_TX_DT}' BETWEEN T5.START_DT AND T5.END_DT -1
+
+
+
+where T5.SUBJ_NO<>'61011205'
+@@BLOCK dwa_C_AGT_LOAN_RCPT_INTST | 5@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_RCPT_INTST_temp_02 AS
+
+SELECT
+
+	 T1.loan_rcpt_no
+
+	,T1.curr_accru_intst		        
+
+	,T1.acctg_class_cd
+
+	,T1.curr_accru_intst - T1.last_day_accru_intst AS today_accru_intst   
+
+	,T1.curr_accru_intst - T1.last_month_accru_intst AS thmonth_accru_intst   
+
+FROM (
+
+	SELECT
+
+		 T.loan_loan_rcpt_no AS loan_rcpt_no
+
+		,T.ACCTG_CLASS_CD   
+
+		,SUM(
+
+		 CASE
+
+		 	WHEN '{ETL_TX_DT}' BETWEEN T.start_dt AND T.end_dt - 1
+
+		 		THEN nvl(T.RECVBL_ACCRU_INT,0) + nvl(T.RECVBL_ACCRU_PENAL_INT,0) + nvl(T.ACCRU_DISCNT_INT,0)
+
+		 	ELSE
+
+		 		0
+
+		 END ) AS curr_accru_intst		        
+
+		,SUM(
+
+		 CASE
+
+		 	WHEN '{I_LAST_DT}' BETWEEN T.start_dt AND T.end_dt - 1
+
+		 		THEN nvl(T.RECVBL_ACCRU_INT,0) + nvl(T.RECVBL_ACCRU_PENAL_INT,0) + nvl(T.ACCRU_DISCNT_INT,0)
+
+		 	ELSE
+
+		 		0
+
+		 END ) AS last_day_accru_intst	      
+
+		,SUM(
+
+		 CASE
+
+		 	WHEN '{I_LME_DT}' BETWEEN T.start_dt AND T.end_dt - 1
+
+		 		THEN NVL(T.recvbl_accru_int,0) + NVL(T.recvbl_accru_penal_int,0) + NVL(T.accru_discnt_int,0)
+
+		 	ELSE
+
+		 		0
+
+		 END ) AS last_month_accru_intst	      
+
+	  FROM {FDM}.F_AC_CRBS_LOAN_ACCT T  
+
+	
+
+	 WHERE T.start_dt <= '{ETL_TX_DT}'
+
+	   AND T.end_dt > '{I_LME_DT}'
+
+	   AND T.del_flag <> 'D'
+
+	 GROUP BY T.loan_loan_rcpt_no,T.ACCTG_CLASS_CD
+
+)T1
+
+
+
+LEFT JOIN (
+
+           SELECT DISTINCT PROD_CLASS_CD1,BIZ_CD_RULE 
+
+           FROM {FDM}.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ   
+
+           WHERE PROD_FEATU_CD = 'LIXISR'
+
+             AND PROD_EVENT_MODE_CD = 'ADD'
+
+             AND date '{ETL_TX_DT}' BETWEEN START_DT AND END_DT -1
+
+           ) T4
+
+ON T1.ACCTG_CLASS_CD = T4.PROD_CLASS_CD1
+
+LEFT JOIN {FDM}.F_CO_CRBS_BIZ_CD T5     
+
+ON T4.BIZ_CD_RULE = T5.BIZ_CD
+
+AND date '{ETL_TX_DT}' BETWEEN T5.START_DT AND T5.END_DT -1
+
+
+
+where T5.SUBJ_NO<>'61011205'
+@@BLOCK dwa_C_AGT_LOAN_RCPT_INTST | 7@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_RCPT_INTST_temp_03 AS
+
+SELECT
+
+	 T1.loan_loan_rcpt_no AS loan_rcpt_no
+
+	,SUM(case when T1.ETL_TX_DT = '{ETL_TX_DT}' then (case when date '{ETL_TX_DT}'  ='20230101' and LOAN_LOAN_RCPT_NO ='DK19092500013100001' then -24930461.95
+
+     when date '{ETL_TX_DT}'  ='20230101' and LOAN_LOAN_RCPT_NO in ('DK21031700008400003','DK21031700008400002') then -44095894.76/2
+
+     when date '{ETL_TX_DT}'  ='20230101' and LOAN_LOAN_RCPT_NO in ('DK20022100001400002') then -16667846.68
+
+     when date '{ETL_TX_DT}'  ='20230101' and LOAN_LOAN_RCPT_NO in ('DK19092500014900002') then -42623519.56
+
+     when date '{ETL_TX_DT}'  ='20230101' and LOAN_LOAN_RCPT_NO in ('DK12062800008300003','DK19122600029300005','DK18010500009000001','DK12062800008300001','DK19122600029300003','612101105R01753J004','DK18010500009000004','DK21031700013200002','DK19092700025700001','DK18010500009000002','DK17061200010800001','DK20071600002200002','DK19122600029300004','DK12062800008300002','DK19011000005300002','DK18010500009000005','DK18010500009000003') then -27822363.55/17
+
+     else 
+
+     DECODE(BAL_FIELD,'LIXISR',TXN_AMT,(DECODE(TXN_DIRECTION_CD, '1', TXN_AMT, TXN_AMT * -1))) END ) else 0.00  end  ) AS  today_rcvd_intst   
+
+			  
+
+	,SUM(case when date '{ETL_TX_DT}'  ='20230101' and LOAN_LOAN_RCPT_NO ='DK19092500013100001' then -24930461.95
+
+     when date '{ETL_TX_DT}'  ='20230101' and LOAN_LOAN_RCPT_NO in ('DK21031700008400003','DK21031700008400002') then -44095894.76/2
+
+     when date '{ETL_TX_DT}'  ='20230101' and LOAN_LOAN_RCPT_NO in ('DK20022100001400002') then -16667846.68
+
+     when date '{ETL_TX_DT}'  ='20230101' and LOAN_LOAN_RCPT_NO in ('DK19092500014900002') then -42623519.56
+
+     when date '{ETL_TX_DT}'  ='20230101' and LOAN_LOAN_RCPT_NO in ('DK12062800008300003','DK19122600029300005','DK18010500009000001','DK12062800008300001','DK19122600029300003','612101105R01753J004','DK18010500009000004','DK21031700013200002','DK19092700025700001','DK18010500009000002','DK17061200010800001','DK20071600002200002','DK19122600029300004','DK12062800008300002','DK19011000005300002','DK18010500009000005','DK18010500009000003') then -27822363.55/17
+
+     else 
+
+     DECODE(BAL_FIELD,'LIXISR',TXN_AMT,(DECODE(TXN_DIRECTION_CD, '1', TXN_AMT, TXN_AMT * -1))) END )   AS thmonth_rcvd_intst	   
+
+
+
+	
+
+ FROM {FDM}.F_EV_CRBS_LOAN_ACCT_TXN_DTL   T1  
+
+ 
+
+
+
+ WHERE    T1.ETL_TX_DT <= '{ETL_TX_DT}' 
+
+  AND T1.ETL_TX_DT >= '{I_MB_DT}'  
+
+         AND ((BAL_FIELD = 'LIXISR' AND TXN_AMT > 0 and TXN_EVENT <> 'LN_JGBG' )
+
+         OR (BAL_FIELD = 'LIXISR' AND TXN_AMT < 0 and  REV_FLAG IN ('1','2') and TXN_EVENT <> 'LN_JGBG' )
+
+         OR (BAL_FIELD IN ('YSYJLX','YSYJFX','YINJTX','YINSQX','YINSFX','YINSTX') and TXN_EVENT not in ('LN_YJZF','LN_FYZY','LN_JGBG')))
+
+
+
+ GROUP BY LOAN_LOAN_RCPT_NO
+@@BLOCK dwa_c_agt_loan_rcpt_subj_rela_h | 4@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_RCPT_SUBJ_RELA_H_01 AS
+
+SELECT
+
+	 DISTINCT
+
+	 biz_cd_rule      
+
+	,prod_class_cd1   
+
+	,prod_featu_cd    
+
+ FROM {FDM}.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ T1
+
+WHERE T1.start_dt <= DATE '{ETL_TX_DT}'
+
+  AND T1.end_dt > DATE '{ETL_TX_DT}'
+
+  AND T1.prod_featu_cd in ('ZHCHBJ','YUQIBJ','DZHIBJ','DAIZBJ')  
+
+  AND T1.belo_modl_cd = 'LN'  
+
+  AND T1.record_sts_cd = '0'
+@@BLOCK dwa_c_agt_loan_rcpt_subj_rela_h | 6@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_RCPT_SUBJ_RELA_H_02(
+
+	loan_rcpt_no VARCHAR(100) NOT NULL COMMENT '借据编号',
+
+	rela_category_cd VARCHAR(60) NOT NULL COMMENT '关系种类代码',
+
+	core_subj_no VARCHAR(100) DEFAULT NULL COMMENT '核心科目号',
+
+	gl_subj_no VARCHAR(100) DEFAULT NULL COMMENT '总账科目号',
+
+	biz_cd VARCHAR(100) DEFAULT NULL COMMENT '业务代号',
+
+	del_flag VARCHAR(10) DEFAULT NULL COMMENT '删除标志',
+
+	data_sourc_tab_name VARCHAR(50) DEFAULT NULL COMMENT '数据来源表名'
+
+) COMMENT '贷款借据科目关系临时表'
+
+DISTRIBUTED BY ('LOAN_RCPT_NO')
+@@BLOCK dwa_c_agt_loan_rcpt_subj_rela_h | 13@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_RCPT_SUBJ_RELA_H_03 AS
+
+SELECT
+
+	 loan_rcpt_no     	
+
+	,rela_category_cd	     	
+
+	,core_subj_no	     	
+
+	,gl_subj_no	     	
+
+	,biz_cd	     	
+
+	,del_flag	     	
+
+	,data_sourc_tab_name	     	
+
+	FROM (
+
+		SELECT
+
+			 loan_rcpt_no     	
+
+			,rela_category_cd	     	
+
+			,core_subj_no	     	
+
+			,gl_subj_no	     	
+
+			,biz_cd	     	
+
+			,del_flag	     	
+
+			,data_sourc_tab_name	     	
+
+		FROM {CDM}.VT_C_AGT_LOAN_RCPT_SUBJ_RELA_H_02 T1
+
+		EXCEPT ALL
+
+		SELECT
+
+			 loan_rcpt_no     	
+
+			,rela_category_cd	     	
+
+			,core_subj_no	     	
+
+			,gl_subj_no	     	
+
+			,biz_cd	     	
+
+			,del_flag	     	
+
+			,data_sourc_tab_name	     	
+
+		FROM {CDM}.C_AGT_LOAN_RCPT_SUBJ_RELA_H T1
+
+		WHERE T1.end_dt = DATE '{MAX_DATE}'
+
+		) T1
+@@BLOCK dwa_c_agt_loan_rcpt_subj_rela_h_init | 3@@	CREATE TABLE {CDM}.VT_C_AGT_LOAN_RCPT_SUBJ_RELA_H_01 AS
+SELECT
+	 DISTINCT
+	 biz_cd_rule      
+	,prod_class_cd1   
+	,prod_featu_cd    
+	,start_dt
+	,end_dt
+ FROM {FDM}.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ T1
+WHERE T1.prod_featu_cd in ('ZHCHBJ','YUQIBJ','DZHIBJ','DAIZBJ')  
+  AND T1.belo_modl_cd = 'LN'  
+  AND T1.record_sts_cd = '0'  
+  AND T1.end_dt > DATE '{I_MATTY_DT}'
+@@BLOCK dwa_c_cus_folk_debit_credit_pub_cust_invlv_inf | 7@@	CREATE TABLE {CDM}.VT_C_CUS_FOLK_DEBIT_CREDIT_PUB_CUST_INVLV_INF_02 AS
+
+SELECT 
+
+	  RGST.unifi_credit_cd AS unifi_credit_cd
+
+	  ,CAS.lawsu_type
+
+	  ,CAS.judc_lawsu_record_id
+
+      ,CAS.party_id
+
+      ,CAS.party_name
+
+      ,CAS.party_ident
+
+      ,CAS.party_role_type_cd
+
+      ,CAS.party_role_type_name
+
+	  ,CAS.party_type_cd
+
+	  ,CAS.case_no
+
+      ,CAS.case_cause
+
+      ,CAS.case_type_cd
+
+      ,CAS.case_type_name
+
+      ,CAS.court_name
+
+      ,CAS.publish_dt
+
+      ,CAS.title
+
+      ,CAS.case_gover_area
+
+      ,CAS.case_proce_dt
+
+      ,CAS.create_tm
+
+      ,CAS.update_tm
+
+ FROM {CDM}.VT_C_CUS_FOLK_DEBIT_CREDIT_PUB_CUST_INVLV_INF_01 CAS 
+
+INNER JOIN 
+
+     (
+
+      
+
+      SELECT num_libra_no,unifi_credit_cd
+
+	    FROM {FDM}.F_EX_CHSC_INDUS_AND_COMME_RGST_INF CR
+
+       WHERE DATE '{ETL_TX_DT}' >= CR.start_dt AND DATE '{ETL_TX_DT}' <  CR.end_dt 
+
+         AND NVL(CR.record_ind_cd,'') <> 'D' 
+
+		 AND NVL(CR.unifi_credit_cd,'')<>'' 
+
+     )RGST ON CAS.party_id = RGST.num_libra_no
+
+  WHERE NVL(CAS.party_id,'') <>''
+@@BLOCK dwa_c_cus_folk_debit_credit_pub_cust_invlv_inf | 9@@	CREATE TABLE {CDM}.VT_C_CUS_FOLK_DEBIT_CREDIT_PUB_CUST_INVLV_INF_03 AS 
+
+SELECT CUST.cust_no  AS cust_no
+
+      ,CUST.core_cust_no as core_cust_no
+
+	  ,CAS.unifi_credit_cd
+
+	  ,CAS.lawsu_type
+
+	  ,CAS.judc_lawsu_record_id
+
+      ,CAS.party_id
+
+      ,CAS.party_name
+
+      ,CAS.party_ident
+
+      ,CAS.party_role_type_cd
+
+      ,CAS.party_role_type_name
+
+	  ,CAS.party_type_cd     
+
+	  ,CAS.case_no
+
+      ,CAS.case_cause
+
+      ,CAS.case_type_cd
+
+      ,CAS.case_type_name
+
+      ,CAS.court_name
+
+      ,CAS.publish_dt
+
+      ,CAS.title
+
+      ,CAS.case_gover_area
+
+      ,CAS.case_proce_dt
+
+      ,CAS.create_tm
+
+      ,CAS.update_tm
+
+ FROM {CDM}.VT_C_CUS_FOLK_DEBIT_CREDIT_PUB_CUST_INVLV_INF_02 CAS 
+
+INNER JOIN {FDM}.F_PT_CRMS_LOAN_BIZ_BIZCUST_INF CUST 
+
+   ON CAS.unifi_credit_cd = CUST.uscc_cd
+
+  AND DATE '{ETL_TX_DT}' >= CUST.start_dt AND DATE '{ETL_TX_DT}' <  CUST.end_dt
+
+  AND NVL(CUST.uscc_cd,'')<>''
+@@BLOCK dwa_c_cus_folk_debit_credit_pub_cust_invlv_inf | 11@@	CREATE TABLE {CDM}.VT_C_CUS_FOLK_DEBIT_CREDIT_PUB_CUST_INVLV_INF_04 AS 
+
+SELECT CUST1.cust_no AS cust_no
+
+      ,CUST1.core_cust_no as core_cust_no
+
+	  ,CAS.unifi_credit_cd
+
+	  ,CAS.lawsu_type
+
+	  ,CAS.judc_lawsu_record_id
+
+      ,CAS.party_id
+
+      ,CAS.party_name
+
+      ,CAS.party_ident
+
+      ,CAS.party_role_type_cd
+
+      ,CAS.party_role_type_name
+
+	  ,CAS.party_type_cd   
+
+	  ,CAS.case_no
+
+      ,CAS.case_cause
+
+      ,CAS.case_type_cd
+
+      ,CAS.case_type_name
+
+      ,CAS.court_name
+
+      ,CAS.publish_dt
+
+      ,CAS.title
+
+      ,CAS.case_gover_area
+
+      ,CAS.case_proce_dt
+
+      ,CAS.create_tm
+
+      ,CAS.update_tm
+
+ FROM {CDM}.VT_C_CUS_FOLK_DEBIT_CREDIT_PUB_CUST_INVLV_INF_02 CAS 
+
+ INNER JOIN {FDM}.F_PT_CRMS_LOAN_BIZ_BIZCUST_INF CUST1 
+
+    ON REPLACE(REPLACE(REPLACE(REPLACE(CAS.party_name,'（',''),'）',''),'(',''),')','') = REPLACE(REPLACE(REPLACE(REPLACE(CUST1.ent_name,'（',''),'）',''),'(',''),')','')
+
+   AND DATE '{ETL_TX_DT}' >= cust1.start_dt AND DATE '{ETL_TX_DT}' <  CUST1.end_dt
+
+   AND NVL(CUST1.ent_name,'')<>''
+
+  LEFT JOIN (SELECT cust_no FROM  {CDM}.VT_C_CUS_FOLK_DEBIT_CREDIT_PUB_CUST_INVLV_INF_03 GROUP BY 1 ) TMP
+
+    ON CUST1.cust_no = TMP.cust_no 
+
+ WHERE TMP.cust_no IS NULL
+@@BLOCK dwa_c_cus_import_tag_flag_ind_l | 5@@	CREATE TABLE {CDM}.VT_C_CUS_IMPORT_TAG_FLAG_IND_L_02 DISTRIBUTED BY ( 'CUST_NO') AS
+   SELECT cust_no,
+       MAX(cloud_pay_flag) AS cloud_pay_flag 
+  FROM {CDM}.VT_C_CUS_IMPORT_TAG_FLAG_IND_L_01
+ GROUP BY cust_no
+@@BLOCK dwa_c_cus_pri_cust_basic_inf | 12@@	CREATE TABLE IF NOT EXISTS {CDM}.VT_C_CUS_PRI_CUST_BASIC_INF_TMP (
+  "data_dt" date NOT NULL COMMENT '数据日期',
+  "unifi_cust_no" varchar(100) NOT NULL COMMENT '统一客户编号',
+  "cust_cn_name" varchar(100) DEFAULT NULL COMMENT '客户中文名称',
+  "cust_en_name" varchar(100) DEFAULT NULL COMMENT '客户英文名称',
+  "cust_cn_pinyi_name" varchar(100) DEFAULT NULL COMMENT '客户中文拼音名称',
+  "cust_simp_spel" varchar(100) DEFAULT NULL COMMENT '客户简拼',
+  "used_name" varchar(100) DEFAULT NULL COMMENT '曾用名称',
+  "iden_type_cd" varchar(100) DEFAULT NULL COMMENT '证件类型代码',
+  "iden_no" varchar(100) DEFAULT NULL COMMENT '证件号码',
+  "dom_resdnt_flag" varchar(100) DEFAULT NULL COMMENT '境内居民标志',
+  "contact_phone_no" varchar(100) DEFAULT NULL COMMENT '联系电话',
+  "el_email" varchar(100) DEFAULT NULL COMMENT '电子邮箱',
+  "edu_degree_cd" varchar(100) DEFAULT NULL COMMENT '学历代码',
+  "academic_degree_cd" varchar(100) DEFAULT NULL COMMENT '学位代码',
+  "marri_sts_cd" varchar(100) DEFAULT NULL COMMENT '婚姻状况代码',
+  "health_sts_cd" varchar(100) DEFAULT NULL COMMENT '健康状态代码',
+  "cust_sts_cd" varchar(100) DEFAULT NULL COMMENT '客户状态代码',
+  "cy_cd" varchar(100) DEFAULT NULL COMMENT '国家代码',
+  "birth_dt" varchar(100) DEFAULT NULL COMMENT '出生日期',
+  "age" int(11) DEFAULT NULL COMMENT '年龄',
+  "fst_open_acct_dt" date DEFAULT NULL COMMENT '首次开户日期',
+  "gender_cd" varchar(100) DEFAULT NULL COMMENT '性别代码',
+  "work_unit_name" varchar(100) DEFAULT NULL COMMENT '工作单位名称',
+  "unit_economy_nature_cd" varchar(100) DEFAULT NULL COMMENT '单位经济性质代码',
+  "unit_belo_indus_category_cd" varchar(100) DEFAULT NULL COMMENT '单位所属行业种类代码',
+  "work_unit_addr" varchar(500) DEFAULT NULL COMMENT '工作单位地址',
+  "work_unit_contact_phone_no" varchar(100) DEFAULT NULL COMMENT '工作单位联系电话',
+  "work_unit_email" varchar(100) DEFAULT NULL COMMENT '工作单位邮箱',
+  "monthly_income_tot_amt" varchar(100) DEFAULT NULL COMMENT '月收入总金额',
+  "pri_year_income" decimal(24,2) DEFAULT NULL COMMENT '个人年收入',
+  "family_month_avg_income" decimal(24,2) DEFAULT NULL COMMENT '家庭月均收入',
+  "ethnic_cd" varchar(100) DEFAULT NULL COMMENT '民族代码',
+  "postn_cd" varchar(100) DEFAULT NULL COMMENT '职务代码',
+  "ocup_cd" varchar(100) DEFAULT NULL COMMENT '职业代码',
+  "tech_tech_title_cd" varchar(100) DEFAULT NULL COMMENT '技术职称代码',
+  "child_situ_cd" varchar(100) DEFAULT NULL COMMENT '子女情况代码',
+  "open_acct_dt" varchar(100) DEFAULT NULL COMMENT '开户日期',
+  "open_acct_org_no" varchar(100) DEFAULT NULL COMMENT '开户机构号',
+  "city_cd" varchar(100) DEFAULT NULL COMMENT '城市代码',
+  "admin_regio_scope_cd" varchar(100) DEFAULT NULL COMMENT '行政区域代码',
+  "admin_regio_scope_name" varchar(100) DEFAULT NULL COMMENT '行政区域名称',
+  "pri_cust_subclass_cd" varchar(100) DEFAULT NULL COMMENT '个人客户细类代码',
+  "farmer_flag" varchar(100) DEFAULT NULL COMMENT '农户标志',
+  "mybank_black_flag" varchar(100) DEFAULT NULL COMMENT '本行黑名单标志',
+  "black_dt" varchar(100) DEFAULT NULL COMMENT '黑名单日期',
+  "black_reason" varchar(100) DEFAULT NULL COMMENT '黑名单原因',
+  "operational_cust_type_cd" varchar(100) DEFAULT NULL COMMENT '经营性客户类型代码',
+  "fst_issued_limit" varchar(100) DEFAULT NULL COMMENT '首次发卡额度',
+  "ratify_tot_credit_limit" varchar(100) DEFAULT NULL COMMENT '核定总授信额度',
+  "had_credit_card_card_bank_num" varchar(100) DEFAULT NULL COMMENT '已有信用卡发卡银行数',
+  "had_oth_credit_amt" varchar(100) DEFAULT NULL COMMENT '已有他行授信金额',
+  "appl_chan" varchar(100) DEFAULT NULL COMMENT '申请渠道',
+  "whe_video_intiv_activa_flag" varchar(100) DEFAULT NULL COMMENT '视频面签激活标志',
+  "belo_to_dept" varchar(100) DEFAULT NULL COMMENT '归属部门',
+  "data_sourc" varchar(100) DEFAULT NULL COMMENT '数据来源',
+  "mybank_emp_flag" varchar(100) DEFAULT NULL COMMENT '本行员工标志',
+  "emp_no" varchar(100) DEFAULT NULL COMMENT '员工号',
+  "post_no" varchar(100) DEFAULT NULL COMMENT '岗位编号',
+  "perm_addr" varchar(500) DEFAULT NULL COMMENT '常住地址',
+  "iden_rgst_addr" varchar(500) DEFAULT NULL COMMENT '证件登记地址'
+) DISTRIBUTED BY('unifi_cust_no') DEFAULT CHARSET=utf8
+@@BLOCK dwa_c_cus_pub_cust_basic_inf | 14@@	CREATE TABLE {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_ECIF  DISTRIBUTED BY('UNIFI_CUST_NO') as  (SELECT * FROM {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF LIMIT 0)
+@@BLOCK dwa_c_cus_pub_cust_basic_inf | 15@@	CREATE TABLE {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_CRBS  DISTRIBUTED BY('UNIFI_CUST_NO') as  (SELECT * FROM {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF LIMIT 0)
+@@BLOCK dwa_c_cus_pub_cust_basic_inf | 16@@	CREATE TABLE {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_CRMS  DISTRIBUTED BY('UNIFI_CUST_NO') as  (SELECT * FROM {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF LIMIT 0)
+@@BLOCK dwa_c_cus_pub_cust_basic_inf | 17@@	CREATE TABLE {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_NBMS  DISTRIBUTED BY('UNIFI_CUST_NO') as  (SELECT * FROM {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF LIMIT 0)
+@@BLOCK dwa_c_cus_pub_cust_basic_inf | 18@@	CREATE TABLE {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_SILN  DISTRIBUTED BY('UNIFI_CUST_NO') as  (SELECT * FROM {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF LIMIT 0)
+@@BLOCK dwa_c_cus_pub_cust_basic_inf | 19@@	CREATE TABLE {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_FNDS_BB  DISTRIBUTED BY('UNIFI_CUST_NO') as  (SELECT * FROM {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF LIMIT 0)
+@@BLOCK dwa_c_cus_pub_cust_basic_inf | 20@@	CREATE TABLE {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_FNDS_WB  DISTRIBUTED BY('UNIFI_CUST_NO') as  (SELECT * FROM {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF LIMIT 0)
+@@BLOCK dwa_c_cus_pub_cust_basic_inf | 21@@	CREATE TABLE {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_SFLN  DISTRIBUTED BY('UNIFI_CUST_NO') as  (SELECT * FROM {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF LIMIT 0)
+@@BLOCK dwa_c_cus_pub_cust_basic_inf | 22@@	CREATE TABLE {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_SCLN  DISTRIBUTED BY('UNIFI_CUST_NO')  AS (SELECT *  FROM  {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF LIMIT 0)
+@@BLOCK dwa_c_cus_pub_cust_basic_inf | 23@@	CREATE TABLE {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_SCLN_ZZ  DISTRIBUTED BY('UNIFI_CUST_NO')  AS (SELECT *  FROM  {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF LIMIT 0)
+@@BLOCK dwa_c_cus_UNIFI_CUST_INF_PUB | 3@@	CREATE TABLE {CDM}.VT_C_CUS_UNIFI_CUST_INF_PUB_UPDB AS
+SELECT  REPLACE(T1.cust_name,' ','')||TRIM(T1.cust_iden_no)  AS core_cust_no               
+       ,T1.cust_no                                           AS cust_no                    
+       ,TRIM(T1.cust_name)                                   AS cust_name                  
+       ,TRIM(T1.cust_iden_no)                                AS iden_no                    
+       ,T1.iden_type_cd                                      AS iden_type_cd               
+	   ,'UPDB'                                               AS data_sourc                 
+	   ,'0092'                                               AS create_org                 
+       ,''                                                   AS create_person              
+	   ,DATE '{NULL_DATE}'                                   AS create_date                
+       ,T1.start_dt                                          AS last_update_tm             
+       ,ROW_NUMBER() OVER(PARTITION BY REPLACE(T1.cust_name,' ','')||TRIM(T1.cust_iden_no) ORDER BY TO_CHAR(T1.start_dt ,'YYYYMMDD') DESC )    AS RN  	   
+  FROM {FDM}.F_PT_UPDB_CUST_INF T1                
+ WHERE T1.start_dt <= '{ETL_TX_DT}'
+   AND T1.end_dt   >  '{ETL_TX_DT}'
+   AND T1.del_flag <> 'D'
+   AND T1.iden_type_cd <> '10100'
+@@BLOCK dwa_pid_a_d_ag_agent_pay_cus_inf | 3@@	CREATE TABLE {PID}.A_D_AG_AGENT_PAY_CUS_INF_{ETL_TX_DT}
+
+as
+
+select
+
+date('{ETL_TX_DT}')   AS DATA_DT,     
+
+ORG_NO                     AS ORG_NO,      
+
+CUST_NO                    AS CUST_NO,     
+
+SUM(nvl(DEP_BAL,0))        AS DEP_BAL,     
+
+SUM(nvl(DEP_AVG,0))        AS DEP_AVG,     
+
+SUM(nvl(LN_BAL,0))         AS LN_BAL,      
+
+SUM(nvl(LN_AVG,0))         AS LN_AVG,      
+
+MAX(nvl(BAD_LN,0))         AS BAD_LN,      
+
+SUM(nvl(BAD_LN_BAL,0))     AS BAD_LN_BAL,  
+
+SUM(nvl(DEP_PROFIT,0))     AS DEP_PROFIT,  
+
+SUM(nvl(LN_PROFIT,0))      AS LN_PROFIT,   
+
+SUM(nvl(MID_PROFIT,0))     AS MID_PROFIT   
+
+from
+
+(
+
+SELECT
+
+   ORG_NO
+
+   ,CUST_NO
+
+   ,SUM(BAL)              AS DEP_BAL
+
+   ,SUM(YEAR_DAILY_AVG)   AS DEP_AVG
+
+   ,0                     AS LN_BAL
+
+   ,0                     AS LN_AVG
+
+   ,'0'                   AS BAD_LN
+
+   ,0                     AS BAD_LN_BAL
+
+   ,SUM(ASSES_PRFT)       AS DEP_PROFIT
+
+   ,0                     AS LN_PROFIT
+
+   ,0                     AS MID_PROFIT
+
+FROM PID.A_D_DP_DEPOSIT_ORG_DTL_QUERY
+
+WHERE DATA_DT =date('{ETL_TX_DT}')
+
+and (BAL <> 0 or YEAR_DAILY_AVG <> 0 or ASSES_PRFT <> 0)
+
+GROUP BY ORG_NO,CUST_NO
+
+
+
+union all
+
+
+
+SELECT
+
+    T.ORG_NO
+
+    ,T.CUST_NO
+
+    ,0                          AS DEP_BAL
+
+    ,0                          AS DEP_AVG
+
+    ,SUM(T.LOAN_BAL)            AS LN_BAL
+
+    ,SUM(T.BAL_YEAR_DAILY_AVG)  AS LN_AVG
+
+    ,MAX(CASE WHEN T.LOAN_FIVECLASS_CLASS IN ('33','34','35') THEN '1' ELSE '0' END)          AS BAD_LN
+
+    ,SUM(CASE WHEN T.LOAN_FIVECLASS_CLASS IN ('33','34','35') THEN T.LOAN_BAL ELSE 0 END) AS BAD_LN_BAL
+
+    ,0                          AS DEP_PROFIT
+
+    ,SUM(T.ASSES_PRFT)          AS LN_PROFIT
+
+    ,0                          AS MID_PROFIT
+
+    FROM PID.A_D_LN_LOAN_ORG_DTL T
+
+    WHERE T.DATA_DT = date('{ETL_TX_DT}')
+
+    and (LOAN_BAL <> 0 or BAL_YEAR_DAILY_AVG <>0 or ASSES_PRFT <> 0)
+
+    AND T.DATA_SOURC <> 'HLW'
+
+GROUP BY
+
+    T.ORG_NO
+
+    ,T.CUST_NO
+
+
+
+union all
+
+
+
+SELECT
+
+    T.ORG_NO
+
+    ,T.CUST_NO
+
+    ,0                 AS DEP_BAL
+
+    ,0                 AS DEP_AVG
+
+    ,0                 AS LN_BAL
+
+    ,0                 AS LN_AVG
+
+    ,'0'               AS BAD_LN
+
+    ,0                 AS BAD_LN_BAL
+
+    ,0                 AS DEP_PROFIT
+
+    ,0                 AS LN_PROFIT
+
+    ,SUM(T.TOTAL_FEE)  AS MID_PROFIT
+
+    FROM PID.A_D_AG_PER_MID_INCOME_INF T
+
+    WHERE T.DATA_DT = date('{ETL_TX_DT}')
+
+    and TOTAL_FEE <> 0
+
+GROUP BY
+
+    T.ORG_NO
+
+    ,T.CUST_NO
+
+) tt
+
+group by ORG_NO,CUST_NO
+@@BLOCK dwa_pid_a_d_ag_pub_inter_reve_dtl | 10@@	CREATE TABLE PID.VT_A_D_AG_PUB_INTER_REVE_DTL_TMP_99
+	AS (SELECT T.BKKP_ORG_NO, 
+                  T.BKKP_BIZ_CD, 
+                  T.BKKP_ACCT_NO_SERIAL_NO, 
+                  T.TELLER_SEQ_NO, 
+                  T.ABSTR_CD,  
+                  T.ABSTR_DTL, 
+                  T.RMK_INF, 
+                  T.TRADE_DT, 
+                  T.BKKP_CURRCY_CD, 
+                  SUM(RECORDD_AMT*NVL(TT.DOM_CURRCY_CONVT_PRICE,1)) AS RECORDD_AMT 
+             FROM {FDM}.F_EV_CRBS_NEW_ACCTG_TODAY_CITAT_INF T 
+             LEFT JOIN {CDM}.C_COM_EXCH_RATE TT 
+               ON T.BKKP_CURRCY_CD=TT.CURRCY_CD
+              AND TT.DATA_DT=DATE'{ETL_TX_DT}'
+            WHERE T.TRADE_DT BETWEEN '{I_YB_DT}' AND '{ETL_TX_DT}'
+              AND T.RECORD_STS_CD='0'
+              AND T.TELLER_SEQ_NO NOT LIKE 'B%' 
+              GROUP BY T.BKKP_ORG_NO,
+                       T.BKKP_BIZ_CD,
+                       T.BKKP_ACCT_NO_SERIAL_NO ,
+                       T.TELLER_SEQ_NO,
+                       T.ABSTR_CD,
+                       T.ABSTR_DTL,
+                       T.RMK_INF,
+                       T.TRADE_DT,
+                       T.BKKP_CURRCY_CD
+          )
+@@BLOCK dwa_pid_a_d_dp_deposit_intst_income_dtl_info | 3@@	CREATE TABLE pid.DEPOSIT_TERM_END_INTST_TEMP_{ETL_TX_DT} 
+SELECT  T.LIABI_ACCT_NO       
+       ,T.OPEN_ACCT_ORG_NO    
+       ,CASE WHEN T.PROD_CD = '1027' THEN '3584'  
+             ELSE T3.BIZ_CD_RULE 
+        END                as bl_num  
+       ,'001'              as CURRCY_CD  
+       ,T2.ACCINT          as ACCINT     
+       ,'1'                as DATA_SOURC 
+       ,date'{ETL_TX_DT}'  as DATA_DT    
+  FROM fdm.F_AC_CRBS_DEPOSIT_ACCT T  
+  LEFT JOIN (
+               SELECT  b.LIABI_ACCT_NO 
+                      ,SUM(CASE WHEN b.RECEN_UPDATE_DT > '{ETL_TX_DT}'   
+                                THEN c.ACCRU_INT+c.LAST_DAY_ACCRU_INT 
+                                ELSE b.ACCRU_INT 
+                           end  
+                           ) AS ACCINT
+                 FROM fdm.F_AC_CRBS_ACCT_ACCRU_DEF      b 
+                 left join fdm.F_AC_CRBS_ACCT_ACCRU_DEF c 
+                   ON b.LIABI_ACCT_NO = c.LIABI_ACCT_NO
+                  AND b.INT_CD = c.INT_CD
+                  and c.start_dt <= date'{ETL_TX_DT}'-1 
+                  and c.end_dt>date'{ETL_TX_DT}'-1
+                WHERE b.start_dt <= '{ETL_TX_DT}' and b.end_dt>'{ETL_TX_DT}'
+                  AND ( b.INT_CD='INTERT' OR b.INT_CD ='MATINT' OR b.INT_CD = 'MATINR' )   
+                  AND b.ACCRU_INT_FLAG='1'    
+                GROUP BY b.LIABI_ACCT_NO
+            ) T2
+    ON T.LIABI_ACCT_NO= T2.LIABI_ACCT_NO 
+  LEFT JOIN (SELECT  PROD_NO          
+                  ,PROD_CLASS_CD1   
+                  ,PROD_CLASS_CD2   
+                  ,PROD_FEATU_CD    
+                  ,BIZ_CD_RULE      
+              FROM fdm.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ 
+             WHERE start_dt <= '{ETL_TX_DT}' and end_dt>'{ETL_TX_DT}'
+               AND BELO_MODL_CD = 'DP'   
+               AND PROD_FEATU_CD IN ('ACCINT')  
+               AND RECORD_STS_CD = '0'      
+             GROUP BY PROD_NO,PROD_CLASS_CD1,PROD_CLASS_CD2,PROD_FEATU_CD,BIZ_CD_RULE
+             ) T3 
+    ON '1'||CASE SUBSTR(T.ACCTG_TYPE_CD,2,1)   
+                 WHEN '0' THEN TRIM(T.ACCT_CLASS_CD_1)||TRIM(T.ACCT_CLASS_CD_2) 
+                 WHEN '2' THEN TRIM(T.ACCT_CLASS_CD_1) 
+                 WHEN '3' THEN TRIM(T.ACCT_CLASS_CD_2) 
+            END = TRIM(T3.PROD_CLASS_CD1) 
+   AND CASE WHEN T.PROD_CD IN ('1024','2016','2018','2211','2021') THEN '99Y' ELSE T.DEPOSIT_TERM_CD END = T3.PROD_CLASS_CD2
+   AND T.PROD_CD = T3.PROD_NO  
+  LEFT JOIN fdm.F_CO_CRBS_BIZ_CD T4 
+    ON T3.BIZ_CD_RULE=T4.BIZ_CD 
+   AND T4.start_dt <= '{ETL_TX_DT}' 
+   and T4.end_dt>'{ETL_TX_DT}'
+ WHERE (T.ACCT_STS_CD='A'  OR (T.ACCT_STS_CD ='C' and t.ACCT_ACCT_CANCE_DT>='{ETL_TX_DT}'))
+   AND T.start_dt <= '{ETL_TX_DT}' 
+   and T.end_dt>'{ETL_TX_DT}'
+   AND (T.PROD_CD NOT IN ('1021','1022','1027','1028') OR T.DEPOSIT_TERM_CD NOT LIKE '%D')  
+   
+   AND T.CURRCY_CD = '156'
+@@BLOCK dwa_pid_a_d_dp_deposit_intst_income_dtl_info | 5@@	CREATE TABLE pid.DEPOSIT_TERM_BEGIN_INTST_TEMP_{ETL_TX_DT} 
+SELECT  T.LIABI_ACCT_NO      
+       ,T.OPEN_ACCT_ORG_NO   
+       ,CASE WHEN T.PROD_CD = '1027' THEN '3584'  
+             ELSE T3.BIZ_CD_RULE 
+        END                     as bl_num  
+       ,'001'                   as CURRCY_CD  
+       ,T2.ACCINT               as ACCINT     
+       ,'1'                     as DATA_SOURC 
+       ,date'{ETL_TX_DT}'-1     as DATA_DT    
+  FROM fdm.F_AC_CRBS_DEPOSIT_ACCT T 
+  LEFT JOIN (
+              SELECT b.LIABI_ACCT_NO 
+                    ,SUM(CASE WHEN b.RECEN_UPDATE_DT > date'{ETL_TX_DT}'-1   
+                              THEN c.ACCRU_INT+c.LAST_DAY_ACCRU_INT 
+                              ELSE b.ACCRU_INT
+                         end  
+                         ) AS ACCINT
+                FROM fdm.F_AC_CRBS_ACCT_ACCRU_DEF      b 
+                left join fdm.F_AC_CRBS_ACCT_ACCRU_DEF c 
+                  ON b.LIABI_ACCT_NO = c.LIABI_ACCT_NO
+                 AND b.INT_CD = c.INT_CD
+                 and c.start_dt <= date'{ETL_TX_DT}'-2 and c.end_dt>date'{ETL_TX_DT}'-2
+               WHERE b.start_dt <= date'{ETL_TX_DT}'-1 and b.end_dt>date'{ETL_TX_DT}'-1
+                 AND ( b.INT_CD='INTERT' OR b.INT_CD ='MATINT' OR b.INT_CD = 'MATINR' )   
+                 AND b.ACCRU_INT_FLAG='1'    
+               GROUP BY b.LIABI_ACCT_NO
+             ) T2
+        ON T.LIABI_ACCT_NO= T2.LIABI_ACCT_NO 
+  LEFT JOIN (SELECT  PROD_NO      
+                    ,PROD_CLASS_CD1  
+                    ,PROD_CLASS_CD2  
+                    ,PROD_FEATU_CD   
+                    ,BIZ_CD_RULE     
+               FROM fdm.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ  
+           WHERE start_dt <= date'{ETL_TX_DT}'-1 and end_dt>date'{ETL_TX_DT}'-1
+             AND BELO_MODL_CD = 'DP'   
+             AND PROD_FEATU_CD IN ('ACCINT')  
+             AND RECORD_STS_CD = '0'      
+           GROUP BY PROD_NO,PROD_CLASS_CD1,PROD_CLASS_CD2,PROD_FEATU_CD,BIZ_CD_RULE
+           ) T3 
+    ON '1'||CASE SUBSTR(T.ACCTG_TYPE_CD,2,1)   
+                 WHEN '0' THEN TRIM(T.ACCT_CLASS_CD_1)||TRIM(T.ACCT_CLASS_CD_2) 
+                 WHEN '2' THEN TRIM(T.ACCT_CLASS_CD_1) 
+                 WHEN '3' THEN TRIM(T.ACCT_CLASS_CD_2) 
+             END = TRIM(T3.PROD_CLASS_CD1) 
+   AND CASE WHEN T.PROD_CD IN ('1024','2016','2018','2211','2021') THEN '99Y' ELSE T.DEPOSIT_TERM_CD END = T3.PROD_CLASS_CD2
+   AND T.PROD_CD = T3.PROD_NO  
+  LEFT JOIN fdm.F_CO_CRBS_BIZ_CD T4 
+    ON T3.BIZ_CD_RULE=T4.BIZ_CD 
+   AND T4.start_dt <= date'{ETL_TX_DT}'-1 and T4.end_dt>date'{ETL_TX_DT}'-1
+ WHERE (T.ACCT_STS_CD='A'  OR (T.ACCT_STS_CD ='C' and t.ACCT_ACCT_CANCE_DT>=date'{ETL_TX_DT}'-1))
+   AND T.start_dt <= date'{ETL_TX_DT}'-1 
+   and T.end_dt>date'{ETL_TX_DT}'-1
+   AND (T.PROD_CD NOT IN ('1021','1022','1027','1028') OR T.DEPOSIT_TERM_CD NOT LIKE '%D') 
+   
+   AND T.CURRCY_CD = '156'
+@@BLOCK dwa_pid_a_d_dp_deposit_intst_income_dtl_info | 7@@	CREATE TABLE pid.ACTUAL_INT_PAY_FLOWS_TEMP_{ETL_TX_DT} 
+SELECT   T.LIABI_ACCT_NO                           
+        ,T.OPEN_ACCT_ORG_NO                        
+        ,CASE WHEN T.PROD_NO = '1027' THEN '3584'  
+              ELSE T3.BIZ_CD_RULE END as bl_num  
+        ,T.ACTUAL_INT_AMT
+FROM (
+      SELECT  T.LIABI_ACCT_NO
+             ,T.OPEN_ACCT_ORG_NO
+             ,T2.PROD_NO
+             ,T2.DEPOSIT_PERIO
+             ,T.ACCTG_TYPE_CD
+             ,T.ACCT_CLASS_CD_1
+             ,T.ACCT_CLASS_CD_2
+             ,T2.ACTUAL_INT_AMT
+      FROM fdm.F_AC_CRBS_DEPOSIT_ACCT T 
+     INNER JOIN (
+                   SELECT  LIABI_ACCT_NO
+                          ,PROD_NO
+                          ,DEPOSIT_PERIO
+                          ,SUM(ACTUAL_INT_AMT) as ACTUAL_INT_AMT 
+                     FROM fdm.F_EV_CRBS_DEPOSIT_ACCT_INT_PAY_DTL 
+                    WHERE TRADE_DAY_TERM = '{ETL_TX_DT}'
+                    GROUP BY LIABI_ACCT_NO,PROD_NO,DEPOSIT_PERIO
+                 ) T2
+        ON T.LIABI_ACCT_NO = T2.LIABI_ACCT_NO 
+     WHERE T.start_dt <= '{ETL_TX_DT}' and T.end_dt>'{ETL_TX_DT}'
+       AND T.CURRCY_CD = '156' 
+     ) T  
+LEFT JOIN (SELECT  PROD_NO   
+                  ,PROD_CLASS_CD1  
+                  ,PROD_CLASS_CD2  
+                  ,PROD_FEATU_CD   
+                  ,BIZ_CD_RULE     
+            FROM fdm.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ 
+           WHERE start_dt <= '{ETL_TX_DT}' and end_dt>'{ETL_TX_DT}'
+             AND BELO_MODL_CD = 'DP'   
+             AND PROD_FEATU_CD IN ('ACCINT')  
+             AND RECORD_STS_CD = '0'      
+           GROUP BY PROD_NO,PROD_CLASS_CD1,PROD_CLASS_CD2,PROD_FEATU_CD,BIZ_CD_RULE
+           ) T3 
+  ON '1'||CASE SUBSTR(T.ACCTG_TYPE_CD,2,1) 
+               WHEN '0' THEN TRIM(T.ACCT_CLASS_CD_1)||TRIM(T.ACCT_CLASS_CD_2) 
+               WHEN '2' THEN TRIM(T.ACCT_CLASS_CD_1) 
+               WHEN '3' THEN TRIM(T.ACCT_CLASS_CD_2) 
+          END   = TRIM(T3.PROD_CLASS_CD1) 
+ AND CASE WHEN T.PROD_NO IN ('1024','2016','2018','2211','2021') THEN '99Y' ELSE T.DEPOSIT_PERIO END = T3.PROD_CLASS_CD2
+ AND T.PROD_NO = T3.PROD_NO
+@@BLOCK dwa_pid_a_d_dp_deposit_intst_income_dtl_info | 9@@	CREATE TABLE pid.a_d_dp_deposit_intst_income_dtl_info_tmp_{ETL_TX_DT} (
+  "ACCT_NO"      varchar(200) DEFAULT NULL COMMENT '账号',
+  "ORG_NO"       varchar(200) DEFAULT NULL COMMENT '机构编号',
+  "BIZ_CD"       varchar(200) DEFAULT NULL COMMENT '业务代码',
+  "CURRCY"       varchar(200) DEFAULT NULL COMMENT '币种',
+  "INTST_INCOME" varchar(200) DEFAULT NULL COMMENT '利息收入',
+  "DATA_SOURC"   varchar(200) DEFAULT NULL COMMENT '数据来源',
+  "DATA_DT"      varchar(200) DEFAULT NULL COMMENT '数据日期'
+)
+@@BLOCK dwa_pid_a_d_dp_deposit_intst_income_dtl_info | 11@@	CREATE TABLE pid.DEPOSIT_TERM_BEGIN_INTST_TEMP_01_{ETL_TX_DT}
+as 
+select 
+        T.LIABI_ACCT_NO       
+       ,CASE WHEN t1.liabi_acct_no is not null then t1.OPEN_ACCT_ORG_NO else t.OPEN_ACCT_ORG_NO end OPEN_ACCT_ORG_NO    
+       ,CASE WHEN t1.liabi_acct_no is not null then t1.bl_num else t.bl_num end bl_num 
+       ,t.CURRCY_CD  
+       ,t.ACCINT     
+       ,t.DATA_SOURC 
+       ,t.DATA_DT    
+from
+pid.DEPOSIT_TERM_BEGIN_INTST_TEMP_{ETL_TX_DT} t
+left join 
+pid.DEPOSIT_TERM_END_INTST_TEMP_{ETL_TX_DT} t1
+on t.liabi_acct_no = t1.liabi_acct_no
+@@BLOCK dwa_pid_a_d_dp_deposit_intst_income_dtl_info | 13@@	CREATE TABLE pid.ACTUAL_INT_PAY_FLOWS_TEMP_01_{ETL_TX_DT} 
+select 
+        T.LIABI_ACCT_NO       
+       ,CASE WHEN t1.liabi_acct_no is not null then t1.OPEN_ACCT_ORG_NO else t.OPEN_ACCT_ORG_NO end OPEN_ACCT_ORG_NO    
+       ,CASE WHEN t1.liabi_acct_no is not null then t1.bl_num else t.bl_num end bl_num 
+       ,t.ACTUAL_INT_AMT     
+from
+pid.ACTUAL_INT_PAY_FLOWS_TEMP_{ETL_TX_DT} t
+left join 
+pid.DEPOSIT_TERM_END_INTST_TEMP_{ETL_TX_DT} t1
+on t.liabi_acct_no = t1.liabi_acct_no
+@@BLOCK dwa_pid_a_d_eq_rpt_gov_qlfy_info | 3@@	CREATE TABLE TMP1_A_D_EQ_RPT_GOV_QLFY_INFO
+
+as 
+
+	 select t.etl_tx_dt
+
+        ,t.MAIN_CUST_NO
+
+        ,t.COUNT_CUST_ACCT_NO
+
+        ,sum(nvl(t.TXN_AMT,0)) TXN_AMT
+
+    from(
+
+  select substr(t1.etl_tx_dt,1,4) as etl_tx_dt
+
+        ,t2.MAIN_CUST_NO as MAIN_CUST_NO
+
+  	    ,t1.COUNT_CUST_ACCT_NO as COUNT_CUST_ACCT_NO
+
+  	    ,sum(t1.TXN_AMT) as TXN_AMT
+
+    from {FDM}.F_EV_CRBS_ACCT_BAL_HAPPEN_DTL t1
+
+   inner join {FDM}.F_AC_CRBS_CUST_ACCT_NO t2 
+
+      on t1.CUST_ACCT_NO = t2.CUST_ACCT_NO 
+
+     and DATE({ETL_TX_DT}) between t2.start_dt and t2.end_dt -1
+
+   where t1.etl_tx_dt >= to_char(substr(DATE({ETL_TX_DT}),1,4)-1)||'0101'
+
+     and t1.etl_tx_dt <= DATE({ETL_TX_DT})
+
+     and t1.USERN IN ('河北省省直住房资金管理中心','河北省省直住房资金中心','石家庄住房公积金管理中心','辛集市住房公积金管理中心','唐山市住房公积金管理中心','唐山市住房公积金管理中心开滦分中心','邯郸市住房公积金管理中心','廊坊市住房公积金中心','沧州市住房公积金管理中心','保定市住房公积金管理中心','定州市住房公积金管理中心','邢台市住房公积金管理中心','邢台市住房公积金管理中心冀中能源邢台矿业集团有限责任公司分中心','张家口市住房公积金管理中心','衡水市住房公积金管理中心','秦皇岛市住房公积金管理中心','承德市住房公积金管理中心')
+
+     and t1.USERN != t1.COUNT_USERN  
+
+     and t1.COUNT_USERN not like '%住房%管理中心%' 
+
+     and t1.DEBIT_CREDIT_FLAG = '1'
+
+     and length(trim(t1.COUNT_USERN)) > 4 
+
+     and t1.INTAL_TXN_CD not in ('5567','6674') 
+
+   group by substr(t1.etl_tx_dt,1,4)
+
+        ,t2.MAIN_CUST_NO
+
+        ,t1.COUNT_CUST_ACCT_NO
+
+   union all
+
+  select substr(t1.etl_tx_dt,1,4) as etl_tx_dt
+
+        ,t2.MAIN_CUST_NO as MAIN_CUST_NO
+
+        ,t1.PAYER_ACCT_NO as COUNT_CUST_ACCT_NO
+
+  	    ,sum(t1.TXN_AMT) as TXN_AMT
+
+    from {FDM}.F_EV_CRBS_CURR_FOR_PAY_OUT_ACCT_BOOK t1 
+
+   inner join {FDM}.F_AC_CRBS_CUST_ACCT_NO t2 
+
+      on t1.PAYEE_ACCT_NO = t2.CUST_ACCT_NO 
+
+     and DATE({ETL_TX_DT}) between t2.start_dt and t2.end_dt -1
+
+   where t1.SYS_INSD_CUST_NAME LIKE '%公积金管理中心%'
+
+     and t1.RMK_INF like '%成功付款%'
+
+     and t1.etl_tx_dt >= to_char(substr(DATE({ETL_TX_DT}),1,4)-1)||'0101'
+
+   group by substr(t1.etl_tx_dt,1,4)
+
+        ,t2.MAIN_CUST_NO
+
+        ,t1.PAYER_ACCT_NO) t
+
+   group by t.etl_tx_dt
+
+        ,t.MAIN_CUST_NO
+
+        ,t.COUNT_CUST_ACCT_NO
+@@BLOCK dwa_pid_a_d_eq_rpt_gov_qlfy_info | 5@@	CREATE TABLE TMP2_A_D_EQ_RPT_GOV_QLFY_INFO as
+
+    SELECT T.MAIN_CUST_NO CUST_ID
+
+	       ,SUM(T.cust_score) CUST_SCORE
+
+	   FROM (
+
+	 SELECT t.MAIN_CUST_NO 
+
+	       ,t.COUNT_CUST_ACCT_NO
+
+	       ,case when t.TXN_AMT/12 < 300000 then -0.2
+
+	             when t.TXN_AMT/12 >= 300000 and t.TXN_AMT/12 < 1000000 then -0.5
+
+	             when t.TXN_AMT/12 >= 1000000 and t.TXN_AMT/12 < 5000000 then -1.5 
+
+	             when t.TXN_AMT/12 >= 5000000 then -3
+
+	             else 0
+
+	           end as cust_score
+
+	   FROM TMP1_A_D_EQ_RPT_GOV_QLFY_INFO T
+
+	  where t.etl_tx_dt = substr(DATE({ETL_TX_DT}),1,4)-1
+
+	  union all
+
+	 SELECT t.MAIN_CUST_NO
+
+	       ,t.COUNT_CUST_ACCT_NO
+
+	       ,case when t.TXN_AMT/to_number(substr(DATE({ETL_TX_DT}),5,2)) < 300000 then 0.2
+
+	             when t.TXN_AMT/to_number(substr(DATE({ETL_TX_DT}),5,2)) >= 300000 and t.TXN_AMT/to_number(substr(DATE({ETL_TX_DT}),5,2)) < 1000000 then 0.5
+
+	             when t.TXN_AMT/to_number(substr(DATE({ETL_TX_DT}),5,2)) >= 1000000 and t.TXN_AMT/to_number(substr(DATE({ETL_TX_DT}),5,2)) < 5000000 then 1.5 
+
+	             when t.TXN_AMT/to_number(substr(DATE({ETL_TX_DT}),5,2)) >= 5000000 then 3
+
+	             else 0
+
+	           end as cust_score
+
+	   FROM TMP1_A_D_EQ_RPT_GOV_QLFY_INFO T
+
+	  where t.etl_tx_dt = substr(DATE({ETL_TX_DT}),1,4)) T
+
+	  GROUP BY T.MAIN_CUST_NO
+@@BLOCK dwa_pid_a_d_fi_gl_inf | 8@@	CREATE TABLE {PID}.TMP_A_D_FI_GL_INF_TMP_ACCUM
+    AS
+    SELECT
+         {ETL_TX_DT} AS DATA_DT
+        ,CASE 
+           WHEN T1.ORG_NO = '1499' THEN '0599'
+           WHEN T1.ORG_NO = '1599' THEN '0799'
+           ELSE T1.ORG_NO 
+         END as ORG                   
+        ,T1.CURRCY_CD  AS CURR_CD  
+        ,T1.SUBJ_NO  AS GL_NUM  
+       
+        ,SUM(CASE WHEN PERIOD_DT BETWEEN {CUR_MONTH_BEGIN} AND {ETL_TX_DT} THEN TERM_END_BAL_DEBIT ELSE 0 END)/{MTD_DAYS}  AS DEBIT_M_AVG 
+        ,SUM(CASE WHEN PERIOD_DT BETWEEN {I_QB_DT} AND {ETL_TX_DT} THEN TERM_END_BAL_DEBIT ELSE 0 END)/{QTD_DAYS} AS DEBIT_Q_AVG  
+        ,SUM(CASE WHEN PERIOD_DT BETWEEN {I_YB_DT} AND {ETL_TX_DT} THEN TERM_END_BAL_DEBIT ELSE 0 END)/{YTD_DAYS} AS DEBIT_Y_AVG  
+        ,SUM(CASE WHEN PERIOD_DT BETWEEN {CUR_MONTH_BEGIN} AND {ETL_TX_DT} THEN TERM_END_BAL_CREDIT ELSE 0 END)/{MTD_DAYS} AS CRDT_M_AVG  
+        ,SUM(CASE WHEN PERIOD_DT BETWEEN {I_QB_DT} AND {ETL_TX_DT} THEN TERM_END_BAL_CREDIT ELSE 0 END)/{QTD_DAYS}  AS CRDT_Q_AVG  
+        ,SUM(CASE WHEN PERIOD_DT BETWEEN {I_YB_DT} AND {ETL_TX_DT} THEN TERM_END_BAL_CREDIT ELSE 0 END)/{YTD_DAYS}  AS CRDT_Y_AVG  
+    
+    FROM {FDM}.F_FI_FIGL_SUBJ_BAL_TAB T1    
+    WHERE T1.CURRCY_CD <> '@RMB' AND T1.CURRCY_CD <> '@RMB1'                           
+      AND MOD(LENGTH(T1.SUBJ_NO),2) =0                         
+      AND T1.PERIOD_DT BETWEEN {LAST_YEAR} AND {ETL_TX_DT}                        
+    GROUP BY CASE 
+               WHEN T1.ORG_NO = '1499' THEN '0599'
+               WHEN T1.ORG_NO = '1599' THEN '0799'
+               ELSE T1.ORG_NO 
+             END                         
+             ,T1.CURRCY_CD                                    
+             ,T1.SUBJ_NO
+@@BLOCK dwa_pid_a_d_fi_gl_inf | 10@@	CREATE TABLE {PID}.O_CB_PZSHL_TMP   
+    AS    
+        SELECT 
+         currcy_cd  
+        ,DOM_CURRCY_CONVT_PRICE  
+        FROM 
+      ( select currcy_cd, DOM_CURRCY_CONVT_PRICE
+      from (select currcy_cd, 
+                   DOM_CURRCY_CONVT_PRICE,
+                   row_number() over(partition by currcy_symbo order by ETL_TX_DT desc) rm
+            
+               from {FDM}.F_CO_CRBS_CONVT_EXCH_RATE_PARAM 
+             where CONVT_CATEGORY_CD = '0'
+               and RECORD_STS_CD = '0'
+               and eff_dt <= {ETL_TX_DT}) t
+     where rm = 1 
+    ) T11
+@@BLOCK dwa_pid_A_D_FI_GL_INF_B | 7@@	CREATE TABLE {PID}.TMP_A_D_FI_GL_INF_B_TMP_ACCUM
+
+    AS
+
+    SELECT
+
+         {ETL_TX_DT} AS DATA_DT
+
+        ,CASE 
+
+           WHEN T1.ORG_NO = '1499' THEN '0599'
+
+           WHEN T1.ORG_NO = '1599' THEN '0799'
+
+           ELSE T1.ORG_NO 
+
+         END as ORG                   
+
+        ,T1.CURRCY_CD  AS CURR_CD  
+
+        ,T1.SUBJ_NO  AS GL_NUM  
+
+       
+
+        ,SUM(CASE WHEN PERIOD_DT BETWEEN {CUR_MONTH_BEGIN} AND {ETL_TX_DT} THEN TERM_END_BAL_DEBIT ELSE 0 END)/{MTD_DAYS}  AS DEBIT_M_AVG 
+
+        ,SUM(CASE WHEN PERIOD_DT BETWEEN {I_QB_DT} AND {ETL_TX_DT} THEN TERM_END_BAL_DEBIT ELSE 0 END)/{QTD_DAYS} AS DEBIT_Q_AVG  
+
+        ,SUM(CASE WHEN PERIOD_DT BETWEEN {I_YB_DT} AND {ETL_TX_DT} THEN TERM_END_BAL_DEBIT ELSE 0 END)/{YTD_DAYS} AS DEBIT_Y_AVG  
+
+        ,SUM(CASE WHEN PERIOD_DT BETWEEN {CUR_MONTH_BEGIN} AND {ETL_TX_DT} THEN TERM_END_BAL_CREDIT ELSE 0 END)/{MTD_DAYS} AS CRDT_M_AVG  
+
+        ,SUM(CASE WHEN PERIOD_DT BETWEEN {I_QB_DT} AND {ETL_TX_DT} THEN TERM_END_BAL_CREDIT ELSE 0 END)/{QTD_DAYS}  AS CRDT_Q_AVG  
+
+        ,SUM(CASE WHEN PERIOD_DT BETWEEN {I_YB_DT} AND {ETL_TX_DT} THEN TERM_END_BAL_CREDIT ELSE 0 END)/{YTD_DAYS}  AS CRDT_Y_AVG  
+
+    
+
+    FROM {FDM}.F_FI_FIGL_SUBJ_BAL_TAB_B T1    
+
+    WHERE T1.CURRCY_CD <> '@RMB' AND T1.CURRCY_CD <> '@RMB1'                           
+
+      AND MOD(LENGTH(T1.SUBJ_NO),2) =0                         
+
+      AND T1.PERIOD_DT BETWEEN {LAST_YEAR} AND {ETL_TX_DT}                        
+
+    GROUP BY CASE 
+
+               WHEN T1.ORG_NO = '1499' THEN '0599'
+
+               WHEN T1.ORG_NO = '1599' THEN '0799'
+
+               ELSE T1.ORG_NO 
+
+             END                         
+
+             ,T1.CURRCY_CD                                    
+
+             ,T1.SUBJ_NO
+@@BLOCK dwa_pid_A_D_FI_GL_INF_B | 9@@	CREATE TABLE {PID}.O_CB_PZSHL_TMP   
+
+    AS    
+
+        SELECT 
+
+         currcy_cd  
+
+        ,DOM_CURRCY_CONVT_PRICE  
+
+        FROM 
+
+      ( select currcy_cd, DOM_CURRCY_CONVT_PRICE
+
+      from (select currcy_cd, 
+
+                   DOM_CURRCY_CONVT_PRICE,
+
+                   row_number() over(partition by currcy_symbo order by ETL_TX_DT desc) rm
+
+            
+
+               from {FDM}.F_CO_CRBS_CONVT_EXCH_RATE_PARAM 
+
+             where CONVT_CATEGORY_CD = '0'
+
+               and RECORD_STS_CD = '0'
+
+               and eff_dt <= {ETL_TX_DT}) t
+
+     where rm = 1 
+
+    ) T11
+@@BLOCK dwa_pid_a_d_ln_bill_discnt_cash_loan | 3@@	CREATE TABLE {PID}.TMP_BILL_DISCH_INTST_INCOME_TAB
+    ( LIST_ID VARCHAR(200) DEFAULT NULL COMMENT '业务清单ID',
+      BILL_NO VARCHAR(50) DEFAULT NULL COMMENT '票号',
+      ORG_NO VARCHAR(50) DEFAULT NULL COMMENT '机构号',
+      INTAL_ACCT_NO VARCHAR(50) DEFAULT NULL COMMENT '内部户账号',
+      DAY_INTST_INCOME DECIMAL(20,4) DEFAULT NULL COMMENT '贴现日利息收入'
+    )
+@@BLOCK DWA_PID_A_D_LN_CREDIT_CARD_FTP_INF | 2@@	CREATE TABLE {PID}.VT_A_D_LN_CREDIT_CARD_FTP_INF_02_{ETL_TX_DT} AS 
+
+(
+
+SELECT A.ACCT_NO,
+
+     A.CARD_NO,
+
+     A.STAGES_PAY_SERIAL_NO,
+
+     A.BAL AS REM_PPL_MP,
+
+     B.BAL AS REM_PPL_TOT,
+
+     CASE WHEN B.BAL = 0 THEN cast((A.PURCH/B.PURCH) as DECIMAL(38,8))
+
+          ELSE cast((A.BAL / B.BAL) as DECIMAL(38,8)) 
+
+     END AS B_PERCENT
+
+FROM 
+
+    (
+
+    select T.ACCT_NO,
+
+        T.CARD_NO,
+
+        T.STAGES_PAY_SERIAL_NO,
+
+        SUM(T.REMAI_UNPAY_PRINCIPAL + CASE WHEN T.STAGES_PAY_STS_CD='A' THEN RES_PPL ELSE 0 END ) AS BAL,
+
+        SUM(T.TOT_PROD_AMT) AS PURCH
+
+    from FDM.F_EV_CCRD_STAGES_PAY_TXN_DTL t
+
+    WHERE DATE(T.RECORD_DT) <= DATE '{ETL_TX_DT}' 
+
+	      AND DATE '{ETL_TX_DT}' between start_dt and end_dt - 1
+
+    GROUP BY 
+
+        T.ACCT_NO,
+
+        T.CARD_NO,
+
+        T.STAGES_PAY_SERIAL_NO
+
+        
+
+    ) A
+
+LEFT JOIN 
+
+    (
+
+    select 
+
+      T.ACCT_NO
+
+      ,SUM(T.REMAI_UNPAY_PRINCIPAL+CASE WHEN T.STAGES_PAY_STS_CD='A' THEN RES_PPL ELSE 0 END ) AS BAL
+
+      ,SUM(T.TOT_PROD_AMT) AS PURCH
+
+    from FDM.F_EV_CCRD_STAGES_PAY_TXN_DTL t
+
+    WHERE DATE(T.RECORD_DT) <= DATE '{ETL_TX_DT}'
+
+       AND DATE '{ETL_TX_DT}' between start_dt and end_dt - 1
+
+    GROUP BY T.ACCT_NO
+
+    
+
+    ) B ON A.ACCT_NO = B.ACCT_NO
+
+)
+@@BLOCK DWA_PID_A_D_LN_CREDIT_CARD_FTP_INF | 4@@	CREATE TABLE {PID}.VT_A_D_LN_CREDIT_CARD_FTP_INF_01_{ETL_TX_DT} AS    
+
+SELECT
+
+    DATE '{ETL_TX_DT}'                                 as DATA_DT,
+
+    T.ACCT_NO                                          as account_number,
+
+    T.CARD_NO                                          as CARD_NO,
+
+    '1310030000'                                       AS GL_ACCOUNT_ID,
+
+    '156'                                              AS currcy_cd,
+
+    T.STAGES_PAY_SERIAL_NO                             AS SEQ_SN,
+
+    T.TOT_PROD_AMT                                     as ORG_PAYMENT_AMT,
+
+    NVL(T.REMAI_UNPAY_PRINCIPAL,0)+ NVL(T.RES_PPL,0)   AS CUR_PAYMENT_AMT,
+
+    T.RECORD_DT                                        as ORIGINATION_DATE,                  
+
+    T.TOT_STAGES_MONTH_NUM                             as AMRT_TERM,
+
+    T.INSTL_CNT                                        as INSTL_CNT,
+
+    CASE
+
+      WHEN T.STAGES_PAY_TYPE_CD = 'W' THEN T.EXPIR_DT
+
+      WHEN ADD_MONTHS(DATE(T.RECORD_DT),T.TOT_STAGES_MONTH_NUM) < DATE '{ETL_TX_DT}' THEN DATE '{ETL_TX_DT}' + 1
+
+      ELSE ADD_MONTHS(DATE(T.RECORD_DT),T.TOT_STAGES_MONTH_NUM)
+
+    END                                                AS MATURITY_DATE,
+
+    CASE
+
+      WHEN T.LAST_STAGES_AMORTI_DT = '0' THEN T.RECORD_DT
+
+      WHEN T.LAST_STAGES_AMORTI_DT > DATE '{ETL_TX_DT}' THEN DATE '{ETL_TX_DT}'
+
+      ELSE T.LAST_STAGES_AMORTI_DT
+
+    end                                               as LAST_PAYMENT_DATE,
+
+    ADD_MONTHS(CASE
+
+                WHEN T.LAST_STAGES_AMORTI_DT = '0' THEN T.RECORD_DT
+
+                WHEN T.LAST_STAGES_AMORTI_DT > DATE '{ETL_TX_DT}' THEN DATE '{ETL_TX_DT}'
+
+                ELSE T.LAST_STAGES_AMORTI_DT END,1)   as NEXT_PAYMENT_DATE,
+
+    T.MONTHLY_AMORTI_STAGES_PAY_AMT                   as NEXT_PAYMENT_AMT,
+
+    CASE
+
+      WHEN T.STAGES_PAY_TYPE_CD = 'W' THEN T.STAGES_PAY_INT_RATE/100
+
+      ELSE NVL(T.STAGES_ANNUA_INT_RATE/100, 0)
+
+    end                                               as CURRENT_RATE,
+
+    'CARD_FQ'                                         as DATA_SOURCE,
+
+    NVL(D.MP_ID,T.STAGES_PAY_MERCHD_NO)               as PRODUCT_NO
+
+FROM FDM.F_EV_CCRD_STAGES_PAY_TXN_DTL T
+
+LEFT JOIN {PID}.VT_A_D_LN_CREDIT_CARD_FTP_INF_02_{ETL_TX_DT} P1 ON T.ACCT_NO = P1.ACCT_NO
+
+AND T.CARD_NO = P1.CARD_NO
+
+AND T.STAGES_PAY_SERIAL_NO = P1.STAGES_PAY_SERIAL_NO
+
+LEFT JOIN PID.A_D_DM_DEF_CCRD_PROD D
+
+ON T.STAGES_PAY_MERCHD_NO = D.MP_ID
+
+WHERE DATE '{ETL_TX_DT}' between start_dt and end_dt - 1
+
+AND DATE(T.RECORD_DT) <= DATE '{ETL_TX_DT}'
+
+AND P1.B_PERCENT IS NOT NULL
+@@BLOCK dwa_pid_a_d_ln_credit_card_qty_inf | 3@@	CREATE TABLE {PID}.TMP_CREDIT_CARD_QTY
+		   (  DATA_DT DATE,
+			  ORG_NO VARCHAR(10),
+			  ORG_ID VARCHAR(10),
+			  ACCT_NO VARCHAR(50),
+			  CARD_NO_RELATED_ID_NO VARCHAR(50),
+			  CARD_NO VARCHAR(50)
+		   ) ENGINE=EXPRESS DISTRIBUTED BY('ACCT_NO') DEFAULT CHARSET=utf8 TABLESPACE='sys_tablespace'
+@@BLOCK dwa_pid_a_d_ln_credit_card_qty_inf | 6@@	CREATE TABLE {PID}.TMP_CREDIT_CARD_QTY
+		   (  DATA_DT DATE,
+			  ORG_NO VARCHAR(10),
+			  ORG_ID VARCHAR(10),
+			  ACCT_NO VARCHAR(50),
+			  CARD_NO_RELATED_ID_NO VARCHAR(50),
+			  CARD_NO VARCHAR(50)
+		   ) ENGINE=EXPRESS DISTRIBUTED BY('ACCT_NO') DEFAULT CHARSET=utf8 TABLESPACE='sys_tablespace'
+@@BLOCK DWA_PID_A_D_LN_LOAN_ACCT_INF | 3@@	CREATE TABLE {PID}.VT_A_D_LN_LOAN_ACCT_INF_01
+
+    ( 
+
+    SELECT F1.CORE_CUST_NO AS CUST_ID
+
+    FROM {FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF F1     
+
+    INNER JOIN {FDM}.F_PT_ECIF_PUB_CUST_INF F2      
+
+       ON F1.CUST_NO = F2.CUST_NO
+
+      AND F2.GOVERN_STRUCTURE = '1'                 
+
+      AND '{ETL_TX_DT}'BETWEEN F2.START_DT AND F2.END_DT - 1
+
+    WHERE '{ETL_TX_DT}'BETWEEN F1.START_DT AND F1.END_DT - 1
+
+      AND F1.DEL_FLAG <> 'D'
+
+      AND F1.CORE_CUST_NO <> ''
+
+    )
+@@BLOCK DWA_PID_A_D_LN_LOAN_ACCT_INF | 5@@	CREATE TABLE {PID}.VT_A_D_LN_LOAN_ACCT_INF_02
+
+    SELECT  T.LOAN_RCPT_NO AS ACCT_NO
+
+           ,T1.INDUSTRY_CLUSTER_NO    
+
+           ,T1.INDUSTRY_CLUSTER_NAME  
+
+    FROM {CDM}.C_AGT_LOAN_RCPT_INF T
+
+    INNER JOIN (
+
+                SELECT T.CUST_NO
+
+                      ,T.INDUSTRY_CLUSTER_NO
+
+                      ,T.INDUSTRY_CLUSTER_NAME
+
+                FROM {PID}.A_PT_INDUSTRY_CLUSTER_INF T
+
+                WHERE DATA_DT = DATE '{ETL_TX_DT}'
+
+                  AND T.AGRI_MKT_FLAG = '2'    
+
+                  AND T.WHE_WHITE_ROLL_CUST IN ('0')
+
+                GROUP BY CUST_NO,INDUSTRY_CLUSTER_NO,INDUSTRY_CLUSTER_NAME
+
+                ) T1  
+
+       ON T.CUST_NO = T1.CUST_NO
+
+    WHERE T.DATA_DT = DATE '{ETL_TX_DT}'
+
+      AND T.PROD_NO NOT IN ('1090040') 
+
+    UNION
+
+    SELECT T.LOAN_RCPT_NO
+
+          ,T1.INDUSTRY_CLUSTER_NO    
+
+          ,T1.INDUSTRY_CLUSTER_NAME  
+
+    FROM {CDM}.C_AGT_LOAN_RCPT_INF T
+
+    INNER JOIN (
+
+                SELECT CUST_NO
+
+                      ,INDUSTRY_CLUSTER_NO
+
+                      ,INDUSTRY_CLUSTER_NAME
+
+                FROM {PID}.A_PT_INDUSTRY_CLUSTER_INF
+
+                WHERE DATA_DT = DATE '{ETL_TX_DT}'
+
+                  AND WHE_WHITE_ROLL_CUST = '1'
+
+                GROUP BY CUST_NO,INDUSTRY_CLUSTER_NO,INDUSTRY_CLUSTER_NAME
+
+                ) T1  
+
+       ON T.CUST_NO = T1.CUST_NO
+
+    WHERE T.DATA_DT = DATE '{ETL_TX_DT}'
+
+      AND T.PROD_NO IN ('1120050','1120060','1110170')
+
+    UNION
+
+    SELECT T.LOAN_RCPT_NO
+
+          ,FLG.INDUSTRY_CLUSTER_NO 
+
+          ,FLG.INDUSTRY_CLUSTER_NAME  
+
+    FROM {CDM}.C_AGT_LOAN_RCPT_INF T
+
+    LEFT JOIN {FDM}.F_CT_CRMS_LOAN_BIZ_CONTRACT_EXT_INF T1  
+
+      ON T.LOAN_CONTRACT_NO = T1.CONTRACT_NO
+
+     AND T1.START_DT <= DATE '{ETL_TX_DT}'
+
+     AND T1.END_DT > DATE  '{ETL_TX_DT}'
+
+    INNER JOIN (
+
+                SELECT CUST_NO
+
+                      ,RELATED_OR_CORE_NO
+
+                      ,INDUSTRY_CLUSTER_NO
+
+                      ,INDUSTRY_CLUSTER_NAME
+
+                FROM {PID}.A_PT_INDUSTRY_CLUSTER_INF
+
+                WHERE DATA_DT = DATE '{ETL_TX_DT}'
+
+                  AND WHE_WHITE_ROLL_CUST IN ('2')
+
+                GROUP BY CUST_NO,RELATED_OR_CORE_NO,INDUSTRY_CLUSTER_NO,INDUSTRY_CLUSTER_NAME
+
+                ) FLG 
+
+       ON T.CUST_NO = FLG.CUST_NO
+
+      AND T1.CORE_ENT_NAME = FLG.RELATED_OR_CORE_NO
+
+    WHERE T.DATA_DT = DATE '{ETL_TX_DT}'
+
+      AND T.PROD_NO IN ('1090040') 
+
+      AND T.LOAN_RCPT_NO NOT LIKE 'FC%'
+@@BLOCK dwa_pid_a_d_ln_loan_acct_prft | 3@@	create table {PID}.VT_A_D_LN_LOAN_ACCT_PRFT_01_{ETL_TX_DT}
+as
+select
+T.LOAN_RCPT_NO AS ACCT_NO
+,acctg_org_no org_no
+,T.PROD_NO
+,LOAN_TYPE_CD
+,CASE WHEN (T.loan_rcpt_no = 'MB20010200004000001') THEN '01'
+      WHEN T.LOAN_TYPE_CD = '0310' THEN '01' 
+      WHEN T.LOAN_TYPE_CD = '0110' THEN '02'  
+      WHEN T.LOAN_TYPE_CD = '0130' THEN '03'  
+      WHEN T.LOAN_TYPE_CD = '0120' THEN '04' 
+END AS BELO_LINE
+,CASE  WHEN T.loan_rcpt_no = '93123001' THEN '35'  
+       WHEN T.loan_rcpt_no = 'MB20010200004000001' THEN '31'  
+       WHEN T.LOAN_TYPE_CD IN ('0110','0120','0130') THEN   
+            (CASE WHEN DECODE(T.FIVECLASS_CLASS_RS_CD,'','01',SUBSTR(T.FIVECLASS_CLASS_RS_CD,1,2)) ='01' THEN '31' 
+                   WHEN DECODE(T.FIVECLASS_CLASS_RS_CD,'','01',SUBSTR(T.FIVECLASS_CLASS_RS_CD,1,2)) ='02' THEN '32' 
+                   WHEN DECODE(T.FIVECLASS_CLASS_RS_CD,'','01',SUBSTR(T.FIVECLASS_CLASS_RS_CD,1,2)) ='03' THEN '33' 
+                   WHEN DECODE(T.FIVECLASS_CLASS_RS_CD,'','01',SUBSTR(T.FIVECLASS_CLASS_RS_CD,1,2)) ='04' THEN '34' 
+                   WHEN DECODE(T.FIVECLASS_CLASS_RS_CD,'','01',SUBSTR(T.FIVECLASS_CLASS_RS_CD,1,2)) ='05' THEN '35' 
+             END)
+       WHEN T.LOAN_TYPE_CD = '' THEN 
+           (CASE WHEN  SUBSTR(T.FIVECLASS_CLASS_RS_CD,1,2) ='01'  THEN '31' 
+                 WHEN  SUBSTR(T.FIVECLASS_CLASS_RS_CD,1,2) ='02'  THEN '32' 
+                 WHEN  SUBSTR(T.FIVECLASS_CLASS_RS_CD,1,2) ='03'  THEN '33' 
+                 WHEN  SUBSTR(T.FIVECLASS_CLASS_RS_CD,1,2) ='04'  THEN '34' 
+                 WHEN  SUBSTR(T.FIVECLASS_CLASS_RS_CD,1,2) ='05'  THEN '35' 
+            END)
+       ELSE (CASE WHEN T.OVERDUE_DAYS = 0 THEN '31'
+                 WHEN T.OVERDUE_DAYS > 0 AND T.OVERDUE_DAYS <= 90 THEN '32'  
+                 WHEN T.OVERDUE_DAYS > 90 AND T.OVERDUE_DAYS <= 180 THEN '33'
+                 WHEN T.OVERDUE_DAYS > 180 AND T.OVERDUE_DAYS <= 360 THEN '34'
+                 ELSE '35' END
+            )
+END  AS FIVECLASS_CLASS
+FROM {CDM}.C_AGT_LOAN_RCPT_INF T
+left join
+(
+select F1.CORE_CUST_NO as CUST_ID
+from {FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF F1     
+inner join {FDM}.F_PT_ECIF_PUB_CUST_INF F2    
+on F1.CUST_NO = F2.CUST_NO
+and F2.GOVERN_STRUCTURE = '1'               
+AND '{ETL_TX_DT}'between F2.start_dt and F2.end_dt - 1
+where '{ETL_TX_DT}'between F1.start_dt and F1.end_dt - 1
+AND F1.DEL_FLAG <> 'D'
+and F1.CORE_CUST_NO <> ''
+) t1 on t.core_cust_no = t1.cust_id
+where T.DATA_DT = DATE'{ETL_TX_DT}'
+and t.open_acct_dt <= DATE'{ETL_TX_DT}'
+@@BLOCK dwa_pid_a_d_ln_loan_org_dtl | 3@@	CREATE TABLE PID.VT_A_D_LN_LOAN_ORG_DTL_01_{ETL_TX_DT} (
+       "DATA_DT" date NOT NULL COMMENT '数据日期',
+       "ORG_NO" varchar(60) DEFAULT NULL COMMENT '机构编号',
+       "BIZ_ORG_NO" varchar(60) DEFAULT NULL COMMENT '入账机构',
+       "LOAN_RCPT_NO" varchar(200) DEFAULT NULL COMMENT '借据号',
+       "CURRCY_CD" varchar(5) DEFAULT NULL COMMENT '币种代码',
+       "BELO_LINE" varchar(200) DEFAULT NULL COMMENT '所属条线',
+       "CONTRACT_BAL" decimal(24,2) DEFAULT NULL COMMENT '合同余额',
+       "LOAN_BAL" decimal(26,6) DEFAULT NULL COMMENT '余额',
+       "RECVBL_INTST" decimal(26,6) DEFAULT NULL COMMENT '应收利息',
+       "ACCRU_INTST" decimal(26,6) DEFAULT NULL COMMENT '应计利息',
+       "AVG_MONTH_DAILY_BAL" decimal(26,6) DEFAULT NULL COMMENT '月末余额年日均',
+       "BAL_MONTH_DAILY_AVG" decimal(26,6) DEFAULT NULL COMMENT '余额月日均',
+       "BAL_QUART_DAILY_AVG" decimal(26,6) DEFAULT NULL COMMENT '余额季日均',
+       "BAL_YEAR_DAILY_AVG" decimal(26,6) DEFAULT NULL COMMENT '余额年日均',
+       "TAX_AFTER_INTST_INCOME" decimal(26,6) DEFAULT NULL COMMENT '税后利息收入',
+	   "ACTULA_INTST_INCOME" decimal(26,6) DEFAULT NULL COMMENT '实际利息收入',
+       "FTPEXPEN" decimal(26,6) DEFAULT NULL COMMENT 'FTP支出',
+       "ECONOMY_CAP" decimal(26,6) DEFAULT NULL COMMENT '经济资本余额',
+       "ECONOMY_CAP_COST" decimal(26,6) DEFAULT NULL COMMENT '经济资本成本',
+       "ITEM_SETOU" decimal(26,6) DEFAULT NULL COMMENT '专项准备',
+       "PRE_TAX_INTST_INCOME" decimal(26,6) DEFAULT NULL COMMENT '税前利息收入',
+       "DATA_SOURC" varchar(10) DEFAULT NULL COMMENT '数据来源'
+     ) ENGINE=EXPRESS DEFAULT CHARSET=utf8 COMMENT='机构贷款明细临时表'
+@@BLOCK dwa_pid_a_d_pt_minor_ent_related_rela | 3@@	CREATE TABLE {PID}.P_LIST_SMALL_CUST_TMP1
+
+ AS                    
+
+ SELECT  
+
+
+
+
+
+
+
+
+
+  CASE WHEN (CASE WHEN T2.core_cust_no = '' or t2.core_cust_no is null THEN T.core_cust_no ELSE T2.core_cust_no END) LIKE '01%' THEN '01'
+
+       WHEN (CASE WHEN T2.core_cust_no = '' or t2.core_cust_no is null THEN T.core_cust_no ELSE T2.core_cust_no END) LIKE '02%' THEN '02'
+
+       ELSE '' END CUSTTYPE 
+
+ ,T.LOAN_RCPT_NO       JIEJUHAO        
+
+ ,T.LOAN_CONTRACT_NO   CONTRACT_NO     
+
+ ,T.CUST_NO            JIEDAIREN       
+
+ ,T.OUT_ACCT_DT        PUTOUTDATE      
+
+ ,T.CLEAR_DT           finishdate      
+
+ ,T.LOAN_BAL           TOT_BAL         
+
+ ,T3.HANDL_ORG_NO                      
+
+ FROM {CDM}.C_AGT_LOAN_RCPT_INf T
+
+ LEFT JOIN {FDM}.F_PT_CRMS_LOAN_BIZ_CUST_INF T2 
+
+        ON T.CUST_NO=T2.CUST_NO 
+
+       AND T2.DEL_FLAG <>'D'
+
+       AND T2.END_DT > DATE '{ETL_TX_DT}'
+
+       AND T2.START_DT <= DATE '{ETL_TX_DT}'
+
+ LEFT JOIN {FDM}.F_CT_CRMS_LOAN_BIZ_CONTRACT T3 
+
+        ON T3.CONTRACT_NO = T.LOAN_CONTRACT_NO  
+
+       AND T3.END_DT > DATE '{ETL_TX_DT}'
+
+       AND T3.START_DT <= DATE '{ETL_TX_DT}'
+
+	   AND T3.del_flag <>'D'
+
+ WHERE T.PROD_NO LIKE '1%'
+
+  AND SUBSTR(T.PROD_NO,1,4) <>'1020'
+
+  AND T.LOAN_TYPE_CD='0120'
+
+  AND T.DATA_DT = DATE '{ETL_TX_DT}'
+@@BLOCK dwa_pid_a_d_pt_minor_ent_related_rela | 5@@	CREATE TABLE {PID}.P_LIST_SMALL_CUST_TMP2
+
+AS
+
+SELECT T.*
+
+,T42.BONDS_CUST_NO         BAOZHENGREN         
+
+,T6.OWSHIP_PERSON_CUST_NO  DIYAREN             
+
+,A.RELATED_CUST_NO         GUANLIANQIYE        
+
+,CASE WHEN T.CUSTTYPE = '01' THEN B.RELATED_CUST_NO
+
+        WHEN T.CUSTTYPE = '02' THEN B2.RELATED_CUST_NO
+
+ELSE '' END                XIANGGUANREN        
+
+,CASE WHEN T.CUSTTYPE = '01' THEN B.RELATED_RELA_CD
+
+        WHEN T.CUSTTYPE = '02' THEN B2.RELATED_RELA_CD
+
+ELSE '' END                XIANGGUANRENTYPE    
+
+FROM {PID}.P_LIST_SMALL_CUST_TMP1 T
+
+LEFT JOIN {FDM}.F_CT_CRMS_LOAN_CONT_AND_GUAR_CONT_RELA T41  
+
+       ON T.CONTRACT_NO=T41.CONTRACT_NO 
+
+      AND T41.RELA_TYPE_CD='GuarantyContract' 
+
+      AND T41.END_DT > DATE '{ETL_TX_DT}'
+
+      AND T41.START_DT <= DATE '{ETL_TX_DT}'
+
+	  AND T41.del_flag <> 'D'
+
+LEFT JOIN {FDM}.F_CT_CRMS_LOAN_BIZ_GUAR_CONTRACT T42  
+
+       ON T41.GUAR_CONTRACT_NO= T42.GUAR_CONTRACT_NO 
+
+      AND T42.END_DT > DATE '{ETL_TX_DT}'
+
+      AND T42.START_DT <= DATE '{ETL_TX_DT}'
+
+	  AND T42.del_flag <> 'D'
+
+LEFT JOIN {FDM}.F_CT_CRMS_LOAN_GUAR_CONTRACT_AND_GUAR_RELA  T5 
+
+       ON T5.GUAR_CONTRACT_NO = T41.GUAR_CONTRACT_NO  
+
+      AND T5.END_DT > DATE '{ETL_TX_DT}'
+
+      AND T5.START_DT <= DATE '{ETL_TX_DT}'
+
+	  AND T5.del_flag <> 'D'
+
+LEFT JOIN {FDM}.F_RE_CRMS_LOAN_BIZ_GUAR_INF T6 
+
+       ON T6.COLLATERAL_NO = T5.GUAR_NO 
+
+      AND T6.END_DT > DATE '{ETL_TX_DT}'
+
+      AND T6.START_DT <= DATE '{ETL_TX_DT}'
+
+	  AND T6.del_flag <> 'D'
+
+LEFT JOIN {FDM}.F_PT_CRMS_LOAN_BIZ_PRI_OPERA_ACCT_RELATED A  
+
+       ON A.CUST_NO = T.JIEDAIREN 
+
+      and A.DEL_FLAG <>'D'
+
+      AND A.END_DT > DATE '{ETL_TX_DT}'
+
+      AND A.START_DT <= DATE '{ETL_TX_DT}'
+
+LEFT JOIN {FDM}.F_PT_CRMS_LOAN_BIZ_CUST_RELATED_RELA B  
+
+       ON A.RELATED_CUST_NO=B.CUST_NO  
+
+      AND B.DEL_FLAG <> 'D' 
+
+      AND B.VLD_FLAG ='1'
+
+      AND B.RELATED_RELA_CD IN ('0100','5201','5202','5203','5204','5205')
+
+      AND B.END_DT > DATE '{ETL_TX_DT}'
+
+      AND B.START_DT <= DATE '{ETL_TX_DT}'	  
+
+LEFT JOIN {FDM}.F_PT_CRMS_LOAN_BIZ_CUST_RELATED_RELA B2   
+
+       ON T.JIEDAIREN=B2.CUST_NO 
+
+      AND B2.VLD_FLAG ='1'
+
+      AND B2.DEL_FLAG <> 'D'
+
+      AND B2.RELATED_RELA_CD IN ('0100','5201','5202','5203','5204','5205') 
+
+      AND B2.END_DT > DATE '{ETL_TX_DT}'
+
+      AND B2.START_DT <= DATE '{ETL_TX_DT}'
+@@BLOCK dwa_pid_a_d_pt_minor_ent_related_rela | 7@@	CREATE TABLE {PID}.P_LIST_SMALL_CUST_TMP3
+
+AS
+
+SELECT
+
+CUSTOMERID, 
+
+CORE_CUST_NO, 
+
+RELATE,    
+
+JIEJUHAO                      
+
+FROM (
+
+		SELECT 
+
+		T.CUST CUSTOMERID 
+
+		,T2.CORE_CUST_NO
+
+		,T.RELATE
+
+		,T.XU
+
+		,T.JIEJUHAO
+
+		,T.PUTOUTDATE,ROW_NUMBER() OVER (PARTITION BY T2.CORE_CUST_NO ORDER BY XU ASC,PUTOUTDATE  DESC ) AS XU3
+
+		FROM
+
+		(
+
+			SELECT 
+
+			A.*
+
+			,ROW_NUMBER() OVER (PARTITION BY CUST ORDER BY XU) AS XU2
+
+			FROM
+
+			(
+
+				
+
+				SELECT JIEDAIREN AS CUST,JIEJUHAO, PUTOUTDATE,'1' AS RELATE,1 AS XU
+
+				FROM (
+
+				  SELECT *,ROW_NUMBER() OVER (PARTITION BY JIEDAIREN ORDER BY PUTOUTDATE DESC,(case when finishdate = '0001-01-01' then '2099/12/31' else finishdate end) desc  ) AS XU
+
+				  FROM {PID}.P_LIST_SMALL_CUST_TMP2
+
+				  WHERE CUSTTYPE IN ('01','02')
+
+				) A WHERE XU =1
+
+				
+
+				UNION ALL
+
+				
+
+				
+
+				SELECT RELATED_CUST_NO AS CUST,JIEJUHAO, PUTOUTDATE,'2' AS RELATE,2 AS XU
+
+				FROM 
+
+				(
+
+				  SELECT T.*,B.RELATED_CUST_NO,ROW_NUMBER() OVER (PARTITION BY B.RELATED_CUST_NO ORDER BY T.PUTOUTDATE DESC,(case when finishdate = '0001-01-01' then '2099/12/31' else finishdate end) desc ) AS XU
+
+				  FROM {PID}.P_LIST_SMALL_CUST_TMP2  T
+
+				  LEFT JOIN {FDM}.F_PT_CRMS_LOAN_BIZ_CUST_RELATED_RELA B  
+
+						 ON T.JIEDAIREN=B.CUST_NO
+
+						AND B.VLD_FLAG ='1'
+
+						AND B.RELATED_RELA_CD ='0301'
+
+						AND B.DEL_FLAG <> 'D'
+
+						AND B.END_DT > DATE '{ETL_TX_DT}'
+
+						AND B.START_DT <= DATE '{ETL_TX_DT}'
+
+				  WHERE T.CUSTTYPE IN ('01','02')
+
+				  AND B.RELATED_CUST_NO IS NOT NULL
+
+				) A  WHERE XU =1
+
+				
+
+				UNION ALL
+
+				
+
+				
+
+				SELECT GUANLIANQIYE AS CUST,JIEJUHAO,PUTOUTDATE, '3' AS RELATE,3 AS XU
+
+				FROM 
+
+				(
+
+				  SELECT *,ROW_NUMBER() OVER (PARTITION BY GUANLIANQIYE ORDER BY PUTOUTDATE DESC ,(case when finishdate = '0001-01-01' then '2099/12/31' else finishdate end) desc ) AS XU
+
+				  FROM {PID}.P_LIST_SMALL_CUST_TMP2 
+
+				  WHERE CUSTTYPE IN ('01','02')
+
+				  AND GUANLIANQIYE IS NOT NULL 
+
+				) A WHERE XU =1
+
+				
+
+				UNION ALL
+
+				
+
+				
+
+				SELECT XIANGGUANREN AS CUST,JIEJUHAO,PUTOUTDATE, '4' AS RELATE,4 AS XU
+
+				FROM 
+
+				(
+
+				  SELECT *,ROW_NUMBER() OVER (PARTITION BY XIANGGUANREN ORDER BY PUTOUTDATE DESC ,(case when finishdate = '0001-01-01' then '2099/12/31' else finishdate end) desc ) AS XU
+
+				  FROM {PID}.P_LIST_SMALL_CUST_TMP2 
+
+				  WHERE CUSTTYPE IN ('01','02')
+
+				  AND XIANGGUANREN IS NOT NULL 
+
+				  AND XIANGGUANRENTYPE ='0100'
+
+				)A WHERE XU =1
+
+				
+
+				UNION ALL
+
+				
+
+				
+
+				SELECT XIANGGUANREN AS CUST,JIEJUHAO, PUTOUTDATE,'5' AS RELATE,5 AS XU
+
+				FROM 
+
+				(
+
+				  SELECT *,ROW_NUMBER() OVER (PARTITION BY XIANGGUANREN ORDER BY PUTOUTDATE DESC ,(case when finishdate = '0001-01-01' then '2099/12/31' else finishdate end) desc ) AS XU
+
+				  FROM {PID}.P_LIST_SMALL_CUST_TMP2 
+
+				  WHERE CUSTTYPE IN ('01','02')
+
+				  AND XIANGGUANREN IS NOT NULL 
+
+				  AND XIANGGUANRENTYPE <>'0100'
+
+				)A WHERE XU =1
+
+				
+
+				UNION ALL
+
+				
+
+				
+
+				SELECT DIYAREN AS CUST,JIEJUHAO,PUTOUTDATE,'6' AS RELATE,6 AS XU
+
+				FROM 
+
+				(
+
+				  SELECT *,ROW_NUMBER() OVER (PARTITION BY DIYAREN ORDER BY PUTOUTDATE DESC ,(case when finishdate = '0001-01-01' then '2099/12/31' else finishdate end) desc ) AS XU
+
+				  FROM {PID}.P_LIST_SMALL_CUST_TMP2 
+
+				  WHERE CUSTTYPE IN ('01','02')
+
+				  AND DIYAREN IS NOT NULL 
+
+				) A WHERE XU =1
+
+				
+
+				UNION ALL 
+
+				
+
+				 
+
+				SELECT BAOZHENGREN AS CUST,JIEJUHAO, PUTOUTDATE,'7' AS RELATE,7 AS XU
+
+				FROM 
+
+				(
+
+				  SELECT *,ROW_NUMBER() OVER (PARTITION BY BAOZHENGREN ORDER BY PUTOUTDATE DESC ,(case when finishdate = '0001-01-01' then '2099/12/31' else finishdate end) desc ) AS XU
+
+				  FROM {PID}.P_LIST_SMALL_CUST_TMP2 
+
+				  WHERE CUSTTYPE IN ('01','02')
+
+				  AND BAOZHENGREN IS NOT NULL 
+
+				)A WHERE XU =1
+
+				
+
+				UNION ALL
+
+				
+
+				
+
+				SELECT RELATED_CUST_NO AS CUST,JIEJUHAO, PUTOUTDATE,'8' AS RELATE,8 AS XU
+
+				FROM (
+
+				  SELECT T.*,B.RELATED_CUST_NO,ROW_NUMBER() OVER (PARTITION BY B.RELATED_CUST_NO ORDER BY PUTOUTDATE DESC ,(case when finishdate = '0001-01-01' then '2099/12/31' else finishdate end) desc ) AS XU
+
+				  FROM {PID}.P_LIST_SMALL_CUST_TMP2  T
+
+				  LEFT JOIN {FDM}.F_PT_CRMS_LOAN_BIZ_CUST_RELATED_RELA B  
+
+						 ON T.XIANGGUANREN=B.CUST_NO 
+
+						AND B.VLD_FLAG ='1'
+
+						AND B.RELATED_RELA_CD ='0301'
+
+						AND B.DEL_FLAG <> 'D'
+
+						AND B.END_DT > DATE '{ETL_TX_DT}'
+
+						AND B.START_DT <= DATE '{ETL_TX_DT}'
+
+				  WHERE CUSTTYPE IN ('01','02')
+
+				  AND T.XIANGGUANREN IS NOT NULL 
+
+				  AND T.XIANGGUANRENTYPE ='0100'
+
+				  AND B.RELATED_CUST_NO IS NOT NULL 
+
+				)A  WHERE XU =1
+
+				
+
+				UNION ALL
+
+				
+
+				
+
+				SELECT RELATED_CUST_NO AS CUST,JIEJUHAO, PUTOUTDATE,'9' AS RELATE,9 AS XU
+
+				FROM (
+
+				  SELECT T.*,B.RELATED_CUST_NO,ROW_NUMBER() OVER (PARTITION BY B.RELATED_CUST_NO ORDER BY PUTOUTDATE DESC ,(case when finishdate = '0001-01-01' then '2099/12/31' else finishdate end) desc ) AS XU
+
+				  FROM {PID}.P_LIST_SMALL_CUST_TMP2  T
+
+				  LEFT JOIN {FDM}.F_PT_CRMS_LOAN_BIZ_CUST_RELATED_RELA B  
+
+						 ON T.XIANGGUANREN=B.CUST_NO 
+
+						AND B.VLD_FLAG ='1'
+
+						AND B.RELATED_RELA_CD ='0301'
+
+						AND B.DEL_FLAG <> 'D'
+
+						AND B.END_DT > DATE '{ETL_TX_DT}'
+
+						AND B.START_DT <= DATE '{ETL_TX_DT}'
+
+				  WHERE CUSTTYPE IN ('01','02')
+
+				  AND T.XIANGGUANREN IS NOT NULL 
+
+				  AND T.XIANGGUANRENTYPE <>'0100'
+
+				  AND B.RELATED_CUST_NO IS NOT NULL 
+
+				)A  WHERE XU =1
+
+				
+
+				UNION ALL
+
+				
+
+				
+
+				SELECT RELATED_CUST_NO AS CUST,JIEJUHAO,PUTOUTDATE, '10' AS RELATE,10 AS XU
+
+				FROM (
+
+				  SELECT T.*,B.RELATED_CUST_NO,ROW_NUMBER() OVER (PARTITION BY B.RELATED_CUST_NO ORDER BY PUTOUTDATE DESC ,(case when finishdate = '0001-01-01' then '2099/12/31' else finishdate end) desc ) AS XU
+
+				  FROM {PID}.P_LIST_SMALL_CUST_TMP2  T
+
+				  LEFT JOIN {FDM}.F_PT_CRMS_LOAN_BIZ_CUST_RELATED_RELA B  
+
+						 ON T.DIYAREN=B.CUST_NO 
+
+						AND B.VLD_FLAG ='1'
+
+						AND B.RELATED_RELA_CD ='0301'
+
+						AND B.DEL_FLAG <> 'D'
+
+						AND B.END_DT > DATE '{ETL_TX_DT}'
+
+						AND B.START_DT <= DATE '{ETL_TX_DT}'
+
+				  WHERE T.CUSTTYPE IN ('01','02')
+
+				  AND T.DIYAREN IS NOT NULL 
+
+				  AND B.RELATED_CUST_NO IS NOT NULL 
+
+				)A  WHERE XU =1
+
+				
+
+				UNION ALL
+
+				
+
+				
+
+				SELECT RELATED_CUST_NO AS CUST,JIEJUHAO,PUTOUTDATE, '11' AS RELATE,11 AS XU
+
+				FROM 
+
+				(
+
+				  SELECT T.*,B.RELATED_CUST_NO,ROW_NUMBER() OVER (PARTITION BY B.RELATED_CUST_NO ORDER BY PUTOUTDATE DESC ,(case when finishdate = '0001-01-01' then '2099/12/31' else finishdate end) desc ) AS XU
+
+				  FROM {PID}.P_LIST_SMALL_CUST_TMP2  T
+
+				  LEFT JOIN {FDM}.F_PT_CRMS_LOAN_BIZ_CUST_RELATED_RELA B  
+
+						 ON T.BAOZHENGREN=B.CUST_NO 
+
+						AND B.VLD_FLAG ='1'
+
+						AND B.RELATED_RELA_CD ='0301'
+
+						AND B.DEL_FLAG <> 'D'
+
+						AND B.END_DT > DATE '{ETL_TX_DT}'
+
+						AND B.START_DT <= DATE '{ETL_TX_DT}'
+
+				  WHERE CUSTTYPE IN ('01','02')
+
+				  AND T.BAOZHENGREN IS NOT NULL 
+
+				  AND B.RELATED_CUST_NO IS NOT NULL 
+
+				)A  WHERE XU =1 
+
+			) A
+
+			WHERE A.CUST IS NOT NULL
+
+		)T
+
+		LEFT JOIN {FDM}.F_PT_CRMS_LOAN_BIZ_CUST_INF T2 
+
+			ON T.CUST =T2.CUST_NO 
+
+			AND T2.DEL_FLAG <> 'D'
+
+			AND T2.END_DT > DATE '{ETL_TX_DT}'
+
+			AND T2.START_DT <= DATE '{ETL_TX_DT}'
+
+		WHERE NOT(T.RELATE IN ('6','7','4','5') AND T2.CORE_CUST_NO LIKE '02%')
+
+			AND T.XU2 =1
+
+			AND T2.CORE_CUST_NO IS NOT NULL
+
+			AND T2.CORE_CUST_NO <>''
+
+	) TT
+
+WHERE TT.XU3 =1
+@@BLOCK dwa_pid_a_d_pt_minor_ent_related_rela | 11@@	CREATE TABLE  {PID}.tmp_A_D_PT_MINOR_ENT_RELATED_RELA   
+
+AS select 
+
+t8.cust_no
+
+,T8.ACCT_NO
+
+,T8.acct_name  
+
+,T8.cust_acct_no  
+
+,T8.open_acct_dt 
+
+,T8.acct_sts_cd
+
+,t8.int_rate  
+
+,t8.acct_cance_dt 
+
+,T8.acct_bal * NVL(T9.DOM_CURRCY_CONVT_PRICE,1) as acct_bal
+
+,T8.quart_daily_avg * NVL(T9.DOM_CURRCY_CONVT_PRICE,1) as quart_daily_avg
+
+,T8.year_daily_avg * NVL(T9.DOM_CURRCY_CONVT_PRICE,1) as year_daily_avg
+
+from {CDM}.C_AGT_DEPOSIT_ACCT_INF T8
+
+LEFT JOIN {CDM}.C_COM_EXCH_RATE T9
+
+       ON T8.CURRCY_CD = T9.CURRCY_CD
+
+      AND T9.DATA_DT = DATE '{ETL_TX_DT}' 
+
+where T8.DATA_DT = DATE '{ETL_TX_DT}'
+@@BLOCK dwa_pid_a_g_dp_deposit_report | 4@@	CREATE TABLE pid.vt_a_g_dp_deposit_report_01_{ETL_TX_DT} (
+  "DATA_DT" date NOT NULL COMMENT '数据日期',
+  "ORG_NO" varchar(60) DEFAULT NULL COMMENT '机构编号',
+  "ORG_Name" varchar(200) DEFAULT NULL COMMENT '机构名称',
+  "BELO_BRCH_NO" varchar(60) DEFAULT NULL COMMENT '所属分行编号',
+  "BELO_BRCH_NAME" varchar(200) DEFAULT NULL COMMENT '所属分行名称',
+  "CUST_NO" varchar(60) DEFAULT NULL COMMENT '客户编号',
+  "CUST_NAME" varchar(200) DEFAULT NULL COMMENT '客户名称',
+  "INTAL_ACCT_NO_NO" varchar(60) DEFAULT NULL COMMENT '内部账号编号',
+  "ACCT_NO" varchar(60) DEFAULT NULL COMMENT '账户编号',
+  "SUB_ACCT_NO_NO" varchar(60) DEFAULT NULL COMMENT '子账号编号',
+  "PROD_NO" varchar(60) DEFAULT NULL COMMENT '产品编号',
+  "PROD_NAME" varchar(200) DEFAULT NULL COMMENT '产品名称',
+  "SUBJ_NO" varchar(200) DEFAULT NULL COMMENT '科目编号',
+  "SUBJ_NAME" varchar(200) DEFAULT NULL COMMENT '科目名称',
+  "DEPOSIT_CLASS" varchar(200) DEFAULT NULL COMMENT '存款类别',
+  "LINE_NAME" varchar(200) DEFAULT NULL COMMENT '条线名称',
+  "PERM_LINE" varchar(100) DEFAULT NULL COMMENT '权限条线',
+  "BAL" decimal(26,6) DEFAULT NULL COMMENT '余额',
+  "dep_bal" decimal(26,6) DEFAULT NULL COMMENT '未折币存款余额',
+  "MONTH_DAILY_AVG" decimal(26,6) DEFAULT NULL COMMENT '月日均',
+  "QUART_DAILY_AVG" decimal(26,6) DEFAULT NULL COMMENT '季日均',
+  "YEAR_DAILY_AVG" decimal(26,6) DEFAULT NULL COMMENT '年日均',
+  "DAY_INTST" decimal(26,6) DEFAULT NULL COMMENT '天利息',
+  "INTST_EXPEN" decimal(26,6) DEFAULT NULL COMMENT '利息支出',
+  "FTPINCOME" decimal(26,6) DEFAULT NULL COMMENT 'FTP收入',
+  "open_dt" date DEFAULT NULL COMMENT '开户日期'
+) ENGINE=EXPRESS DEFAULT CHARSET=utf8 TABLESPACE='sys_tablespace' COMMENT='机构存款明细查询临时表'
+@@BLOCK dwa_pid_a_g_dp_deposit_report | 7@@	CREATE TABLE pid.vt_a_g_dp_deposit_report_02_{ETL_TX_DT} (
+  "DATA_DT" date NOT NULL COMMENT '数据日期',
+  "ORG_NO" varchar(60) DEFAULT NULL COMMENT '机构编号',
+  "ORG_Name" varchar(200) DEFAULT NULL COMMENT '机构名称',
+  "BELO_BRCH_NO" varchar(60) DEFAULT NULL COMMENT '所属分行编号',
+  "BELO_BRCH_NAME" varchar(200) DEFAULT NULL COMMENT '所属分行名称',
+  "SUBJ_NO" varchar(200) DEFAULT NULL COMMENT '科目编号',
+  "LINE_NAME" varchar(200) DEFAULT NULL COMMENT '条线名称',
+  "PERM_LINE" varchar(100) DEFAULT NULL COMMENT '权限条线',
+  "BAL" decimal(26,6) DEFAULT NULL COMMENT '余额',
+  "dep_bal" decimal(26,6) DEFAULT NULL COMMENT '未折币存款余额',
+  "MONTH_DAILY_AVG" decimal(26,6) DEFAULT NULL COMMENT '月日均',
+  "QUART_DAILY_AVG" decimal(26,6) DEFAULT NULL COMMENT '季日均',
+  "YEAR_DAILY_AVG" decimal(26,6) DEFAULT NULL COMMENT '年日均',
+  "DAY_INTST" decimal(26,6) DEFAULT NULL COMMENT '天利息',
+  "INTST_EXPEN" decimal(26,6) DEFAULT NULL COMMENT '利息支出',
+  "FTPINCOME" decimal(26,6) DEFAULT NULL COMMENT 'FTP收入',
+  "open_dt" date DEFAULT NULL COMMENT '开户日期'
+) ENGINE=EXPRESS DEFAULT CHARSET=utf8 TABLESPACE='sys_tablespace' COMMENT='机构存款明细查询临时表'
+@@BLOCK dwa_pid_a_g_ln_loan_org_itnet_sum | 3@@	CREATE TABLE {PID}.VT_A_G_LN_LOAN_ORG_ITNET_SUM_01_{ETL_TX_DT}
+(SELECT   
+ACCT_NO
+,CONTRACT_NO
+,PROD_NO
+,BELO_LINE
+,VAL_DT
+,DATA_SOURC_TAB_NAME
+,sum(CASE WHEN T.DATA_DT = DATE '{ETL_TX_DT}' THEN T.LOAN_BAL else 0 end) LOAN_BAL  
+,SUM(CASE WHEN T.DATA_DT >= DATE '{I_MB_DT}' AND T.DATA_DT <= DATE '{ETL_TX_DT}' THEN NVL(T.LOAN_BAL,0) ELSE 0 END) / {MTD_DAYS} AS MONTH_DAILY_AVG 
+,SUM(CASE WHEN T.DATA_DT >= DATE '{I_QB_DT}' AND T.DATA_DT <= DATE '{ETL_TX_DT}' THEN NVL(T.LOAN_BAL,0) ELSE 0 END) / {QTD_DAYS} AS QUART_DAILY_AVG 
+,SUM(CASE WHEN T.DATA_DT >= DATE '{I_YB_DT}' AND T.DATA_DT <= DATE '{ETL_TX_DT}' THEN NVL(T.LOAN_BAL,0) ELSE 0 END) / {YTD_DAYS} AS YEAR_DAILY_AVG  
+FROM {PID}.A_D_LN_LOAN_ACCT_ITNET_INF T 
+WHERE T.DATA_DT >= DATE '{I_YB_DT}' AND T.DATA_DT <= DATE '{ETL_TX_DT}'
+and NVL(T.LOAN_BAL,0) <> 0
+GROUP BY T.ACCT_NO,CONTRACT_NO,prod_no,belo_line,t.VAL_DT,DATA_SOURC_TAB_NAME
+)
+@@BLOCK dwa_pid_a_g_ln_loan_org_itnet_sum | 5@@	CREATE TABLE {PID}.VT_A_G_LN_LOAN_ORG_ITNET_SUM_02_{ETL_TX_DT}
+select
+   date '{ETL_TX_DT}' as DATA_DT
+  ,t.acct_no
+  ,T.CURRCY_CD
+  ,t.org_no
+  ,t.prod_no 
+  ,t.BELO_LINE                                  as BELO_LINE   
+  ,SUM(CASE WHEN T.DATA_DT = DATE'{ETL_TX_DT}' THEN FTP_INT_DAY_AJUST*PLUS_MINUS_FLAG ELSE 0 END)   AS FTP_INT_DAY_AJUST      
+  ,SUM(CASE WHEN T.DATA_DT between DATE '{I_MB_DT}' and DATE '{ETL_TX_DT}' THEN FTP_INT_DAY_AJUST*PLUS_MINUS_FLAG else 0 end) AS FTP_INT_MONTH_AJUST  
+  ,SUM(CASE WHEN T.DATA_DT BETWEEN DATE '{I_QB_DT}' AND DATE '{ETL_TX_DT}' THEN FTP_INT_DAY_AJUST*PLUS_MINUS_FLAG ELSE 0 END)  AS FTP_INT_QUAR_AJUST     
+  ,SUM(FTP_INT_DAY_AJUST*PLUS_MINUS_FLAG)  AS FTP_INT_YEAR_AJUST     
+from 
+pid.a_d_ln_loan_acct_prft t 
+where t.DATA_DT <= date '{ETL_TX_DT}'
+and t.data_dt >= date '{I_YB_DT}'
+and (t.DATA_SOURCE = 'HLW' or prod_no in ('1110140','1110145','1110155','3005')) 
+group by 
+t.acct_no
+,T.CURRCY_CD
+,t.org_no
+,t.prod_no
+,t.BELO_LINE
+@@BLOCK dwa_pid_a_g_ln_new_distr_loan_int_rate | 10@@	CREATE TABLE {PID}.TMP_kln_0 as
+
+   SELECT SUM(CASE WHEN T.LOAN_TYPE_CD = '0110' THEN T.OUT_ACCT_AMT ELSE 0 END) a1
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0110' THEN T.OUT_ACCT_AMT*t.ACTUAL_OUT_ACCT_INT_RATE ELSE 0 END) a2
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0110' AND T3.CORE_CUST_NO IS NULL THEN T.OUT_ACCT_AMT ELSE 0 END) b1
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0110' AND T3.CORE_CUST_NO IS NULL THEN T.OUT_ACCT_AMT*t.ACTUAL_OUT_ACCT_INT_RATE ELSE 0 END) b2
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0110' AND T3.CORE_CUST_NO IS NOT NULL THEN T.OUT_ACCT_AMT ELSE 0 END) c1
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0110' AND T3.CORE_CUST_NO IS NOT NULL THEN T.OUT_ACCT_AMT*t.ACTUAL_OUT_ACCT_INT_RATE ELSE 0 END) c2
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0120' THEN T.OUT_ACCT_AMT ELSE 0 END) d1
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0120' THEN T.OUT_ACCT_AMT*t.ACTUAL_OUT_ACCT_INT_RATE ELSE 0 END) d2
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0310' THEN T.OUT_ACCT_AMT ELSE 0 END) e1
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0310' THEN T.OUT_ACCT_AMT*t.ACTUAL_OUT_ACCT_INT_RATE ELSE 0 END) e2
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0310' and T.PROD_NO in ('1110010','1110020') THEN T.OUT_ACCT_AMT ELSE 0 END) f1
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0310' and T.PROD_NO in ('1110010','1110020') THEN T.OUT_ACCT_AMT*t.ACTUAL_OUT_ACCT_INT_RATE ELSE 0 END) f2
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0310' and T.PROD_NO not in ('1110010','1110020') THEN T.OUT_ACCT_AMT ELSE 0 END) g1
+
+         ,SUM(CASE WHEN T.LOAN_TYPE_CD = '0310' and T.PROD_NO not in ('1110010','1110020') THEN T.OUT_ACCT_AMT*t.ACTUAL_OUT_ACCT_INT_RATE ELSE 0 END) g2
+
+   FROM  {FDM}.F_AC_CRMS_LOAN_BIZ_LOAN_RCPT T 
+
+   LEFT JOIN {FDM}.F_CT_CRMS_LOAN_BIZ_CONTRACT T1 
+
+   ON T1.CONTRACT_NO = T.CONTRACT_NO
+
+   AND {ETL_TX_DT} BETWEEN T1.START_DT AND T1.END_DT-1
+
+   INNER JOIN {FDM}.F_PD_CRMS_LOAN_BIZ_PROD T2  
+
+   ON T2.PROD_NO = T.PROD_NO
+
+   AND {ETL_TX_DT} BETWEEN T2.START_DT AND T2.END_DT-1
+
+   AND T2.PROD_NO LIKE '1%' 
+
+   and t2.PROD_NAME NOT LIKE '%垫款%' 
+
+   AND T2.PROD_NAME NOT LIKE '%贴现%' 
+
+   LEFT JOIN (SELECT C.CORE_CUST_NO
+
+              FROM {FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF C 
+
+    	        LEFT JOIN {FDM}.F_PT_ECIF_PUB_CUST_INF O
+
+    	        ON C.CUST_NO = O.CUST_NO
+
+    	        AND {ETL_TX_DT} BETWEEN O.START_DT AND O.END_DT-1
+
+    	        WHERE {ETL_TX_DT} BETWEEN C.START_DT AND C.END_DT-1
+
+    	        AND O.GOVERN_STRUCTURE='1' 
+
+    	        GROUP BY C.CORE_CUST_NO) T3
+
+   ON T.CORE_CUST_NO = T3.CORE_CUST_NO
+
+   WHERE {ETL_TX_DT} BETWEEN T.START_DT AND T.END_DT-1
+
+   AND SUBSTR(REPLACE(T.OUT_ACCT_DT,'/',''),1,4) = substr({ETL_TX_DT},1,4)
+
+   AND T.BIZ_CURRCY_CD = '156'
+
+   and DATE(REPLACE(T.CONTRACT_EXPIR_DT,'/',''))-DATE(REPLACE(T.OUT_ACCT_DT,'/','')) >= 10
+
+   and (TRIM(T.CLEAR_DT) = '' 
+
+    or DATE(REPLACE(T.CLEAR_DT,'/',''))-DATE(REPLACE(T.OUT_ACCT_DT,'/','')) >= 10)
+@@BLOCK dwa_pid_a_g_ln_new_distr_loan_int_rate | 11@@	CREATE TABLE {PID}.TMP_kxw_1 as
+
+   SELECT SUM(C.LOAN_TOT_PRINCIPAL) AS a1
+
+   ,SUM((C.LOAN_TOT_PRINCIPAL)*(INT_INT_RATE*(1-0.005)*100-0)) as a2
+
+   
+
+   
+
+   FROM {FDM}.F_CT_SPLN_CUST_ORDER_AND_LOAN_RCPT_RELA A 
+
+   LEFT JOIN {FDM}.F_AC_SPLN_LOAN_RCPT C  
+
+   ON A.LOAN_RCPT_NO = C.LOAN_RCPT_NO 
+
+   AND {ETL_TX_DT} between C.start_dt and C.end_dt-1
+
+   WHERE {ETL_TX_DT} between a.start_dt and a.end_dt-1
+
+   AND nvl(c.LOAN_RCPT_NO,'') <> ''
+
+   and substr(replace(LOAN_RGST_DT,'-',''),1,4)= substr({ETL_TX_DT},1,4)
+
+   and FIR_OUT_BILL_DT-LOAN_RGST_DT>=10
+@@BLOCK dwa_pid_a_g_ln_new_distr_loan_int_rate | 12@@	CREATE TABLE {PID}.TMP_kmy_1 as
+
+   SELECT SUM(case when nvl(t.BIZ_TYPE_CD,'0201')='0201' then t.DISTR_AMT/100 end) as a1
+
+   ,SUM(case when nvl(t.BIZ_TYPE_CD,'0201')='0201' then t.DISTR_AMT/100*((LOAN_DAY_INT_RATE*360*100)*(1-0.35)-0.67) end) as a2
+
+   
+
+   ,SUM(case when nvl(t.BIZ_TYPE_CD,'0201')='02013000' then t.DISTR_AMT/100 end) as b1
+
+   ,SUM(case when nvl(t.BIZ_TYPE_CD,'0201')='02013000' then t.DISTR_AMT/100*((LOAN_DAY_INT_RATE*360*100)*(1-0.295)-0.67) end) as b2
+
+   
+
+   ,SUM(case when nvl(t.BIZ_TYPE_CD,'0201')='0301' then t.DISTR_AMT/100 end) as c1
+
+   ,SUM(case when nvl(t.BIZ_TYPE_CD,'0201')='0301' then t.DISTR_AMT/100*((LOAN_DAY_INT_RATE*360*100)*(1-0.295)-0.67) end) as c2
+
+   
+
+   FROM {FDM}.F_EV_MYLN_DISTR_DTL  T 
+
+   LEFT JOIN (SELECT T.*,ROW_NUMBER() OVER(PARTITION BY CONTRACT_NO ORDER BY start_dt DESC) RN 
+
+              FROM {FDM}.F_CT_MYLN_DAY_END_CONT T  
+
+              WHERE {ETL_TX_DT} between start_dt and end_dt-1) T2  
+
+   ON T.FINANG_PLATF_LOAN_CONTRACT_NO = T2.CONTRACT_NO
+
+   AND T2.RN = 1 
+
+   WHERE {ETL_TX_DT} between t.start_dt and t.end_dt-1
+
+   AND (DATE(CASE WHEN TRIM(T2.CLEAR_DT)='' THEN '20991231' ELSE T2.CLEAR_DT END)-DATE(T.LOAN_VAL_DAY) >= 10)
+
+   AND SUBSTR(REPLACE(CAST(SUBSTR(T.DISTR_DT,1,10) AS DATE)+1,'-',''),1,4) = substr({ETL_TX_DT},1,4)
+@@BLOCK dwa_pid_a_g_ln_new_distr_loan_int_rate | 13@@	CREATE TABLE {PID}.TMP_kmy_2 as
+
+   select sum(a1) as a1,sum(a2) as a2 from (
+
+   SELECT a1,a2
+
+   FROM TMP_kmy_1
+
+   union
+
+   SELECT b1,b2
+
+   FROM TMP_kmy_1
+
+   union
+
+   SELECT c1,c2
+
+   FROM TMP_kmy_1
+
+   )t
+@@BLOCK dwa_pid_a_g_ln_new_distr_loan_int_rate | 14@@	CREATE TABLE {PID}.TMP_kdz_1 as
+
+   select SUM(a.LOAN_INIT_PRIN) as a1
+
+   ,sum(a.LOAN_INIT_PRIN*a.BASE_INT_RATE*100) as a2
+
+   from {FDM}.F_AC_UPEA_STAGES_INF a   
+
+   where {ETL_TX_DT} BETWEEN A.START_DT AND A.END_DT -1
+
+   AND (trim(a.PAY_OFF_DT)='' or DATE(a.PAY_OFF_DT)-DATE(a.ACTIVA_DT) >= 10)
+
+   AND SUBSTR(a.ACTIVA_DT,1,4) = substr({ETL_TX_DT},1,4)
+@@BLOCK dwa_pid_a_g_ln_new_distr_loan_int_rate | 15@@	CREATE TABLE {PID}.TMP_kxj_1 as
+
+   SELECT SUM(case when BIZ_VATY_CD not in ('3002','3003','1005','1006','1007','2005','1106','2009') then T.LOAN_AMT end) as a1
+
+   ,SUM(case when BIZ_VATY_CD not in ('3002','3003','1005','1006','1007','2005','1106','2009') then T.LOAN_AMT*LOAN_INT_RATE end) as a2
+
+   ,sum(case when BIZ_VATY_CD='3002' then T.LOAN_AMT end) as b1
+
+   ,sum(case when BIZ_VATY_CD='3002' then T.LOAN_AMT*(LOAN_INT_RATE*(1-0.3)-0) end) as b2
+
+   ,sum(case when BIZ_VATY_CD='3003' then T.LOAN_AMT end) as c1
+
+   ,sum(case when BIZ_VATY_CD='3003' then T.LOAN_AMT*(LOAN_INT_RATE*(1-0.3)-0) end) as c2
+
+   ,sum(case when BIZ_VATY_CD='1005' then T.LOAN_AMT end) as d1
+
+   ,sum(case when BIZ_VATY_CD='1005' then T.LOAN_AMT*(LOAN_INT_RATE*(1-0.3014)-0.5) end) as d2
+
+   ,sum(case when BIZ_VATY_CD='1006' then T.LOAN_AMT end) as e1
+
+   ,sum(case when BIZ_VATY_CD='1006' then T.LOAN_AMT*(LOAN_INT_RATE*(1-0.2)-3.44) end) as e2
+
+   ,sum(case when BIZ_VATY_CD='1007' then T.LOAN_AMT end) as f1
+
+   ,sum(case when BIZ_VATY_CD='1007' then T.LOAN_AMT*(LOAN_INT_RATE*(1-0.3014)-0.5) end) as f2
+
+   ,sum(case when BIZ_VATY_CD='2005' then T.LOAN_AMT end) as g1
+
+   ,sum(case when BIZ_VATY_CD='2005' then T.LOAN_AMT*(LOAN_INT_RATE*(1-0.3014)-0.5) end) as g2
+
+   ,sum(case when BIZ_VATY_CD='1106' then T.LOAN_AMT end) as h1
+
+   ,sum(case when BIZ_VATY_CD='1106' then T.LOAN_AMT*(LOAN_INT_RATE*(1-0.2)-3.44) end) as h2
+
+   ,sum(case when BIZ_VATY_CD='2009' then T.LOAN_AMT end) as i1
+
+   ,sum(case when BIZ_VATY_CD='2009' then T.LOAN_AMT*(LOAN_INT_RATE*(1-0.35)-0.5) end) as i2
+
+   FROM {FDM}.F_AC_CFXF_LOAN_RCPT T    
+
+   WHERE {ETL_TX_DT} between t.start_dt and t.end_dt-1
+
+   AND T.BIZ_STS_CD  <> '1'
+
+   and SUBSTR(replace(LOAN_DISTR_DT+1,'-',''),1,4) = substr({ETL_TX_DT},1,4)
+
+   and (CLEAR_DT IS NULL OR CLEAR_DT='1900-01-01' OR CLEAR_DT-LOAN_DISTR_DT>=10)
+@@BLOCK dwa_pid_a_g_ln_new_distr_loan_int_rate | 16@@	CREATE TABLE {PID}.TMP_kxj_2 as
+
+   select sum(a1) as a1,sum(a2) as a2 from (
+
+   SELECT a1,a2
+
+   from TMP_kxj_1
+
+   union
+
+   SELECT b1,b2
+
+   from TMP_kxj_1
+
+   union
+
+   SELECT c1,c2
+
+   from TMP_kxj_1
+
+   union
+
+   SELECT d1,d2
+
+   from TMP_kxj_1
+
+   union
+
+   SELECT e1,e2
+
+   from TMP_kxj_1
+
+   union
+
+   SELECT f1,f2
+
+   from TMP_kxj_1
+
+   union
+
+   SELECT g1,g2
+
+   from TMP_kxj_1
+
+   union
+
+   SELECT h1,h2
+
+   from TMP_kxj_1
+
+   union
+
+   SELECT i1,i2
+
+   from TMP_kxj_1
+
+   )t
+@@BLOCK dwa_pid_a_g_ln_new_distr_loan_int_rate | 17@@	CREATE TABLE {PID}.TMP_kxf_1 as
+
+   SELECT SUM(T.LOAN_DISTR_AMT/100) as a1,  
+
+   SUM(T.LOAN_DISTR_AMT/100*CURR_CONTRACT_INT_RATE/100) as a2
+
+   FROM {FDM}.F_FI_CSLN_XXT_LOAN_TEMP_B4 T 
+
+   WHERE {ETL_TX_DT} between start_dt and end_dt-1
+
+   AND DATE(T.EXPIR_DT)-DATE(T.LOAN_DISTR_DT) >= 10
+
+   AND SUBSTR(T.LOAN_DISTR_DT,1,4) = substr({ETL_TX_DT},1,4)
+@@BLOCK dwa_pid_a_g_pt_cust_flg | 22@@	CREATE TABLE  {PID}.O_CB_BCUAC_TMP
+    AS
+    (
+        SELECT
+         T.CORE_CUST_NO as KEHHAO
+        ,T.CUST_NAME as CUACNM
+        ,T.CUST_CREATE_ORG_NO as ACOPBR
+        ,T1.CUST_ACCT_NO as CUACNO
+        ,T.CUST_CREATE_DT as KAIHRQ
+    FROM {FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF T
+LEFT JOIN
+    {FDM}.F_AC_CRBS_CUST_ACCT_NO  T1
+   ON T.CORE_CUST_NO=T1.MAIN_CUST_NO
+       LIMIT 0)
+@@BLOCK dwa_pid_a_g_pt_cust_flg | 24@@	CREATE TABLE {PID}.P_MOD_DP_ACCT_TMP
+    AS
+    (
+       SELECT CUST_NO as CUST_ID
+	   ,BAL_RMB  as CURR_BAL
+	   FROM {PID}.A_D_DP_DEPOSIT_ACCT_INF
+       LIMIT 0
+    )
+@@BLOCK dwa_pid_a_g_pt_cust_flg | 26@@	CREATE TABLE {PID}.O_CB_VYKTD_TMP
+    AS
+    (
+       SELECT
+          CUST_NO as KEHHAO
+        ,COUNT(1) as CNT
+    FROM {FDM}.F_MD_CRBS_ISSUED_INF T2
+    WHERE VCH_USE_STS_CD<>'B' AND RECORD_STS_CD='0'
+AND {ETL_TX_DT} BETWEEN START_DT AND END_DT - 1
+GROUP BY CUST_NO
+       LIMIT 0
+    )
+@@BLOCK dwa_pid_a_g_pt_cust_flg | 28@@	CREATE TABLE {PID}.O_CB_BC_TMP
+    AS
+    (
+       SELECT T1.MAIN_CUST_NO as KEHHAO
+        ,COUNT(1) as CNT
+    FROM {FDM}.F_MD_CRBS_ISSUED_INF T
+INNER JOIN
+    {FDM}.F_AC_CRBS_CUST_ACCT_NO T1
+    ON T.CUST_NO=T1.MAIN_CUST_NO
+AND {ETL_TX_DT} BETWEEN T1.START_DT AND T1.END_DT - 1
+WHERE {ETL_TX_DT} BETWEEN T.START_DT AND T.END_DT - 1
+AND T.CARD_TYPE_CD ='YBJGX99009'
+GROUP BY T1.MAIN_CUST_NO
+       LIMIT 0
+    )
+@@BLOCK dwa_pid_a_g_pt_cust_flg | 30@@	CREATE TABLE  {PID}.O_QD_CUST_ACCT_TMP
+    AS
+    (
+       SELECT  CUST_NO,
+		       SUM(TYPE_MB) TYPE_MB, 
+		       SUM(TYPE_NB) TYPE_NB,
+			   SUM(TYPE_WB) TYPE_WB
+          FROM (SELECT E_BANK_CUST_NO as CUST_NO,
+                       CASE WHEN OPEN_CHAN_CD = 'MB' 
+					        THEN 1 
+							ELSE 0
+						END AS TYPE_MB,
+                       CASE WHEN OPEN_CHAN_CD = 'NB' 
+					        THEN 1 
+							ELSE 0
+						END AS TYPE_NB,  
+                       CASE WHEN OPEN_CHAN_CD = 'WB' 
+					        THEN 1 
+							ELSE 0
+						END AS TYPE_WB					  
+                 FROM {FDM}.F_PT_RTCH_EL_CUST_INF T
+                 WHERE  CUST_STS_CD<>'0'
+                   AND OPEN_CHAN_CD IN ('MB', 'NB', 'WB')
+				   AND CORE_CUST_NO<>'' 
+				   AND ( {ETL_TX_DT} BETWEEN START_DT AND END_DT -1  )                      
+                   AND DEL_FLAG<>'D'                        
+                ) A
+				GROUP BY CUST_NO
+       LIMIT 0
+    )
+@@BLOCK dwa_pid_a_g_pt_cust_flg | 42@@	CREATE TABLE  {PID}.P_MOD_DP_ACCT_TMP_KH
+    AS
+    (
+       SELECT  CUST_NO AS CUST_ID, '1' AS FLG
+  FROM (SELECT T1.CUST_NO,
+               CASE
+                 WHEN T2.OPEN_ACCT_DT >=
+                      SUBSTR( DATE({ETL_TX_DT}),1,4) || '0101' AND
+                      T2.OPEN_ACCT_DT <= REPLACE({ETL_TX_DT}, '-', '') THEN
+                  '1'
+                 ELSE
+                  '0'
+               END AS NEW_FLG,
+             
+             
+             
+             
+             
+             
+             
+			 year_daily_avg_deposit_bal  AS YEAR_ACCUM_AVG
+          FROM {PID}.A_D_DP_DEPOSIT_ACCT_INF T1
+          LEFT JOIN (SELECT D.CORE_CUST_NO
+                      FROM {FDM}.F_PT_ECIF_PUB_CUST_INF A
+                     INNER JOIN {FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF D
+                        ON A.CUST_NO = D.CUST_NO
+                       AND DATE({ETL_TX_DT}) BETWEEN D.START_DT AND
+                           D.END_DT - 1
+                     WHERE A.GOVERN_STRUCTURE = '1'
+                       AND DATE({ETL_TX_DT}) BETWEEN A.START_DT AND
+                           A.END_DT - 1
+                       AND A.DEL_FLAG <> 'D'
+                       AND NVL(D.CORE_CUST_NO, '') <> '') T40
+            ON T1.CUST_NO = T40.CORE_CUST_NO
+          LEFT JOIN (SELECT *
+                      FROM {FDM}.F_PT_CRBS_PUB_CUST_INF
+                     WHERE DATE({ETL_TX_DT}) BETWEEN START_DT AND END_DT - 1
+                       AND DEL_FLAG <> 'D'
+                       AND CUST_NO LIKE '02%') T2
+            ON T1.CUST_NO = T2.CUST_NO
+         WHERE T1.DATA_DT = DATE({ETL_TX_DT})
+           AND T1.CUST_NO LIKE '02%'
+       
+           AND T40.CORE_CUST_NO IS NULL
+       
+       
+       
+       
+       
+       
+       
+       
+       
+       
+	   ) T
+ WHERE (NEW_FLG = '1' AND YEAR_ACCUM_AVG >= 400000)
+    OR (NEW_FLG = '0' AND YEAR_ACCUM_AVG >= 100000)
+LIMIT 0
+    )
+@@BLOCK dwa_pid_a_g_pt_cust_flg | 46@@	CREATE TABLE  {PID}.O_QD_CUST_LOG_LOGIN_TMP_KH
+    AS
+    (SELECT 
+       t1.CORE_CUST_NO AS cust_core_no,1 AS FLG
+  FROM (SELECT t1.CORE_CUST_NO, MAX(LOGIN_DT)
+          FROM {FDM}.F_EV_RTCH_CUST_LOGIN_BOOK T
+          LEFT JOIN {FDM}.F_PT_RTCH_EL_CUST_INF t1
+            ON t.E_BANK_CUST_NO = t1.E_BANK_CUST_NO
+           AND DATE({ETL_TX_DT}) BETWEEN t1.start_dt AND t1.end_dt - 1
+         WHERE T.LOGIN_DT = CAST(DATE({ETL_TX_DT}) AS DATE) - 1
+           AND T.LOGIN_STS_CD = '1'
+           AND T.LOGIN_CHAN_CD = 'MB'
+         GROUP BY t1.CORE_CUST_NO) T1
+  JOIN (SELECT CORE_CUST_NO, TXN_ORG, MAX(TRADE_DT)
+          FROM {FDM}.F_EV_RTCH_CUST_SIGNE_RESCS_DTL T
+         WHERE SUBSTR(TRADE_DT, 1, 4) = SUBSTR(DATE({ETL_TX_DT}), 1, 4)
+           AND MOVEM_TYPE_CD = '1'
+           AND TXN_HAPPEN_CHAN_CD = 'MB'
+         GROUP BY CORE_CUST_NO, TXN_ORG) T
+    ON T.CORE_CUST_NO = T1.CORE_CUST_NO
+		   LIMIT 0
+    )
+@@BLOCK dwa_pid_a_g_pt_cust_flg | 48@@	CREATE TABLE {PID}.O_QD_CUST_LOG_LOGIN_TMP_KH2
+    AS
+    (  SELECT DISTINCT T.E_BANK_CUST_NO AS CUST_NO,1 AS FLG
+  FROM {FDM}.F_EV_RTCH_CUST_LOGIN_BOOK T
+ WHERE T.ETL_TX_DT = DATE({ETL_TX_DT})
+   AND T.LOGIN_STS_CD = '1'
+   AND T.LOGIN_CHAN_CD = 'MB'
+		   LIMIT 0
+    )
+@@BLOCK dwa_pid_a_g_pt_cust_flg | 50@@	CREATE TABLE {PID}.O_QD_CUST_LOG_LOGIN_TMP_KH3
+    AS
+    (  SELECT DISTINCT T.E_BANK_CUST_NO AS CUST_NO,1 AS FLG
+  FROM {FDM}.F_EV_RTCH_CUST_LOGIN_BOOK T
+ WHERE T.ETL_TX_DT = DATE({ETL_TX_DT})
+   AND T.LOGIN_STS_CD = '1'
+   AND T.LOGIN_CHAN_CD = 'NB'
+		   LIMIT 0
+    )
+@@BLOCK dwa_pid_a_g_pt_cust_flg | 52@@	CREATE TABLE  {PID}.O_QD_CUST_LOG_LOGIN_TMP_KH4
+    AS
+    ( select 
+       distinct CORE_CUST_NO AS CUST_CORE_NO,1 AS FLG
+  from (SELECT T2.CORE_CUST_NO,
+               trim(T2.CUST_NAME) 客户姓名,
+               count(1) 总登录次数
+          FROM {FDM}.F_EV_RTCH_CUST_LOGIN_BOOK T1
+         INNER JOIN {FDM}.F_PT_RTCH_EL_CUST_INF T2
+            ON T1.E_BANK_CUST_NO = T2.E_BANK_CUST_NO
+           AND DATE({ETL_TX_DT}) BETWEEN T2.START_DT AND T2.END_DT - 1
+         WHERE LOGIN_CHAN_CD = 'MB'
+           and LOGIN_DT BETWEEN
+               CAST(SUBSTR(DATE({ETL_TX_DT}),1,4 )||'0101' AS DATE) AND
+               CAST(DATE({ETL_TX_DT}) AS DATE)
+ 
+ 
+ 
+           and CORE_CUST_NO <> ''
+           and LOGIN_STS_CD = '1'
+         group by T2.CORE_CUST_NO, trim(T2.CUST_NAME)) t 
+		   LIMIT 0
+    )
+@@BLOCK DWA_PID_A_PT_INDUSTRY_CLUSTER_INF | 3@@	CREATE TABLE PID.VT_A_PT_INDUSTRY_CLUSTER_INF_01
+
+(
+
+ CUST_NO VARCHAR(100) COMMENT '供应链客户号'
+
+,CORE_CUST_NM VARCHAR(100) COMMENT '客户名称'
+
+,CORE_CROP_NM VARCHAR(100) COMMENT '核心企业名称'
+
+)
+@@BLOCK DWA_PID_A_PT_INDUSTRY_CLUSTER_INF | 5@@	CREATE TABLE PID.VT_A_PT_INDUSTRY_CLUSTER_INF_02
+
+(
+
+ CORE_CUST_NM VARCHAR(100) COMMENT '客户名称'
+
+,CORE_CROP_NM VARCHAR(100) COMMENT '核心企业名称'
+
+)
+@@BLOCK DWA_PID_A_PT_INDUSTRY_CLUSTER_INF | 7@@	CREATE TABLE PID.VT_A_PT_INDUSTRY_CLUSTER_INF_03
+
+(
+
+DATA_DT DATE COMMENT '数据日期'
+
+,CORE_CUST_NO VARCHAR(100) COMMENT '客户号'
+
+,CORE_CUST_NM VARCHAR(100) COMMENT '客户名称'
+
+,CORE_CROP_NO VARCHAR(100) COMMENT '核心企业客户号'
+
+,CORE_CROP_NM VARCHAR(100) COMMENT '核心企业名称'
+
+)
+@@BLOCK dwa_pidrpt_a_othr_industry_cluster_cust_qualify_tab | 3@@	CREATE TABLE {PIDRPT}.A_OTHR_INDUSTRY_CLUSTER_CUST_QUALIFY_TAB_01 AS
+
+SELECT DATE'{ETL_TX_DT}' DATA_DT
+
+     	,INDUSTRY_CLUSTER_NAME
+
+	    ,TRIM(MEM_IDEN_NO) AS UNIFI_CREDIT_CD
+
+	    ,TRIM(MEM_NAME) AS ENT_NAME
+
+  FROM FDM.F_EV_CRMS_INDUSTRY_CLUSTER_CUST_WHITE_ROLL
+
+	  WHERE MEM_NAME NOT LIKE '%*%' 
+
+	    AND UPDATE_DT >='2025/03/19'
+
+	    AND START_DT <= DATE'{ETL_TX_DT}'
+
+	    AND END_DT > DATE'{ETL_TX_DT}'
+
+	    AND CHECK_CD = '1'
+
+	    AND DEL_FLAG <> 'D'
+
+	    AND VLD_CD = '1'
+
+union 
+
+SELECT DATE'{ETL_TX_DT}' DATA_DT
+
+	    ,'农批市场' AS INDUSTRY_CLUSTER_NAME
+
+	    ,TRIM(USCC_CD) AS UNIFI_CREDIT_CD
+
+	    ,TRIM(MECT_NAME) AS ENT_NAME
+
+  FROM CDM.C_CUS_BIZCIRCLE_MECT_INF T
+
+	  WHERE T.DATA_DT = '{ETL_TX_DT}'
+
+	    AND T.BIZCIRCLE_STS_CD = '30'
+
+	    AND T.MECT_STS_CD = '30'
+
+	    AND T.BIZCIRCLE_TYPE_CD = '10' 
+
+	    AND T.DATA_SOURC_TAB_NAME = 'F_EV_CRMS_FLOWS_BUSINESS_CIRCLE_LIST'
+@@BLOCK dwa_pidrpt_m_cust_ent_qualify_tab | 3@@	CREATE TABLE {PIDRPT}.M_CUST_ENT_QUALIFY_TAB_YBH_01 AS
+
+SELECT DISTINCT DATE'{ETL_TX_DT}' DATA_DT
+
+			,TAXPAYER_RECOG_NO AS UNIFI_CREDIT_CD
+
+  FROM FDM.F_EX_CHSC_TAX_ADMIN_RATIN_INF
+
+    WHERE START_DT <= DATE'{ETL_TX_DT}'
+
+      AND END_DT > DATE'{ETL_TX_DT}'                      
+
+      AND (YEAR = LEFT('{ETL_TX_DT}',4) - 1 OR YEAR = LEFT('{ETL_TX_DT}',4)) 
+
+      AND RECORD_IND_CD = 'A'
+
+UNION 
+
+SELECT DATA_DT
+
+			,USCC AS UNIFI_CREDIT_CD
+
+	FROM (
+
+	SELECT DATE'{ETL_TX_DT}' DATA_DT
+
+	      ,TRIM(USCC)  AS USCC   
+
+	      ,TRIM(ENT_NAME)  AS ENT_NAME  
+
+	      ,ROW_NUMBER() OVER(PARTITION BY TRIM(USCC) ORDER BY INPUT_DT DESC) RANKING
+
+	  FROM FDM.F_PT_CRMS_TDL_WHITE_ROLL_INF
+
+	    WHERE VLD_STS_FLAG = '1'
+
+	      AND START_DT <= '{ETL_TX_DT}'
+
+	      AND ENT_NAME <> ''
+
+	      AND USCC <> ''
+
+	      AND LENGTH(USCC) = 18
+
+	      ) T
+
+	  WHERE RANKING = 1

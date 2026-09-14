@@ -1,0 +1,65 @@
+﻿dwa_c_cus_pub_cust_basic_inf	34	offic_addr	CASE WHEN NVL(OFFICE_ADDR, '') <> '' THEN B.OFFICE_ADDR ELSE NULL END	vt_c_cus_pub_cust_basic_inf_tmp5
+dwa_pid_a_d_crdt_cust_stl_rate_info	2	cust_name	CUST_NAME	NULL
+dwa_pid_a_d_credit_card_prov_outer_finang_dtl_tab	6	prom_projects	PROM_PROJECTS	NULL
+dwa_pid_a_d_dm_credit_card_org_in	25	data_dt	BIL_FLOW_big	NULL
+dwa_pid_a_d_dm_credit_card_org_in	25	asset_type	BIL_FLOW_STS	NULL
+dwa_pid_a_d_dm_credit_card_org_in	25	asset_type	batch_no	NULL
+dwa_pid_a_d_dm_credit_card_org_in	25	txn_type	CNTRPTY_NAME	NULL
+dwa_pid_a_d_dm_credit_card_org_in	25	txn_type	GL_SUB_NAME	NULL
+dwa_pid_a_d_dm_credit_card_org_in	25	dtl_sub_num	sum(ALL_INC)	NULL
+dwa_pid_a_d_dm_credit_card_org_in	25	val_related_desc	sum(ALL_INC)	NULL
+dwa_pid_a_d_dm_credit_card_org_in	25	val_related_desc	sum(ALL_INC)	NULL
+dwa_pid_a_d_dm_credit_card_org_in	27	data_dt	BIL_FLOW_big	NULL
+dwa_pid_a_d_dm_credit_card_org_in	27	asset_type	BIL_FLOW_STS	NULL
+dwa_pid_a_d_dm_credit_card_org_in	27	asset_type	batch_no	NULL
+dwa_pid_a_d_dm_credit_card_org_in	27	txn_type	CNTRPTY_NAME	NULL
+dwa_pid_a_d_dm_credit_card_org_in	27	txn_type	GL_SUB_NAME	NULL
+dwa_pid_a_d_dm_credit_card_org_in	27	vs_name	sum(BILL_AMT)	NULL
+dwa_pid_a_d_dm_credit_card_org_in	27	dtl_sub_num	sum(ALL_INC)	NULL
+dwa_pid_a_d_dm_credit_card_org_in	27	val_related_desc	sum(ALL_INC)	NULL
+dwa_pid_a_d_dm_credit_card_org_in	27	val_related_desc	sum(ALL_INC)	NULL
+dwa_pid_a_d_dm_credit_card_org_in	32	data_dt	BIL_FLOW_big	NULL
+dwa_pid_a_d_dm_credit_card_org_in	32	asset_type	BIL_FLOW_STS	NULL
+dwa_pid_a_d_dm_credit_card_org_in	32	asset_type	batch_no	NULL
+dwa_pid_a_d_dm_credit_card_org_in	32	txn_type	CNTRPTY_NAME	NULL
+dwa_pid_a_d_dm_credit_card_org_in	32	txn_type	GL_SUB_NAME	NULL
+dwa_pid_a_d_dm_credit_card_org_in	32	vs_name	sum(BILL_AMT)	NULL
+dwa_pid_a_d_dm_credit_card_org_in	32	fst_term_remai_term_repur_term	sum(ALL_INC)	NULL
+dwa_pid_a_d_dm_credit_card_org_in	32	val_related_desc	sum(ALL_INC)	NULL
+dwa_pid_a_d_dm_credit_card_org_in	32	val_related_desc	sum(ALL_INC)	NULL
+dwa_pid_a_d_fi_bank_card_income_day_report	8	income	SUM(NVL(FEE_1, 0) + NVL(FEE_2, 0) + NVL(FEE_3, 0))	NULL
+dwa_pid_a_d_fi_bank_card_income_day_report	8	income	SUM(NVL(FEE_1, 0) + NVL(FEE_2, 0) + NVL(FEE_3, 0))	NULL
+dwa_pid_a_d_fi_bank_card_income_day_report	8	income	SUM(NVL(FEE_1, 0) + NVL(FEE_2, 0) + NVL(FEE_3, 0))	NULL
+dwa_pid_a_d_ln_card_mid_income	8	income_fee_bal	SUM(NVL(FEE_1, 0) + NVL(FEE_2, 0) + NVL(FEE_3, 0))	NULL
+dwa_pid_a_d_ln_card_mid_income	8	income_fee_bal	SUM(NVL(FEE_1, 0) + NVL(FEE_2, 0) + NVL(FEE_3, 0))	NULL
+dwa_pid_a_d_ln_card_mid_income	8	income_fee_bal	SUM(NVL(FEE_1, 0) + NVL(FEE_2, 0) + NVL(FEE_3, 0))	NULL
+dwa_pid_a_d_ln_card_mid_income	12	income_fee_bal	SUM(NVL(FEE_1, 0) + NVL(FEE_2, 0) + NVL(FEE_3, 0))	NULL
+dwa_pid_a_d_ln_card_mid_income	12	income_fee_bal	SUM(NVL(FEE_1, 0) + NVL(FEE_2, 0) + NVL(FEE_3, 0))	NULL
+dwa_pid_a_d_ln_card_mid_income	12	income_fee_bal	SUM(NVL(FEE_1, 0) + NVL(FEE_2, 0) + NVL(FEE_3, 0))	NULL
+dwa_pid_a_d_ln_loan_org_dtl	6	ftpexpen	NVL(FTPEXPEN * nvl(exchange_to_cny_rate, nvl(currcy.dom_currcy_convt_p	vt_a_d_ln_loan_org_dtl_01_
+dwa_pid_a_d_ln_loan_org_dtl	6	asses_prft	(NVL(TAX_AFTER_INTST_INCOME, 0) - NVL(FTPEXPEN * nvl(exchange_to_cny_r	vt_a_d_ln_loan_org_dtl_01_
+dwa_pid_a_d_ln_loan_org_dtl	6	eva	(NVL(TAX_AFTER_INTST_INCOME, 0) - NVL(FTPEXPEN * nvl(exchange_to_cny_r	vt_a_d_ln_loan_org_dtl_01_
+dwa_pid_a_d_ln_loan_org_dtl	6	after_ftpprice	(NVL(FTPEXPEN * nvl(exchange_to_cny_rate, nvl(currcy.dom_currcy_convt_	vt_a_d_ln_loan_org_dtl_01_
+dwa_pid_a_d_ln_loan_org_dtl	6	asses_int_rate_sprea	((NVL(TAX_AFTER_INTST_INCOME, 0) - NVL(FTPEXPEN * nvl(exchange_to_cny_	vt_a_d_ln_loan_org_dtl_01_
+dwa_pid_a_d_pay_scene_edu_pay_fees_inf	4	org_no	ACOPBR	NULL
+dwa_pid_a_d_pay_scene_edu_pay_fees_inf	4	cust_no	kehhao	NULL
+dwa_pid_a_d_pay_scene_edu_pay_fees_inf	4	stl_acct_no	cust_acct_no	NULL
+dwa_pid_a_d_pay_scene_edu_pay_fees_inf	4	pay_num	zfbs	NULL
+dwa_pid_a_d_pay_scene_edu_pay_fees_inf	4	pay_amt	zfje	NULL
+dwa_pid_a_d_pay_scene_edu_pay_fees_inf	4	agent_cnt	c_cusno	NULL
+dwa_pid_a_d_pay_scene_edu_pay_fees_inf	4	mgmt_asset	c_aum	NULL
+dwa_pid_a_g_agt_org_report_sum	2	tot_exp_card	SUM(CASE WHEN T1.VRFCTN_DT > DATE '__ph_ETL_TX_DT__' AND T1.ORIGINAL_I	a_g_agt_org_report_dtl
+dwa_pid_a_g_agt_org_report_sum	2	tot_exp_renew_card	SUM(CASE WHEN T1.VRFCTN_DT > DATE '__ph_ETL_TX_DT__' AND T1.ORIGINAL_I	a_g_agt_org_report_dtl
+dwa_pid_a_g_ln_credit_card_acct_sum	2	data_dt	T1.DATA_DT	NULL
+dwa_pid_a_g_ln_new_pord_sum	3	int_income	t.int_income	NULL
+dwa_pid_a_g_ln_new_pord_sum	4	loan_int_coll_rate	CASE WHEN t.int_rev <> 0 THEN t.int_income / t.int_rev ELSE 0 END	NULL
+dwa_pid_a_g_ln_new_pord_sum	4	loan_profit	t.loan_profit	NULL
+dwa_pid_a_g_ln_new_pord_sum	5	int_income	t.int_income	NULL
+dwa_pid_a_g_ln_new_pord_sum	6	loan_int_coll_rate	CASE WHEN t.int_rev <> 0 THEN t.int_income / t.int_rev ELSE 0 END	NULL
+dwa_pid_a_g_ln_new_pord_sum	6	loan_profit	t.loan_profit	NULL
+dwa_pid_a_g_ln_new_pord_sum	7	int_income	t.int_income	NULL
+dwa_pid_a_g_ln_new_pord_sum	8	loan_int_coll_rate	CASE WHEN t.int_rev <> 0 THEN t.int_income / t.int_rev ELSE 0 END	NULL
+dwa_pid_a_g_ln_new_pord_sum	8	loan_profit	t.loan_profit	NULL
+dwa_pid_a_gfin_mect_dtl_tab	18	kh_rm_avg	kh_rm_avg	NULL
+dwa_pid_a_gfin_mect_dtl_tab	19	rm_avg	rm_avg	NULL
+dwa_pid_a_tech_demand_inf	2	c_abre	CASE WHEN "NAME" IN ('李翔宇', '冯智伟') THEN '数据管理部' ELSE C.ABRE END	f_co_itmp_org_inf

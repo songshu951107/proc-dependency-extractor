@@ -1,0 +1,3 @@
+{"statements":[
+{"statement":"CALL dbms.killQuery('query-8413957') YIELD queryId, message RETURN queryId, message"}
+]}

@@ -1,0 +1,106 @@
+﻿FAIL [dwa_a_d_pt_pos_merch_info_sum | 3] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "=" "="
+FAIL [dwa_a_d_pt_pos_merch_info_sum | 5] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "=" "="
+FAIL [dwa_a_d_pt_pos_merch_info_sum | 7] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "=" "="
+FAIL [dwa_a_d_pt_pos_merch_info_sum | 9] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "=" "="
+FAIL [dwa_a_d_pt_pos_merch_info_sum | 11] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "=" "="
+FAIL [dwa_a_d_pt_pos_merch_info_sum | 13] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "=" "="
+FAIL [dwa_a_d_pt_pos_merch_info_sum | 15] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "=" "="
+FAIL [dwa_a_d_pt_pos_merch_info_sum | 17] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "=" "="
+OK [dwa_c_agt_credit_card_acct_calcu_base | 3] cols=18
+OK [dwa_c_agt_credit_card_acct_calcu_base | 5] cols=18
+OK [dwa_c_agt_credit_card_acct_calcu_base | 7] cols=18
+OK [dwa_c_agt_credit_card_acct_calcu_base_stand | 3] cols=18
+OK [dwa_c_agt_credit_card_acct_calcu_base_stand | 5] cols=18
+OK [dwa_c_agt_credit_card_acct_calcu_base_stand | 7] cols=18
+FAIL [dwa_c_agt_deposit_acct_intst | 3] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "SELECT" <K_SELECT>
+FAIL [dwa_c_agt_deposit_acct_intst | 5] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "SELECT" <K_SELECT>
+FAIL [dwa_c_agt_deposit_acct_intst | 7] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "SELECT" <K_SELECT>
+FAIL [dwa_c_agt_deposit_acct_intst | 9] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "select" <K_SELECT>
+FAIL [dwa_c_agt_deposit_acct_intst | 11] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "SELECT" <K_SELECT>
+OK [dwa_c_agt_insac_acct_calcu_base | 3] cols=-1 CTAS
+OK [dwa_c_agt_loan_collateral_inf | 3] cols=-1 CTAS
+OK [dwa_c_agt_loan_collateral_inf | 5] cols=-1 CTAS
+OK [dwa_c_agt_loan_guar_contract_inf | 3] cols=-1 CTAS
+OK [dwa_c_agt_loan_guar_contract_inf | 5] cols=-1 CTAS
+OK [dwa_c_agt_loan_guar_contract_inf | 7] cols=-1 CTAS
+OK [dwa_c_agt_loan_rcpt_calcu_base | 3] cols=-1 CTAS
+OK [dwa_c_agt_loan_rcpt_calcu_base | 5] cols=13
+OK [dwa_c_agt_loan_rcpt_calcu_base | 13] cols=-1 CTAS
+OK [dwa_C_AGT_LOAN_RCPT_INTST | 3] cols=-1 CTAS
+OK [dwa_C_AGT_LOAN_RCPT_INTST | 5] cols=-1 CTAS
+OK [dwa_C_AGT_LOAN_RCPT_INTST | 7] cols=-1 CTAS
+OK [dwa_c_agt_loan_rcpt_subj_rela_h | 4] cols=-1 CTAS
+OK [dwa_c_agt_loan_rcpt_subj_rela_h | 6] cols=7
+FAIL [dwa_c_agt_loan_rcpt_subj_rela_h | 13] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "EXCEPT" "EXCEPT"
+OK [dwa_c_agt_loan_rcpt_subj_rela_h_init | 3] cols=-1 CTAS
+OK [dwa_c_cus_folk_debit_credit_pub_cust_invlv_inf | 7] cols=-1 CTAS
+OK [dwa_c_cus_folk_debit_credit_pub_cust_invlv_inf | 9] cols=-1 CTAS
+OK [dwa_c_cus_folk_debit_credit_pub_cust_invlv_inf | 11] cols=-1 CTAS
+OK [dwa_c_cus_import_tag_flag_ind_l | 5] cols=-1 CTAS
+OK [dwa_c_cus_pri_cust_basic_inf | 12] cols=60
+OK [dwa_c_cus_pub_cust_basic_inf | 14] cols=-1 CTAS
+OK [dwa_c_cus_pub_cust_basic_inf | 15] cols=-1 CTAS
+OK [dwa_c_cus_pub_cust_basic_inf | 16] cols=-1 CTAS
+OK [dwa_c_cus_pub_cust_basic_inf | 17] cols=-1 CTAS
+OK [dwa_c_cus_pub_cust_basic_inf | 18] cols=-1 CTAS
+OK [dwa_c_cus_pub_cust_basic_inf | 19] cols=-1 CTAS
+OK [dwa_c_cus_pub_cust_basic_inf | 20] cols=-1 CTAS
+OK [dwa_c_cus_pub_cust_basic_inf | 21] cols=-1 CTAS
+OK [dwa_c_cus_pub_cust_basic_inf | 22] cols=-1 CTAS
+OK [dwa_c_cus_pub_cust_basic_inf | 23] cols=-1 CTAS
+OK [dwa_c_cus_UNIFI_CUST_INF_PUB | 3] cols=-1 CTAS
+OK [dwa_pid_a_d_ag_agent_pay_cus_inf | 3] cols=-1 CTAS
+OK [dwa_pid_a_d_ag_pub_inter_reve_dtl | 10] cols=-1 CTAS
+FAIL [dwa_pid_a_d_dp_deposit_intst_income_dtl_info | 3] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "SELECT" <K_SELECT>
+FAIL [dwa_pid_a_d_dp_deposit_intst_income_dtl_info | 5] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "SELECT" <K_SELECT>
+FAIL [dwa_pid_a_d_dp_deposit_intst_income_dtl_info | 7] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "SELECT" <K_SELECT>
+OK [dwa_pid_a_d_dp_deposit_intst_income_dtl_info | 9] cols=7
+OK [dwa_pid_a_d_dp_deposit_intst_income_dtl_info | 11] cols=-1 CTAS
+FAIL [dwa_pid_a_d_dp_deposit_intst_income_dtl_info | 13] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "select" <K_SELECT>
+FAIL [dwa_pid_a_d_eq_rpt_gov_qlfy_info | 3] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+FAIL [dwa_pid_a_d_eq_rpt_gov_qlfy_info | 5] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+FAIL [dwa_pid_a_d_fi_gl_inf | 8] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "SELECT" <K_SELECT>
+FAIL [dwa_pid_a_d_fi_gl_inf | 10] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "<=" <OP_MINORTHANEQUALS>
+FAIL [dwa_pid_A_D_FI_GL_INF_B | 7] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "SELECT" <K_SELECT>
+FAIL [dwa_pid_A_D_FI_GL_INF_B | 9] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "<=" <OP_MINORTHANEQUALS>
+OK [dwa_pid_a_d_ln_bill_discnt_cash_loan | 3] cols=5
+OK [DWA_PID_A_D_LN_CREDIT_CARD_FTP_INF | 2] cols=-1 CTAS
+OK [DWA_PID_A_D_LN_CREDIT_CARD_FTP_INF | 4] cols=-1 CTAS
+FAIL [dwa_pid_a_d_ln_credit_card_qty_inf | 3] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "TABLESPACE" "TABLESPACE"
+FAIL [dwa_pid_a_d_ln_credit_card_qty_inf | 6] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "TABLESPACE" "TABLESPACE"
+FAIL [DWA_PID_A_D_LN_LOAN_ACCT_INF | 3] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+FAIL [DWA_PID_A_D_LN_LOAN_ACCT_INF | 5] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "SELECT" <K_SELECT>
+OK [dwa_pid_a_d_ln_loan_acct_prft | 3] cols=-1 CTAS
+OK [dwa_pid_a_d_ln_loan_org_dtl | 3] cols=22
+OK [dwa_pid_a_d_pt_minor_ent_related_rela | 3] cols=-1 CTAS
+OK [dwa_pid_a_d_pt_minor_ent_related_rela | 5] cols=-1 CTAS
+OK [dwa_pid_a_d_pt_minor_ent_related_rela | 7] cols=-1 CTAS
+OK [dwa_pid_a_d_pt_minor_ent_related_rela | 11] cols=-1 CTAS
+FAIL [dwa_pid_a_g_dp_deposit_report | 4] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "TABLESPACE" "TABLESPACE"
+FAIL [dwa_pid_a_g_dp_deposit_report | 7] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "TABLESPACE" "TABLESPACE"
+FAIL [dwa_pid_a_g_ln_loan_org_itnet_sum | 3] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+FAIL [dwa_pid_a_g_ln_loan_org_itnet_sum | 5] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "select" <K_SELECT>
+FAIL [dwa_pid_a_g_ln_new_distr_loan_int_rate | 10] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "{" "{"
+FAIL [dwa_pid_a_g_ln_new_distr_loan_int_rate | 11] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "{" "{"
+FAIL [dwa_pid_a_g_ln_new_distr_loan_int_rate | 12] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "{" "{"
+OK [dwa_pid_a_g_ln_new_distr_loan_int_rate | 13] cols=-1 CTAS
+FAIL [dwa_pid_a_g_ln_new_distr_loan_int_rate | 14] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "{" "{"
+FAIL [dwa_pid_a_g_ln_new_distr_loan_int_rate | 15] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "{" "{"
+OK [dwa_pid_a_g_ln_new_distr_loan_int_rate | 16] cols=-1 CTAS
+FAIL [dwa_pid_a_g_ln_new_distr_loan_int_rate | 17] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "{" "{"
+OK [dwa_pid_a_g_pt_cust_flg | 22] cols=-1 CTAS
+OK [dwa_pid_a_g_pt_cust_flg | 24] cols=-1 CTAS
+FAIL [dwa_pid_a_g_pt_cust_flg | 26] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "{" "{"
+FAIL [dwa_pid_a_g_pt_cust_flg | 28] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "{" "{"
+FAIL [dwa_pid_a_g_pt_cust_flg | 30] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "{" "{"
+FAIL [dwa_pid_a_g_pt_cust_flg | 42] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+FAIL [dwa_pid_a_g_pt_cust_flg | 46] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+FAIL [dwa_pid_a_g_pt_cust_flg | 48] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+FAIL [dwa_pid_a_g_pt_cust_flg | 50] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+FAIL [dwa_pid_a_g_pt_cust_flg | 52] net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "(" "("
+OK [DWA_PID_A_PT_INDUSTRY_CLUSTER_INF | 3] cols=3
+OK [DWA_PID_A_PT_INDUSTRY_CLUSTER_INF | 5] cols=2
+OK [DWA_PID_A_PT_INDUSTRY_CLUSTER_INF | 7] cols=5
+OK [dwa_pidrpt_a_othr_industry_cluster_cust_qualify_tab | 3] cols=-1 CTAS
+OK [dwa_pidrpt_m_cust_ent_qualify_tab | 3] cols=-1 CTAS
+SUMMARY ok=59 fail=46

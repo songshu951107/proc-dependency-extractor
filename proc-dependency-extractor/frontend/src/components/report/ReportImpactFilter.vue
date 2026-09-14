@@ -163,7 +163,8 @@ async function loadFields() {
 async function loadReports() {
   reportLoading.value = true
   try {
-    const res = await getReportList({})
+    // 分页接口默认只返回第 1 页 10 条，溯源下拉需要全量列表：传大 pageSize 一次取全
+    const res = await getReportList({ pageNum: 1, pageSize: 100000 })
     // getReportList 返回分页对象 {records, total, size, current, pages}
     reports.value = res.data?.records || res.data || []
   } catch (e) {

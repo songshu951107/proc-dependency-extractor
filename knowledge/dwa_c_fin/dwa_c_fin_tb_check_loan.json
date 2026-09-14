@@ -1,0 +1,246 @@
+{
+  "scriptName": "dwa_c_fin_tb_check_loan.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T10:15:00",
+  "businessScenario": "财务管理系统总分核对-将传统贷款（信贷+保理+贸易融资+三方贷款+信用卡/贴现）明细账与总账科目余额进行比对",
+  "updateMethod": "每日全量",
+  "targetTable": "C_FIN_TB_CHECK",
+  "totalBlocks": 5,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ",
+      "fdmScript": "dwa_f_fi_crbs_new_acctg_entry_config_file_biz.py",
+      "found": true,
+      "tdmTable": "T_CRBS_PKNCS_${ETL_TX_DT}",
+      "odmTable": "O_CRBS_PKNCS",
+      "transformLogic": "从核心系统TDM层（T_CRBS_PKNCS）拉链入FDM，字段直接映射（MODULE→belo_modl_cd, CHANPH→prod_no等）"
+    },
+    {
+      "fdmTable": "F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA",
+      "fdmScript": "dwa_f_fi_figl_subj_no_and_crbs_biz_no_rela.py",
+      "found": true,
+      "tdmTable": "T_FIGL_ZHX002_${ETL_TX_DT}",
+      "odmTable": "O_FIGL_ZHX002",
+      "transformLogic": "从TDM层（T_FIGL_ZHX002）带删除拉链入FDM，字段映射（zyewudh→biz_cd, saknr→gl_subj_no, xloek→src_del_flag）"
+    },
+    {
+      "fdmTable": "F_AC_CRBS_SUB_LDGR",
+      "fdmScript": "dwa_f_ac_crbs_sub_ldgr.py",
+      "found": true,
+      "tdmTable": "T_CRBS_ANBFH_${ETL_TX_DT}",
+      "odmTable": "O_CRBS_ANBFH",
+      "transformLogic": "从核心系统TDM分户账表拉链入FDM，通过F_CO_TRANS_CD转换币种"
+    },
+    {
+      "fdmTable": "F_AC_CRMS_LOAN_BIZ_LOAN_RCPT",
+      "fdmScript": "dwa_f_ac_crms_loan_biz_loan_rcpt.py",
+      "found": true,
+      "tdmTable": "T_CRMS_BUSINESS_DUEBILL_${ETL_TX_DT}",
+      "odmTable": "O_CRMS_BUSINESS_DUEBILL",
+      "transformLogic": "从信贷系统TDM层（T_CRMS_BUSINESS_DUEBILL）带删除拉链入FDM，通过F_CO_TRANS_CD转换币种（STAND_CD_TAB_NO='CRMS0001'）"
+    },
+    {
+      "fdmTable": "F_FI_CRBS_BIZ_GL",
+      "fdmScript": "dwa_f_fi_crbs_biz_gl.py",
+      "found": true,
+      "tdmTable": "T_CRBS_AYWZZ_${ETL_TX_DT}",
+      "odmTable": "O_CRBS_AYWZZ",
+      "transformLogic": "从核心系统TDM业务总账表（T_CRBS_AYWZZ）有变更流水入FDM，通过F_CO_TRANS_CD转换币种（STAND_CD_TAB_NO='CRBS0020'）"
+    },
+    {
+      "fdmTable": "F_FI_FIGL_SUBJ_LVL_RELA",
+      "fdmScript": "dwa_f_fi_figl_subj_lvl_rela.py",
+      "found": true,
+      "tdmTable": "T_FIGL_ZSAPKMCS_${ETL_TX_DT}",
+      "odmTable": "O_FIGL_ZSAPKMCS",
+      "transformLogic": "从TDM层科目表带删除拉链入FDM"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "CREATE TABLE AS SELECT",
+      "depth": 0,
+      "blockName": "传统贷款明细数据加工（科目映射+折人民币）",
+      "sqlCode": "CREATE TABLE VT_C_FIN_TB_CHECK_LOAN_01 AS\nSELECT DATE'{ETL_TX_DT}' AS DATA_DT, T1.zckm, T1.qykm, T1.daikm, T1.dzkm,\n  T.nor_principal, T.overdue_principal, T.slugg_principal, T.doubt_acct_principal,\n  T.loan_bal*NVL(T5.dom_currcy_convt_price,1) AS loan_bal_rmb, ...\nFROM CDM.C_AGT_LOAN_RCPT_INF T\nLEFT JOIN (\n  SELECT T.prod_class_cd1,\n    MAX(CASE WHEN T.prod_featu_cd='ZHCHBJ' THEN T2.gl_subj_no END) AS zckm,\n    MAX(CASE WHEN T.prod_featu_cd='YUQIBJ' THEN T2.gl_subj_no END) AS qykm,\n    MAX(CASE WHEN T.prod_featu_cd='DZHIBJ' THEN T2.gl_subj_no END) AS daikm,\n    MAX(CASE WHEN T.prod_featu_cd='DAIZBJ' THEN T2.gl_subj_no END) AS dzkm\n  FROM FDM.F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ T\n  LEFT JOIN FDM.F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA T2 ON T.biz_cd_rule=T2.biz_cd\n    AND T2.start_dt<=DATE AND T2.end_dt>DATE\n  WHERE T.start_dt<=DATE AND T.end_dt>DATE AND T.prod_featu_cd IN('ZHCHBJ','YUQIBJ','DZHIBJ','DAIZBJ')\n  GROUP BY T.prod_class_cd1\n) T1 ON TRIM(T.acctg_class_cd)=TRIM(T1.prod_class_cd1)\nLEFT JOIN C_COM_EXCH_RATE T5 ON T.currcy_cd=T5.currcy_cd AND T5.data_dt=DATE\nWHERE T.data_dt=DATE AND t.loan_rcpt_no NOT LIKE 'FC%' AND (科目号以1开头) AND t.open_acct_dt<=DATE",
+      "tracedSqlCode": "从C_AGT_LOAN_RCPT_INF T LEFT JOIN (会计分录配置 LEFT JOIN 科目-业务关系) 获取四类科目号(正常/逾期/呆滞/呆账)，LEFT JOIN汇率表折人民币，排除FC开头的保理借据",
+      "businessScenario": "财务管理系统总分核对-从传统贷款共性层提取借据数据，通过会计分录配置和业务-科目关系获取正常/逾期/呆滞/呆账四类科目映射，折人民币计算",
+      "sqlFunction": "多表关联查询（科目映射+汇率转换）",
+      "involvedTables": ["O_CRBS_PKNCS", "O_FIGL_ZHX002", "C_AGT_LOAN_RCPT_INF", "C_COM_EXCH_RATE"],
+      "originalTables": ["F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ", "F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA", "C_AGT_LOAN_RCPT_INF", "C_COM_EXCH_RATE"],
+      "tableJoinLogic": "C_AGT_LOAN_RCPT_INF T LEFT JOIN (会计分录配置 LEFT JOIN 科目-业务关系) ON 产品分类代码匹配，LEFT JOIN 汇率表 ON 币种",
+      "queryDimensions": "借据编号、正常/逾期/呆滞/呆账本金、折人民币余额",
+      "tags": ["传统贷款", "科目映射", "五级分类", "正常本金", "逾期本金", "呆滞本金", "呆账本金", "折人民币"],
+      "traceChains": [
+        {
+          "originalTable": "F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ",
+          "fdmScript": "dwa_f_fi_crbs_new_acctg_entry_config_file_biz.py",
+          "tdmTable": "T_CRBS_PKNCS_${ETL_TX_DT}",
+          "odmTable": "O_CRBS_PKNCS",
+          "filterConditions": "start_dt<=当日 AND end_dt>当日, prod_featu_cd IN ('ZHCHBJ','YUQIBJ','DZHIBJ','DAIZBJ')"
+        },
+        {
+          "originalTable": "F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA",
+          "fdmScript": "dwa_f_fi_figl_subj_no_and_crbs_biz_no_rela.py",
+          "tdmTable": "T_FIGL_ZHX002_${ETL_TX_DT}",
+          "odmTable": "O_FIGL_ZHX002",
+          "filterConditions": "start_dt<=当日 AND end_dt>当日",
+          "fieldMappings": [
+            {"fdmField": "biz_cd", "odmField": "zyewudh", "description": "业务代号"},
+            {"fdmField": "gl_subj_no", "odmField": "saknr", "description": "总账科目号"}
+          ]
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "贷款五级分类科目映射",
+          "derivedSql": "SELECT prod_class_cd1, MAX(CASE WHEN prod_featu_cd='ZHCHBJ' THEN gl_subj_no END) AS zckm, MAX(CASE WHEN prod_featu_cd='YUQIBJ' THEN gl_subj_no END) AS qykm, MAX(CASE WHEN prod_featu_cd='DZHIBJ' THEN gl_subj_no END) AS daikm, MAX(CASE WHEN prod_featu_cd='DAIZBJ' THEN gl_subj_no END) AS dzkm FROM O_CRBS_PKNCS LEFT JOIN O_FIGL_ZHX002 ON biz_cd_rule=zyewudh GROUP BY prod_class_cd1",
+          "businessMeaning": "根据会计产品分类代码获取正常本金(ZHCHBJ)/逾期本金(YUQIBJ)/呆滞本金(DZHIBJ)/呆账本金(DAIZBJ)对应的总账科目号",
+          "sourceTable": "O_CRBS_PKNCS",
+          "originalTable": "F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "blockName": "信贷贷款+保理+贸易融资+三方贷款+信用卡贴现数据汇总",
+      "sqlCode": "-- 信贷数据\nINSERT INTO VT_C_FIN_TB_CHECK_LOAN_02\nSELECT 'subj_no_zc', subj_no_zc, SUM(nor_principal_rmb) FROM VT_C_FIN_TB_CHECK_LOAN_01 GROUP BY subj_no_zc\nUNION ALL SELECT 'subj_no_yq', subj_no_yq, SUM(overdue_principal_rmb) ...\nUNION ALL SELECT 'subj_no_dz', subj_no_dz, SUM(slugg_principal_rmb) ...\nUNION ALL SELECT 'subj_no_dj', subj_no_dj, SUM(doubt_acct_principal_rmb) ...\n\n-- 保理数据\nINSERT INTO VT_C_FIN_TB_CHECK_LOAN_02\nSELECT 'baoli', CASE WHEN overdue_principal<>0 THEN '1313010100' WHEN slugg_principal<>0 THEN '1314010300' WHEN doubt_acct_principal<>0 THEN '1314010300' WHEN nor_principal<>0 THEN '1301030200' END, SUM(T1.loan_bal)\nFROM C_AGT_LOAN_RCPT_INF T1 LEFT JOIN F_AC_CRMS_LOAN_BIZ_LOAN_RCPT T2\n  ON T1.loan_rcpt_no=T2.loan_rcpt_no AND 拉链有效\nWHERE T1.loan_rcpt_no LIKE 'FC%' AND biz_sts_cd NOT IN('18','19') AND loan_bal<>0\n  AND prod_no NOT LIKE '1020%' AND SUBSTR(prod_no,1,1)='1'\n  AND 排除特定借据 AND 排除特定产品\n\n-- 贸易融资数据\nINSERT INTO VT_C_FIN_TB_CHECK_LOAN_02\nSELECT 'myrz', '131299', SUM(T.p_amtz_intst*-1*NVL(T5.dom_currcy_convt_price,1))\nFROM C_AGT_LOAN_RCPT_INF T LEFT JOIN C_COM_EXCH_RATE T5\n  ON T.currcy_cd=T5.currcy_cd AND T5.data_dt=DATE\nWHERE T.data_dt=DATE AND T.acctg_class_cd IN('1411','1333') AND T.p_amtz_intst<>0\n\n-- 三方贷款\nINSERT INTO VT_C_FIN_TB_CHECK_LOAN_02\nSELECT 'hlw', T4.gl_subj_no, SUM(T.debtor_bal-T.creditor_bal)\nFROM F_AC_CRBS_SUB_LDGR T\nINNER JOIN F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA T4 ON T.biz_cd=T4.biz_cd AND 拉链有效\nWHERE 机构过滤(互联网贷款机构) AND T.subj_no LIKE '13%' AND T.subj_no NOT LIKE '1320%'\n\n-- 信用卡贴现\nINSERT INTO VT_C_FIN_TB_CHECK_LOAN_02\nSELECT 'xyk&tx', T4.gl_subj_no, SUM(T.debtor_bal)-SUM(T.creditor_bal)\nFROM F_FI_CRBS_BIZ_GL T\nINNER JOIN F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA T4 ON T.biz_cd=T4.biz_cd\n  AND (SUBSTR(T4.gl_subj_no,1,4) IN('1310','1309') OR SUBSTR(T4.gl_subj_no,1,6) IN('131305','131404'))\nWHERE T.ETL_TX_DT=DATE AND T.gl_type_cd='0' AND T.debtor_bal-T.creditor_bal<>0",
+      "tracedSqlCode": "五类贷款数据汇总到VT_C_FIN_TB_CHECK_LOAN_02（UNION ALL），包括信贷/保理/贸易融资/三方(互联网)/信用卡贴现，其中FDM表已追溯至ODM层",
+      "businessScenario": "财务管理系统总分核对-汇总五类传统贷款数据：信贷贷款按科目类型分组（正常/逾期/呆滞/呆账），供应链保理按贷款状态映射科目，贸易融资反向利息汇总，三方贷款按互联网机构过滤，信用卡贴现按科目前缀限定",
+      "sqlFunction": "多表关联查询（多来源UNION ALL汇总）",
+      "involvedTables": ["C_AGT_LOAN_RCPT_INF", "O_CRMS_BUSINESS_DUEBILL", "O_CRBS_ANBFH", "O_FIGL_ZHX002", "O_CRBS_AYWZZ", "C_COM_EXCH_RATE"],
+      "originalTables": ["C_AGT_LOAN_RCPT_INF", "F_AC_CRMS_LOAN_BIZ_LOAN_RCPT", "F_AC_CRBS_SUB_LDGR", "F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA", "F_FI_CRBS_BIZ_GL", "C_COM_EXCH_RATE"],
+      "tableJoinLogic": "5组INSERT UNION ALL：信贷(单表)、保理(LEFT JOIN FDM借据)、贸易融资(LEFT JOIN汇率表)、三方贷款(INNER JOIN科目关系)、信用卡(INNER JOIN科目关系)",
+      "queryDimensions": "科目类型代码、科目号、余额（折人民币）",
+      "tags": ["传统贷款", "信贷", "保理", "贸易融资", "三方贷款", "信用卡", "贴现", "科目汇总"],
+      "traceChains": [
+        {
+          "originalTable": "F_AC_CRMS_LOAN_BIZ_LOAN_RCPT",
+          "fdmScript": "dwa_f_ac_crms_loan_biz_loan_rcpt.py",
+          "tdmTable": "T_CRMS_BUSINESS_DUEBILL_${ETL_TX_DT}",
+          "odmTable": "O_CRMS_BUSINESS_DUEBILL",
+          "filterConditions": "start_dt<=当日 AND end_dt>当日，用于过滤保理借据"
+        },
+        {
+          "originalTable": "F_AC_CRBS_SUB_LDGR",
+          "fdmScript": "dwa_f_ac_crbs_sub_ldgr.py",
+          "tdmTable": "T_CRBS_ANBFH_${ETL_TX_DT}",
+          "odmTable": "O_CRBS_ANBFH",
+          "filterConditions": "互联网贷款机构过滤，subj_no LIKE '13%' AND NOT LIKE '1320%'"
+        },
+        {
+          "originalTable": "F_FI_CRBS_BIZ_GL",
+          "fdmScript": "dwa_f_fi_crbs_biz_gl.py",
+          "tdmTable": "T_CRBS_AYWZZ_${ETL_TX_DT}",
+          "odmTable": "O_CRBS_AYWZZ",
+          "filterConditions": "ETL_TX_DT=当日, gl_type_cd='0', debtor_bal-creditor_bal<>0"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "保理贷款科目映射",
+          "derivedSql": "SELECT CASE WHEN overdue_principal<>0 THEN '1313010100' WHEN slugg_principal<>0 THEN '1314010300' WHEN doubt_acct_principal<>0 THEN '1314010300' WHEN nor_principal<>0 THEN '1301030200' END AS subj_no, SUM(loan_bal) FROM C_AGT_LOAN_RCPT_INF WHERE loan_rcpt_no LIKE 'FC%' AND biz_sts_cd NOT IN('18','19') AND prod_no NOT LIKE '1020%' AND SUBSTR(prod_no,1,1)='1' GROUP BY CASE ...",
+          "businessMeaning": "根据供应链保理贷款的五级分类状态映射对应科目号（逾期→1313010100, 呆滞/呆账→1314010300, 正常→1301030200）",
+          "sourceTable": "C_AGT_LOAN_RCPT_INF"
+        },
+        {
+          "knowledgeName": "贸易融资利息汇总",
+          "derivedSql": "SELECT SUM(p_amtz_intst * -1 * NVL(dom_currcy_convt_price,1)) FROM C_AGT_LOAN_RCPT_INF LEFT JOIN C_COM_EXCH_RATE ON currcy_cd AND data_dt=当日 WHERE data_dt=当日 AND acctg_class_cd IN('1411','1333') AND p_amtz_intst<>0",
+          "businessMeaning": "汇总科目分类为1411和1333的贸易融资利息余额（值取反+折人民币）",
+          "sourceTable": "C_AGT_LOAN_RCPT_INF"
+        },
+        {
+          "knowledgeName": "信用卡和贴现科目过滤",
+          "derivedSql": "SELECT T4.gl_subj_no, SUM(T.debtor_bal)-SUM(T.creditor_bal) FROM O_CRBS_AYWZZ T INNER JOIN O_FIGL_ZHX002 T4 ON T.biz_cd=T4.zyewudh WHERE T.gl_type_cd='0' AND (SUBSTR(T4.saknr,1,4) IN('1310','1309') OR SUBSTR(T4.saknr,1,6) IN('131305','131404')) AND T.debtor_bal-T.creditor_bal<>0 GROUP BY T4.saknr",
+          "businessMeaning": "过滤科目以1310/1309开头（信用卡）或131305/131404开头（贴现）的信用卡贴现余额",
+          "sourceTable": "O_CRBS_AYWZZ",
+          "originalTable": "F_FI_CRBS_BIZ_GL"
+        },
+        {
+          "knowledgeName": "排除FC保理借据",
+          "derivedSql": "SELECT * FROM C_AGT_LOAN_RCPT_INF WHERE loan_rcpt_no NOT LIKE 'FC%' AND data_dt=当日 AND open_acct_dt<=当日",
+          "businessMeaning": "信贷贷款排除FC开头的保理借据，保理贷款单独处理",
+          "sourceTable": "C_AGT_LOAN_RCPT_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "blockName": "明细账与总账对比入表",
+      "sqlCode": "INSERT INTO CDM.C_FIN_TB_CHECK (check_no, check_desc, check_sub_no, check_sub_name, dtl_acct_bal, gl_bal, margin_val, check_dt)\nSELECT '40002' AS check_no, '总分核对-传统贷款' AS check_desc,\n  LEFT(A.subj_no,4) AS check_sub_no, C.subj_name AS check_sub_name,\n  NVL(A.loan_bal,0) AS dtl_acct_bal, NVL(B.loan_bal,0) AS gl_bal,\n  NVL(A.loan_bal,0)-NVL(B.loan_bal,0) AS margin_val, DATE'{ETL_TX_DT}'\nFROM (\n  SELECT LEFT(subj_no,4) AS SUBJ_NO, SUM(loan_bal_rmb) AS loan_bal\n  FROM VT_C_FIN_TB_CHECK_LOAN_02 GROUP BY LEFT(subj_no,4) HAVING SUM(loan_bal_rmb)>0\n) A\nLEFT JOIN (\n  SELECT subj_no, SUM(debtor_bal), SUM(debtor_bal)-SUM(creditor_bal) AS loan_bal\n  FROM CDM.C_FIN_GL_SUBJ_BAL\n  WHERE data_dt=DATE AND org_no='0099' AND conve_into_currcy_cd<>'001'\n    AND subj_no IN('1301','1302','1303','1304','1307','1308','1309','1310','1311','1312','1313','1314')\n  GROUP BY subj_no HAVING SUM(debtor_bal)>0\n) B ON A.subj_no = B.subj_no\nLEFT JOIN FDM.F_FI_FIGL_SUBJ_LVL_RELA C ON A.subj_no=C.subj_no AND 拉链有效 AND del_flag<>'D'",
+      "tracedSqlCode": "INSERT INTO CDM.C_FIN_TB_CHECK ...\nFROM (按科目前4位汇总的明细账) A\nLEFT JOIN (总账科目余额表中指定13科目) B ON 科目号\nLEFT JOIN FDM科目层级关系 C ON 科目号 AND 拉链有效 AND 未删除",
+      "businessScenario": "财务管理系统总分核对-将五类贷款明细汇总（按科目前4位）与总账科目余额表（指定13科目列表）对比，计算每个科目的差异",
+      "sqlFunction": "多表关联查询（对账比较）",
+      "involvedTables": ["C_FIN_GL_SUBJ_BAL", "O_FIGL_ZSAPKMCS"],
+      "originalTables": ["C_FIN_GL_SUBJ_BAL", "F_FI_FIGL_SUBJ_LVL_RELA"],
+      "tableJoinLogic": "明细账汇总 A LEFT JOIN 总账余额 B ON 科目前4位，LEFT JOIN 科目层级关系 C ON 科目号",
+      "queryDimensions": "检核编号、科目前4位、科目名称、明细账余额、总账余额、差异",
+      "tags": ["总分核对", "传统贷款", "科目对比", "差异检测"],
+      "traceChains": [
+        {
+          "originalTable": "F_FI_FIGL_SUBJ_LVL_RELA",
+          "fdmScript": "dwa_f_fi_figl_subj_lvl_rela.py",
+          "tdmTable": "T_FIGL_ZSAPKMCS_${ETL_TX_DT}",
+          "odmTable": "O_FIGL_ZSAPKMCS",
+          "filterConditions": "start_dt<=当日 AND end_dt>当日 AND del_flag<>'D'"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "传统贷款对账科目列表",
+          "derivedSql": "SELECT subj_no, SUM(debtor_bal), SUM(debtor_bal)-SUM(creditor_bal) AS loan_bal FROM C_FIN_GL_SUBJ_BAL WHERE data_dt=当日 AND org_no='0099' AND conve_into_currcy_cd<>'001' AND subj_no IN('1301','1302','1303','1304','1307','1308','1309','1310','1311','1312','1313','1314') GROUP BY subj_no",
+          "businessMeaning": "从总账科目余额表获取传统贷款相关的13科目余额（排除折人民币数据）",
+          "sourceTable": "C_FIN_GL_SUBJ_BAL"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["C_AGT_LOAN_RCPT_INF", "O_CRBS_PKNCS", "O_FIGL_ZHX002", "C_COM_EXCH_RATE", "O_CRMS_BUSINESS_DUEBILL", "O_CRBS_ANBFH", "O_CRBS_AYWZZ", "C_FIN_GL_SUBJ_BAL", "O_FIGL_ZSAPKMCS"],
+  "allOriginalTables": ["C_AGT_LOAN_RCPT_INF", "F_FI_CRBS_NEW_ACCTG_ENTRY_CONFIG_FILE_BIZ", "F_FI_FIGL_SUBJ_NO_AND_CRBS_BIZ_NO_RELA", "C_COM_EXCH_RATE", "F_AC_CRMS_LOAN_BIZ_LOAN_RCPT", "F_AC_CRBS_SUB_LDGR", "F_FI_CRBS_BIZ_GL", "C_FIN_GL_SUBJ_BAL", "F_FI_FIGL_SUBJ_LVL_RELA"],
+  "traceSummary": {
+    "totalFdmTables": 6,
+    "scriptsFound": 6,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "科目号以1开头过滤",
+      "condition": "T1.zckm LIKE '1%' OR t1.qykm LIKE '1%' OR t1.daikm LIKE '1%' OR t1.dzkm LIKE '1%'",
+      "description": "仅保留科目号以1开头的贷款记录，对应资产类科目"
+    },
+    {
+      "ruleName": "排除FC保理借据",
+      "condition": "loan_rcpt_no NOT LIKE 'FC%'",
+      "description": "信贷贷款数据处理时排除FC开头的供应链保理借据"
+    },
+    {
+      "ruleName": "保理业务状态过滤",
+      "condition": "biz_sts_cd NOT IN ('18', '19')",
+      "description": "排除业务状态为18/19的保理借据"
+    },
+    {
+      "ruleName": "保理产品排除",
+      "condition": "prod_no NOT LIKE '1020%' AND SUBSTR(prod_no,1,1)='1' AND排除特定产品('1110140','1110145','1110155')",
+      "description": "保理数据处理时过滤票据融资和特定产品"
+    },
+    {
+      "ruleName": "三方贷款机构过滤",
+      "condition": "账务机构号3-4位 IN ('92','96') OR 指定账号列表 OR 幸福消金特定账号",
+      "description": "通过机构号/账号列表过滤互联网三方贷款机构"
+    },
+    {
+      "ruleName": "信用卡贴现科目过滤",
+      "condition": "SUBSTR(gl_subj_no,1,4) IN('1310','1309') OR SUBSTR(gl_subj_no,1,6) IN('131305','131404')",
+      "description": "限定信用卡（1310/1309）和贴现（131305/131404）科目范围"
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "scriptName": "dwa_c_com_exch_rate.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T00:00:00",
+  "businessScenario": "共性层通用业务-计算每日各币种对本币及美元的折算汇率",
+  "updateMethod": "切片表（每日按data_dt切片）",
+  "targetTable": "C_COM_EXCH_RATE",
+  "totalBlocks": 1,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_CO_CRBS_CONVT_EXCH_RATE_PARAM",
+      "fdmScript": "dwa_f_co_crbs_convt_exch_rate_param.py",
+      "found": true,
+      "tdmTable": "T_CRBS_PZSHL_{ETL_TX_DT}",
+      "odmTable": "O_CRBS_PZSHL",
+      "transformLogic": "从核心系统TDM表T_CRBS_PZSHL取数，对币种代码huobdh通过F_CO_TRANS_CD(CRBS0067)进行码值标准化后得到currcy_cd，其他字段直接映射并进行有变更流水处理（F2方式）"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "每日汇率计算",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_COM_EXCH_RATE (data_dt, currcy_cd, dom_currcy_convt_price, usd_convt_price)\nSELECT DATE'{ETL_TX_DT}', currcy_cd,\n  CASE WHEN currcy_cd='156' THEN 1 ELSE SUM(dom_currcy_convt_price) END AS dom_currcy_convt_price,\n  SUM(usd_convt_price) AS usd_convt_price\nFROM (\n  SELECT currcy_cd, dom_currcy_convt_price, usd_convt_price\n  FROM FDM.F_CO_CRBS_CONVT_EXCH_RATE_PARAM\n  WHERE convt_category_cd='1' AND record_sts_cd='0'\n    AND eff_dt IN (\n      SELECT eff_dt FROM FDM.F_CO_CRBS_CONVT_EXCH_RATE_PARAM\n      WHERE convt_category_cd='1' AND record_sts_cd='0' AND eff_dt<='{ETL_TX_DT}'\n      ORDER BY eff_dt DESC LIMIT 1\n    )\n  UNION ALL\n  SELECT currcy_cd, dom_currcy_convt_price, usd_convt_price\n  FROM FDM.F_CO_CRBS_CONVT_EXCH_RATE_PARAM\n  WHERE convt_category_cd='0' AND record_sts_cd='0'\n    AND eff_dt IN (\n      SELECT eff_dt FROM FDM.F_CO_CRBS_CONVT_EXCH_RATE_PARAM\n      WHERE convt_category_cd='0' AND record_sts_cd='0' AND eff_dt<='{ETL_TX_DT}'\n      ORDER BY eff_dt DESC LIMIT 1\n    )\n) T\nGROUP BY currcy_cd",
+      "tracedSqlCode": "INSERT INTO CDM.C_COM_EXCH_RATE (data_dt, currcy_cd, dom_currcy_convt_price, usd_convt_price)\nSELECT DATE'{ETL_TX_DT}',\n  CASE WHEN huobdh='156' THEN '156' ELSE COALESCE(T2.stand_cd_val,'@'||COALESCE(huobdh,'')) END AS currcy_cd,\n  CASE WHEN huobdh='156' THEN 1 ELSE SUM(BBIZSJ) END AS dom_currcy_convt_price,\n  SUM(MEYZSJ) AS usd_convt_price\nFROM ODM.O_CRBS_PZSHL T1\nLEFT JOIN FDM.F_CO_TRANS_CD T2 ON T1.huobdh=T2.src_cd_val AND T2.stand_cd_tab_no='CRBS0067'\nWHERE CVTKND='1' AND JILUZT='0'\n  AND SXIORQ IN (\n    SELECT SXIORQ FROM ODM.O_CRBS_PZSHL WHERE CVTKND='1' AND JILUZT='0' AND SXIORQ<='{ETL_TX_DT}'\n    ORDER BY SXIORQ DESC LIMIT 1\n  )\nUNION ALL\nSELECT currcy_cd, dom_currcy_convt_price, usd_convt_price\nFROM ODM.O_CRBS_PZSHL\nWHERE CVTKND='0' AND JILUZT='0'\n  AND SXIORQ IN (\n    SELECT SXIORQ FROM ODM.O_CRBS_PZSHL WHERE CVTKND='0' AND JILUZT='0' AND SXIORQ<='{ETL_TX_DT}'\n    ORDER BY SXIORQ DESC LIMIT 1\n  )\nGROUP BY currcy_cd",
+      "businessScenario": "核心系统汇率管理-每日获取各币种最新有效的人民币折算价和美元折算价",
+      "sqlFunction": "数据汇总查询",
+      "involvedTables": ["O_CRBS_PZSHL", "F_CO_TRANS_CD"],
+      "originalTables": ["F_CO_CRBS_CONVT_EXCH_RATE_PARAM"],
+      "tableJoinLogic": "通过对F_CO_CRBS_CONVT_EXCH_RATE_PARAM两次子查询（UNION ALL），分别取折算种类=1（折美元）和折算种类=0（折人民币）的最新生效日期数据，然后按币种汇总",
+      "queryDimensions": "币种代码",
+      "tags": ["汇率", "折算价", "本币", "美元", "人民币中间价", "外管折算价"],
+      "traceChains": [
+        {
+          "originalTable": "F_CO_CRBS_CONVT_EXCH_RATE_PARAM",
+          "fdmScript": "dwa_f_co_crbs_convt_exch_rate_param.py",
+          "tdmTable": "T_CRBS_PZSHL_{ETL_TX_DT}",
+          "odmTable": "O_CRBS_PZSHL",
+          "fieldMappings": [
+            {"fdmField": "eff_dt", "odmField": "SXIORQ", "description": "生效日期"},
+            {"fdmField": "tm", "odmField": "SHJIAN", "description": "时间"},
+            {"fdmField": "convt_category_cd", "odmField": "CVTKND", "description": "折算种类代码"},
+            {"fdmField": "currcy_cd", "odmField": "huobdh", "description": "币种代码（经过CRBS0067码值标准化）"},
+            {"fdmField": "unit", "odmField": "JIJADW", "description": "单位"},
+            {"fdmField": "currcy_symbo", "odmField": "HUOBFH", "description": "货币符号"},
+            {"fdmField": "dom_currcy_convt_price", "odmField": "BBIZSJ", "description": "本币折算价"},
+            {"fdmField": "usd_convt_price", "odmField": "MEYZSJ", "description": "美元折算价"},
+            {"fdmField": "join_other_currcy_convt_price", "odmField": "JRUZSJ", "description": "加入其它货币折算价"},
+            {"fdmField": "param", "odmField": "CANSSM", "description": "参数"},
+            {"fdmField": "input_teller_no", "odmField": "LURUGY", "description": "录入柜员编号"},
+            {"fdmField": "autho_teller_no", "odmField": "SHOQGY", "description": "授权柜员编号"},
+            {"fdmField": "serial_num", "odmField": "ROWIDD", "description": "序列号"},
+            {"fdmField": "record_sts_cd", "odmField": "JILUZT", "description": "记录状态代码"}
+          ],
+          "filterConditions": "record_sts_cd='0'（正常记录），按折算种类分别取最新生效日期"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "折算种类-外管折算价（折美元）",
+          "derivedSql": "SELECT currcy_cd, dom_currcy_convt_price, usd_convt_price FROM F_CO_CRBS_CONVT_EXCH_RATE_PARAM WHERE convt_category_cd='1' AND record_sts_cd='0'",
+          "businessMeaning": "筛选外管折算种类（折算为美元）的有效汇率记录",
+          "sourceTable": "F_CO_CRBS_CONVT_EXCH_RATE_PARAM",
+          "originalTable": "F_CO_CRBS_CONVT_EXCH_RATE_PARAM"
+        },
+        {
+          "knowledgeName": "折算种类-人行中间价（折人民币）",
+          "derivedSql": "SELECT currcy_cd, dom_currcy_convt_price, usd_convt_price FROM F_CO_CRBS_CONVT_EXCH_RATE_PARAM WHERE convt_category_cd='0' AND record_sts_cd='0'",
+          "businessMeaning": "筛选人行中间价折算种类（折算为人民币）的有效汇率记录",
+          "sourceTable": "F_CO_CRBS_CONVT_EXCH_RATE_PARAM",
+          "originalTable": "F_CO_CRBS_CONVT_EXCH_RATE_PARAM"
+        },
+        {
+          "knowledgeName": "最新有效汇率获取方法",
+          "derivedSql": "SELECT eff_dt FROM F_CO_CRBS_CONVT_EXCH_RATE_PARAM WHERE record_sts_cd='0' AND eff_dt<='{日期}' ORDER BY eff_dt DESC LIMIT 1",
+          "businessMeaning": "通过生效日期倒序取最新一条记录的方式获取当前有效日期，适用于拉链/有效期管理的表",
+          "sourceTable": "F_CO_CRBS_CONVT_EXCH_RATE_PARAM",
+          "originalTable": "F_CO_CRBS_CONVT_EXCH_RATE_PARAM"
+        },
+        {
+          "knowledgeName": "人民币特殊处理",
+          "derivedSql": "CASE WHEN currcy_cd='156' THEN 1 ELSE dom_currcy_convt_price END",
+          "businessMeaning": "人民币（币种代码156）对本币的折算价固定为1，其他币种取实际折算价",
+          "sourceTable": "C_COM_EXCH_RATE",
+          "originalTable": "C_COM_EXCH_RATE"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["O_CRBS_PZSHL", "F_CO_TRANS_CD"],
+  "allOriginalTables": ["F_CO_CRBS_CONVT_EXCH_RATE_PARAM"],
+  "traceSummary": {
+    "totalFdmTables": 1,
+    "scriptsFound": 1,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "折算汇率取最新生效日期规则",
+      "condition": "eff_dt<='{ETL_TX_DT}' ORDER BY eff_dt DESC LIMIT 1",
+      "description": "每天取不晚于数据日期的最新生效日期对应的汇率，确保使用当前有效的汇率数据"
+    },
+    {
+      "ruleName": "折算种类区分规则",
+      "condition": "convt_category_cd='1'（外管折算价/折美元）convt_category_cd='0'（人行中间价/折人民币）",
+      "description": "按折算种类分别取两种汇率，UNION ALL后按币种汇总，使每个币种同时拥有本币和美元两种折算价"
+    },
+    {
+      "ruleName": "人民币固定折算价规则",
+      "condition": "currcy_cd='156'时dom_currcy_convt_price=1",
+      "description": "人民币（币种代码156）对本币的折算价固定为1，不需要从源表取数"
+    },
+    {
+      "ruleName": "记录状态过滤规则",
+      "condition": "record_sts_cd='0'",
+      "description": "只取正常状态的记录（0=正常，1=删除，R=冲正）"
+    }
+  ],
+  "codeValues": {
+    "convt_category_cd": {
+      "0": "人行中间价（折人民币）",
+      "1": "外管折算价（折美元）"
+    },
+    "record_sts_cd": {
+      "0": "正常",
+      "1": "删除",
+      "R": "冲正"
+    },
+    "currcy_cd": {
+      "156": "人民币"
+    }
+  }
+}

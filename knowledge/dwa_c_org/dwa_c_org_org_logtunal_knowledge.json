@@ -1,0 +1,242 @@
+{
+  "scriptName": "dwa_c_org_org_logtunal.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T10:00:00",
+  "businessScenario": "共性层机构管理-将机构信息表展开为机构纵表，通过多层级自关联实现最多4层上级机构追溯",
+  "updateMethod": "切片表（按数据日期DELETE后重新INSERT，支持重跑）",
+  "targetTable": "C_ORG_ORG_LOGTUNAL",
+  "totalBlocks": 5,
+  "fdmScriptsAnalyzed": [],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "临时表准备-上级机构号特殊处理",
+      "depth": 0,
+      "sqlCode": "CREATE TEMPORARY TABLE VT_C_ORG_ORG_INF_TMP\n(org_no varchar(100), org_name varchar(100), org_lvl_cd varchar(100), super_org_no varchar(100), super_org_name varchar(100), super_org_lvl_cd varchar(100), crbs_org_flag varchar(100));\n\nINSERT INTO VT_C_ORG_ORG_INF_TMP(org_no, org_name, org_lvl_cd, super_org_no, super_org_name, super_org_lvl_cd, crbs_org_flag)\nSELECT T1.org_no, T1.org_name, T1.org_lvl_cd,\n  CASE WHEN T1.org_no = '0099' THEN ' '\n       WHEN T1.org_no IN ('0050','0086','0088','0089','0090','0091','0092','0093','0094','0095','0096','0097','0098') THEN '0099'\n       WHEN SUBSTR(T1.org_no, 3, 2) = '99' THEN '0099'\n       ELSE T1.level_scd_org_no END AS super_org_no,\n  CASE WHEN T1.org_no = '0099' THEN ' '\n       WHEN T1.org_no IN ('0050','0086','0088','0089','0090','0091','0092','0093','0094','0095','0096','0097','0098') THEN '河北银行股份有限公司总行'\n       WHEN SUBSTR(T1.org_no, 3, 2) = '99' THEN '河北银行股份有限公司总行'\n       ELSE T1.level_scd_org_name END AS super_org_name,\n  T2.org_lvl_cd, T1.crbs_org_flag\nFROM CDM.C_ORG_ORG_INF T1\nLEFT JOIN (SELECT * FROM CDM.C_ORG_ORG_INF WHERE data_dt = DATE'{ETL_TX_DT}') T2\n  ON T1.super_org_no = T2.org_no\nWHERE T1.data_dt = DATE'{ETL_TX_DT}'",
+      "tracedSqlCode": "CREATE TEMPORARY TABLE VT_C_ORG_ORG_INF_TMP\n(org_no varchar(100), org_name varchar(100), org_lvl_cd varchar(100), super_org_no varchar(100), super_org_name varchar(100), super_org_lvl_cd varchar(100), crbs_org_flag varchar(100));\n\nINSERT INTO VT_C_ORG_ORG_INF_TMP(org_no, org_name, org_lvl_cd, super_org_no, super_org_name, super_org_lvl_cd, crbs_org_flag)\nSELECT T1.org_no, T1.org_name, T1.org_lvl_cd,\n  CASE WHEN T1.org_no = '0099' THEN ' '\n       WHEN T1.org_no IN ('0050','0086','0088','0089','0090','0091','0092','0093','0094','0095','0096','0097','0098') THEN '0099'\n       WHEN SUBSTR(T1.org_no, 3, 2) = '99' THEN '0099'\n       ELSE T1.level_scd_org_no END AS super_org_no,\n  CASE WHEN T1.org_no = '0099' THEN ' '\n       WHEN T1.org_no IN ('0050','0086','0088','0089','0090','0091','0092','0093','0094','0095','0096','0097','0098') THEN '河北银行股份有限公司总行'\n       WHEN SUBSTR(T1.org_no, 3, 2) = '99' THEN '河北银行股份有限公司总行'\n       ELSE T1.level_scd_org_name END AS super_org_name,\n  T2.org_lvl_cd, T1.crbs_org_flag\nFROM CDM.C_ORG_ORG_INF T1\nLEFT JOIN (SELECT * FROM CDM.C_ORG_ORG_INF WHERE data_dt = DATE'{ETL_TX_DT}') T2\n  ON T1.super_org_no = T2.org_no\nWHERE T1.data_dt = DATE'{ETL_TX_DT'}\n注：C_ORG_ORG_INF为CDM层机构信息表，其自身ETL链路可追溯至FDM/ODM层，本脚本不直接引用FDM表故未做进一步穿透追溯",
+      "businessScenario": "共性层机构管理-从机构信息表读取当日数据，通过对上级机构号的特殊CASE WHEN处理（总行、特殊机构归总行、%99结尾归总行），并关联获取上级机构级别代码，写入临时表为后续纵表展开做准备",
+      "sqlFunction": "单表查询+业务规则派生+关联查询",
+      "involvedTables": ["C_ORG_ORG_INF"],
+      "originalTables": ["C_ORG_ORG_INF"],
+      "tableJoinLogic": "机构信息表T1自关联子查询T2（通过super_org_no=org_no），获取上级机构的机构级别代码；左连接确保无上级机构的也能保留",
+      "queryDimensions": "机构号、机构名称、机构级别代码、上级机构号（经CASE规则处理后）、上级机构名称、上级机构级别代码、核心机构标志",
+      "tags": ["机构纵表", "机构层级", "机构管理", "组织架构", "上级机构", "CASE规则"],
+      "traceChains": [
+        {
+          "originalTable": "C_ORG_ORG_INF",
+          "note": "C_ORG_ORG_INF为CDM层机构信息表，其上游ETL链路为CDM→FDM→ODM，本脚本不直接引用FDM表",
+          "inheritedTrace": true
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "总行机构识别（0099）",
+          "derivedSql": "SELECT org_no, org_name, org_lvl_cd FROM C_ORG_ORG_INF WHERE org_no = '0099' AND data_dt = DATE'{ETL_TX_DT}'",
+          "businessMeaning": "机构号0099为河北银行股份有限公司总行，其上级机构为空（本身即为顶级机构）",
+          "sourceTable": "C_ORG_ORG_INF",
+          "originalTable": "C_ORG_ORG_INF"
+        },
+        {
+          "knowledgeName": "特殊机构归总行管理",
+          "derivedSql": "SELECT org_no, org_name FROM C_ORG_ORG_INF WHERE org_no IN ('0050','0086','0088','0089','0090','0091','0092','0093','0094','0095','0096','0097','0098') AND data_dt = DATE'{ETL_TX_DT}'",
+          "businessMeaning": "13个特殊机构（0050,0086,0088-0098）的上级机构统一归为总行（0099），这些机构直属总行管理",
+          "sourceTable": "C_ORG_ORG_INF",
+          "originalTable": "C_ORG_ORG_INF"
+        },
+        {
+          "knowledgeName": "机构号%99结尾归总行规则",
+          "derivedSql": "SELECT org_no, org_name FROM C_ORG_ORG_INF WHERE SUBSTR(org_no, 3, 2) = '99' AND org_no <> '0099' AND data_dt = DATE'{ETL_TX_DT}'",
+          "businessMeaning": "机构号第3-4位为'99'的机构（如xx99），其上级机构强制归为总行0099，这是一条按编码规则批量处理机构归属的业务规则",
+          "sourceTable": "C_ORG_ORG_INF",
+          "originalTable": "C_ORG_ORG_INF"
+        },
+        {
+          "knowledgeName": "上级机构信息查询",
+          "derivedSql": "SELECT T1.org_no, T1.super_org_no, T2.org_lvl_cd AS super_org_lvl_cd FROM C_ORG_ORG_INF T1 LEFT JOIN C_ORG_ORG_INF T2 ON T1.super_org_no = T2.org_no WHERE T1.data_dt = DATE'{ETL_TX_DT}'",
+          "businessMeaning": "通过机构表的super_org_no关联自身获取上级机构的级别代码信息，左连接保证末端机构不丢失",
+          "sourceTable": "C_ORG_ORG_INF",
+          "originalTable": "C_ORG_ORG_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "纵表展开-第1层（本级+本级自身）",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_ORG_ORG_LOGTUNAL(data_dt, org_no, org_name, org_lvl_cd, super_org_no, super_org_name, super_org_lvl_cd, crbs_org_flag)\nSELECT DATE'{ETL_TX_DT}', T1.org_no, T1.org_name, T1.org_lvl_cd, T1.org_no, T1.org_name, T1.org_lvl_cd, T1.crbs_org_flag\nFROM VT_C_ORG_ORG_INF_TMP T1",
+      "tracedSqlCode": "INSERT INTO CDM.C_ORG_ORG_LOGTUNAL(data_dt, org_no, org_name, org_lvl_cd, super_org_no, super_org_name, super_org_lvl_cd, crbs_org_flag)\nSELECT DATE'{ETL_TX_DT}', T1.org_no, T1.org_name, T1.org_lvl_cd, T1.org_no, T1.org_name, T1.org_lvl_cd, T1.crbs_org_flag\nFROM VT_C_ORG_ORG_INF_TMP T1",
+      "businessScenario": "共性层机构管理-纵表第1层展开，将每个机构的机构号和机构名称同时作为上级机构号和上级机构名称写入纵表，代表本级自身记录",
+      "sqlFunction": "数据扁平化（自引用展开）",
+      "involvedTables": ["C_ORG_ORG_INF"],
+      "originalTables": ["C_ORG_ORG_INF"],
+      "tableJoinLogic": "单表INSERT，从临时表VT_C_ORG_ORG_INF_TMP读取，将org_no/org_name同时映射到super_org_no/super_org_name，形成自引用记录",
+      "queryDimensions": "数据日期、机构号、机构名称、机构级别代码、上级机构号（等于自身机构号）、上级机构名称（等于自身机构名称）、上级机构级别代码、核心机构标志",
+      "tags": ["机构纵表", "机构层级", "层级展开", "机构管理", "自引用"],
+      "traceChains": [
+        {
+          "originalTable": "C_ORG_ORG_INF",
+          "note": "临时表VT_C_ORG_ORG_INF_TMP源自C_ORG_ORG_INF，C_ORG_ORG_INF的上游ETL链路为CDM→FDM→ODM",
+          "inheritedTrace": true
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "机构纵表自引用记录",
+          "derivedSql": "SELECT data_dt, org_no, org_name, org_lvl_cd, org_no AS super_org_no, org_name AS super_org_name, org_lvl_cd AS super_org_lvl_cd, crbs_org_flag FROM C_ORG_ORG_LOGTUNAL WHERE org_no = super_org_no",
+          "businessMeaning": "纵表中super_org_no等于org_no的记录为机构自身的第1层记录，代表机构的本级信息",
+          "sourceTable": "C_ORG_ORG_LOGTUNAL",
+          "originalTable": "C_ORG_ORG_LOGTUNAL"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "纵表展开-第2层（本级+直接上级）",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_ORG_ORG_LOGTUNAL(data_dt, org_no, org_name, org_lvl_cd, super_org_no, super_org_name, super_org_lvl_cd, crbs_org_flag)\nSELECT DATE'{ETL_TX_DT}', T1.org_no, T1.org_name, T1.org_lvl_cd, T1.super_org_no, T1.super_org_name, T1.super_org_lvl_cd, T1.crbs_org_flag\nFROM VT_C_ORG_ORG_INF_TMP T1",
+      "tracedSqlCode": "INSERT INTO CDM.C_ORG_ORG_LOGTUNAL(data_dt, org_no, org_name, org_lvl_cd, super_org_no, super_org_name, super_org_lvl_cd, crbs_org_flag)\nSELECT DATE'{ETL_TX_DT}', T1.org_no, T1.org_name, T1.org_lvl_cd, T1.super_org_no, T1.super_org_name, T1.super_org_lvl_cd, T1.crbs_org_flag\nFROM VT_C_ORG_ORG_INF_TMP T1",
+      "businessScenario": "共性层机构管理-纵表第2层展开，将每个机构的直接上级机构信息（super_org_no/name/lvl_cd）作为上级维度写入纵表，代表本级+上级的层级关系",
+      "sqlFunction": "数据扁平化（上级关系展开）",
+      "involvedTables": ["C_ORG_ORG_INF"],
+      "originalTables": ["C_ORG_ORG_INF"],
+      "tableJoinLogic": "单表INSERT，从临时表VT_C_ORG_ORG_INF_TMP直接读取，临时表中的super_org_no/name/lvl_cd已经过Block1的CASE规则处理",
+      "queryDimensions": "数据日期、机构号、机构名称、机构级别代码、上级机构号（经CASE规则处理后的super_org_no）、上级机构名称、上级机构级别代码、核心机构标志",
+      "tags": ["机构纵表", "机构层级", "层级展开", "上级机构", "机构管理"],
+      "traceChains": [
+        {
+          "originalTable": "C_ORG_ORG_INF",
+          "note": "临时表VT_C_ORG_ORG_INF_TMP源自C_ORG_ORG_INF，此处直接使用预处理好的super_org信息",
+          "inheritedTrace": true
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "机构直接上级关系",
+          "derivedSql": "SELECT data_dt, org_no, org_name, org_lvl_cd, super_org_no, super_org_name, super_org_lvl_cd, crbs_org_flag FROM C_ORG_ORG_LOGTUNAL WHERE org_no <> super_org_no AND org_no NOT IN (SELECT org_no FROM C_ORG_ORG_LOGTUNAL WHERE org_no = super_org_no AND org_no <> super_org_no GROUP BY org_no HAVING COUNT(DISTINCT super_org_no) > 1)",
+          "businessMeaning": "纵表中org_no不等于super_org_no且该org_no不参与更深层级展开的记录即为第2层直接上级关系记录",
+          "sourceTable": "C_ORG_ORG_LOGTUNAL",
+          "originalTable": "C_ORG_ORG_LOGTUNAL"
+        }
+      ]
+    },
+    {
+      "blockIndex": 4,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "纵表展开-第3层（本级+上上级）",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_ORG_ORG_LOGTUNAL(data_dt, org_no, org_name, org_lvl_cd, super_org_no, super_org_name, super_org_lvl_cd, crbs_org_flag)\nSELECT DATE'{ETL_TX_DT}', T1.org_no, T1.org_name, T1.org_lvl_cd, T2.super_org_no, T2.super_org_name, T2.super_org_lvl_cd, T1.crbs_org_flag\nFROM VT_C_ORG_ORG_INF_TMP T1\nINNER JOIN VT_C_ORG_ORG_INF_TMP T2 ON T1.super_org_no = T2.org_no",
+      "tracedSqlCode": "INSERT INTO CDM.C_ORG_ORG_LOGTUNAL(data_dt, org_no, org_name, org_lvl_cd, super_org_no, super_org_name, super_org_lvl_cd, crbs_org_flag)\nSELECT DATE'{ETL_TX_DT}', T1.org_no, T1.org_name, T1.org_lvl_cd, T2.super_org_no, T2.super_org_name, T2.super_org_lvl_cd, T1.crbs_org_flag\nFROM VT_C_ORG_ORG_INF_TMP T1\nINNER JOIN VT_C_ORG_ORG_INF_TMP T2 ON T1.super_org_no = T2.org_no",
+      "businessScenario": "共性层机构管理-纵表第3层展开，通过一次自关联（T1.super_org_no=T2.org_no）获取本级的上上级机构信息，即T1的直接上级（T2）的上级（T2.super），实现跨级追溯",
+      "sqlFunction": "自关联查询（跨级上级追溯）",
+      "involvedTables": ["C_ORG_ORG_INF"],
+      "originalTables": ["C_ORG_ORG_INF"],
+      "tableJoinLogic": "T1与T2通过 T1.super_org_no = T2.org_no 内连接，T1为本级机构，T2为T1的上级机构；取T2的super_org信息即为T1的上上级机构信息；内连接确保只保留有上级且上级也有上级的机构",
+      "queryDimensions": "数据日期、本级机构号、本级机构名称、本级机构级别代码、上上级机构号（T2.super_org_no）、上上级机构名称、上上级机构级别代码、核心机构标志",
+      "tags": ["机构纵表", "机构层级", "层级展开", "上上级", "自关联", "跨级追溯"],
+      "traceChains": [
+        {
+          "originalTable": "C_ORG_ORG_INF",
+          "note": "临时表VT_C_ORG_ORG_INF_TMP源自C_ORG_ORG_INF，通过两次自关联实现跨级上级追溯",
+          "inheritedTrace": true
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "机构上上级追溯（跨级）",
+          "derivedSql": "SELECT T1.org_no, T1.org_name AS org_name, T1.org_lvl_cd AS org_lvl, T2.super_org_no AS grand_super_org_no, T2.super_org_name AS grand_super_org_name, T2.super_org_lvl_cd AS grand_super_org_lvl FROM C_ORG_ORG_INF T1 INNER JOIN C_ORG_ORG_INF T2 ON T1.super_org_no = T2.org_no WHERE T1.data_dt = DATE'{ETL_TX_DT}' AND T2.data_dt = DATE'{ETL_TX_DT}'",
+          "businessMeaning": "通过C_ORG_ORG_INF自关联一次获取本级机构的上上级（祖父级）机构信息，T1的上级是T2，T2的上级即为T1的上上级，INNER JOIN过滤掉无上上级的末端机构",
+          "sourceTable": "C_ORG_ORG_INF",
+          "originalTable": "C_ORG_ORG_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 5,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "纵表展开-第4层（三级+上上上级）",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_ORG_ORG_LOGTUNAL(data_dt, org_no, org_name, org_lvl_cd, super_org_no, super_org_name, super_org_lvl_cd, crbs_org_flag)\nSELECT DATE'{ETL_TX_DT}', T1.org_no, T1.org_name, T1.org_lvl_cd, T3.super_org_no, T3.super_org_name, T3.super_org_lvl_cd, T1.crbs_org_flag\nFROM VT_C_ORG_ORG_INF_TMP T1\nINNER JOIN VT_C_ORG_ORG_INF_TMP T2 ON T1.super_org_no = T2.org_no\nINNER JOIN VT_C_ORG_ORG_INF_TMP T3 ON T2.super_org_no = T3.org_no",
+      "tracedSqlCode": "INSERT INTO CDM.C_ORG_ORG_LOGTUNAL(data_dt, org_no, org_name, org_lvl_cd, super_org_no, super_org_name, super_org_lvl_cd, crbs_org_flag)\nSELECT DATE'{ETL_TX_DT}', T1.org_no, T1.org_name, T1.org_lvl_cd, T3.super_org_no, T3.super_org_name, T3.super_org_lvl_cd, T1.crbs_org_flag\nFROM VT_C_ORG_ORG_INF_TMP T1\nINNER JOIN VT_C_ORG_ORG_INF_TMP T2 ON T1.super_org_no = T2.org_no\nINNER JOIN VT_C_ORG_ORG_INF_TMP T3 ON T2.super_org_no = T3.org_no",
+      "businessScenario": "共性层机构管理-纵表第4层展开，通过两次自关联获取最深层的上级机构信息，T1是本级，T2是T1的上级，T3是T2的上级，取T3的super_org即为T1的上上上级，实现最深跨级追溯",
+      "sqlFunction": "多级自关联查询（深层跨级上级追溯）",
+      "involvedTables": ["C_ORG_ORG_INF"],
+      "originalTables": ["C_ORG_ORG_INF"],
+      "tableJoinLogic": "T1与T2通过 T1.super_org_no=T2.org_no 连接，T2与T3通过 T2.super_org_no=T3.org_no 连接；T1为本级、T2为上级、T3为上上级；取T3的super_org即为T1的上上上级；三层INNER JOIN确保该机构有完整的4层上级链",
+      "queryDimensions": "数据日期、本级机构号、本级机构名称、本级机构级别代码、上上上级机构号（T3.super_org_no）、上上上级机构名称、上上上级机构级别代码、核心机构标志",
+      "tags": ["机构纵表", "机构层级", "层级展开", "上上上级", "多级自关联", "深度追溯"],
+      "traceChains": [
+        {
+          "originalTable": "C_ORG_ORG_INF",
+          "note": "临时表VT_C_ORG_ORG_INF_TMP源自C_ORG_ORG_INF，通过三次自关联实现最深跨级上级追溯",
+          "inheritedTrace": true
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "机构最深上级追溯（三级跳）",
+          "derivedSql": "SELECT T1.org_no, T1.org_name, T3.super_org_no AS top_super_org_no, T3.super_org_name AS top_super_org_name FROM C_ORG_ORG_INF T1 INNER JOIN C_ORG_ORG_INF T2 ON T1.super_org_no = T2.org_no INNER JOIN C_ORG_ORG_INF T3 ON T2.super_org_no = T3.org_no WHERE T1.data_dt = DATE'{ETL_TX_DT}' AND T2.data_dt = DATE'{ETL_TX_DT}' AND T3.data_dt = DATE'{ETL_TX_DT}'",
+          "businessMeaning": "通过C_ORG_ORG_INF连续两次自关联获取本级机构的顶层级（曾祖父级）上级机构信息，T1→T2→T3链路：T2是T1上级、T3是T2上级、T3的super_org是T1的上上上级",
+          "sourceTable": "C_ORG_ORG_INF",
+          "originalTable": "C_ORG_ORG_INF"
+        },
+        {
+          "knowledgeName": "机构完整层级链路",
+          "derivedSql": "SELECT T1.org_no AS leaf_org, T1.org_name AS leaf_name, T1.org_lvl_cd AS leaf_lvl, T2.org_no AS parent_org, T2.org_name AS parent_name, T2.org_lvl_cd AS parent_lvl, T3.org_no AS grand_org, T3.org_name AS grand_name, T3.super_org_no AS root_org FROM C_ORG_ORG_INF T1 INNER JOIN C_ORG_ORG_INF T2 ON T1.super_org_no = T2.org_no INNER JOIN C_ORG_ORG_INF T3 ON T2.super_org_no = T3.org_no WHERE T1.data_dt = DATE'{ETL_TX_DT}'",
+          "businessMeaning": "构建完整的四级机构层级链路：叶子节点→父节点→祖父节点→根节点，一次性获取机构的完整上下级关系链",
+          "sourceTable": "C_ORG_ORG_INF",
+          "originalTable": "C_ORG_ORG_INF"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["C_ORG_ORG_INF"],
+  "allOriginalTables": ["C_ORG_ORG_INF"],
+  "traceSummary": {
+    "totalFdmTables": 0,
+    "scriptsFound": 0,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "切片表更新（支持重跑）",
+      "condition": "DELETE FROM C_ORG_ORG_LOGTUNAL WHERE data_dt = DATE'{ETL_TX_DT}'",
+      "description": "写入前先删除当天的历史数据，确保重跑不产生重复记录，实现切片表语义"
+    },
+    {
+      "ruleName": "总行机构（0099）上级为空",
+      "condition": "org_no = '0099' → super_org_no = ' '（空）",
+      "description": "机构号0099为河北银行股份有限公司总行，是机构树的顶级节点，没有上级机构"
+    },
+    {
+      "ruleName": "特殊直属机构归总行管理",
+      "condition": "org_no IN ('0050','0086','0088','0089','0090','0091','0092','0093','0094','0095','0096','0097','0098') → super_org_no = '0099'",
+      "description": "13个特殊机构（0050和0086及0088-0098共13个）的上级机构统一归为总行0099，代表这些机构直接隶属于总行管理"
+    },
+    {
+      "ruleName": "编码%99机构归总行规则",
+      "condition": "SUBSTR(org_no, 3, 2) = '99' → super_org_no = '0099'",
+      "description": "机构号的第3-4位为'99'的机构（如xx99格式），其上级机构强制归为总行0099，批量处理非标准层级结构的机构归属"
+    },
+    {
+      "ruleName": "机构纵表4层展开",
+      "condition": "通过1次直接读取+1次一级自关联+1次二级自关联+1次三级自关联，构建4个层级的机构纵表数据",
+      "description": "将机构信息从横表展平为纵表：第1层本级自身、第2层本级+直接上级、第3层本级+上上级（通过一次自关联跨级）、第4层本级+上上上级（通过两次自关联跨级），满足不同粒度下钻分析需求"
+    },
+    {
+      "ruleName": "INNER JOIN保证完整层级链",
+      "condition": "第3层和第4层使用INNER JOIN而非LEFT JOIN",
+      "description": "第3层确保机构有直接上级且直接上级还有上级（即至少3层）；第4层确保机构有完整的4层上级链（本级→上级→上上级→上上上级），过滤掉层级不足的机构"
+    }
+  ],
+  "codeValues": {}
+}

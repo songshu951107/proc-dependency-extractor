@@ -1,0 +1,19 @@
+﻿CREATE TABLE pid.vt_a_g_dp_deposit_report_02_{ETL_TX_DT} (
+  "DATA_DT" date NOT NULL COMMENT '数据日期',
+  "ORG_NO" varchar(60) DEFAULT NULL COMMENT '机构编号',
+  "ORG_Name" varchar(200) DEFAULT NULL COMMENT '机构名称',
+  "BELO_BRCH_NO" varchar(60) DEFAULT NULL COMMENT '所属分行编号',
+  "BELO_BRCH_NAME" varchar(200) DEFAULT NULL COMMENT '所属分行名称',
+  "SUBJ_NO" varchar(200) DEFAULT NULL COMMENT '科目编号',
+  "LINE_NAME" varchar(200) DEFAULT NULL COMMENT '条线名称',
+  "PERM_LINE" varchar(100) DEFAULT NULL COMMENT '权限条线',
+  "BAL" decimal(26,6) DEFAULT NULL COMMENT '余额',
+  "dep_bal" decimal(26,6) DEFAULT NULL COMMENT '未折币存款余额',
+  "MONTH_DAILY_AVG" decimal(26,6) DEFAULT NULL COMMENT '月日均',
+  "QUART_DAILY_AVG" decimal(26,6) DEFAULT NULL COMMENT '季日均',
+  "YEAR_DAILY_AVG" decimal(26,6) DEFAULT NULL COMMENT '年日均',
+  "DAY_INTST" decimal(26,6) DEFAULT NULL COMMENT '天利息',
+  "INTST_EXPEN" decimal(26,6) DEFAULT NULL COMMENT '利息支出',
+  "FTPINCOME" decimal(26,6) DEFAULT NULL COMMENT 'FTP收入',
+  "open_dt" date DEFAULT NULL COMMENT '开户日期'
+) ENGINE=EXPRESS DEFAULT CHARSET=utf8 TABLESPACE='sys_tablespace' COMMENT='机构存款明细查询临时表'

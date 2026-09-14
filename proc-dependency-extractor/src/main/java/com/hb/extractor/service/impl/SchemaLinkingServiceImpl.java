@@ -3,7 +3,11 @@ package com.hb.extractor.service.impl;
 import com.hb.extractor.config.Nl2SqlProperties;
 import com.hb.extractor.dto.nl2sql.CandidateTable;
 import com.hb.extractor.entity.TableColumnMeta;
+import com.hb.extractor.entity.TableDdlInfo;
 import com.hb.extractor.mapper.TableColumnMetaMapper;
+import com.hb.extractor.mapper.TableDdlInfoMapper;
+import com.hb.extractor.nl2sql.ValueDictionary;
+import com.hb.extractor.service.LlmClient;
 import com.hb.extractor.service.SchemaLinkingService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +27,9 @@ public class SchemaLinkingServiceImpl implements SchemaLinkingService {
 
     @Autowired
     private TableColumnMetaMapper columnMetaMapper;
+
+    @Autowired(required = false)
+    private TableDdlInfoMapper tableDdlInfoMapper;
 
     @Autowired(required = false)
     private Neo4jClient neo4jClient;
@@ -97,16 +104,73 @@ public class SchemaLinkingServiceImpl implements SchemaLinkingService {
             }
         }
 
-        // 裁剪：排序（得分降序）→ 截断表数 → 截断每表字段
+        // 业务词加权：问题含业务专有词（如"信用卡"）时，对表名命中目标关键词的候选表加分，优先选对业务表
+        applyBusinessTermWeights(question, byTable);
+
+        // 裁剪：排序（得分降序）→ 截断表数 → 补全血缘表字段 → 截断每表字段（数据日期字段置顶保留）
         return byTable.values().stream()
                 .sorted(Comparator.comparingDouble(CandidateTable::getScore).reversed())
                 .limit(props.getMaxCandidateTables())
                 .peek(ct -> {
+                    backfillFields(ct); // 血缘召回的表仅含表名，补全字段
+                    promoteDateFields(ct.getFields());
                     if (ct.getFields().size() > props.getMaxFieldsPerTable()) {
                         ct.setFields(new ArrayList<>(ct.getFields().subList(0, props.getMaxFieldsPerTable())));
                     }
                 })
                 .collect(Collectors.toList());
+    }
+
+    /** 业务词加权 + 补充召回：问题命中业务专有词时，按权威表白名单把对应业务账户表（全量字段）拉进候选并加权。
+     *  解决"信用卡"等业务词在字段注释中并不存在、且字段被裁剪导致关键字段缺失，业务账户表被误判的问题。 */
+    private void applyBusinessTermWeights(String question, Map<String, CandidateTable> byTable) {
+        Map<String, List<String>> tables = ValueDictionary.businessTermTables();
+        if (tables == null || tables.isEmpty()) return;
+        String q = question == null ? "" : question.toLowerCase();
+        for (Map.Entry<String, List<String>> e : tables.entrySet()) {
+            if (!q.contains(e.getKey().toLowerCase())) continue;
+            for (String fullName : e.getValue()) {
+                if (fullName == null || fullName.isBlank()) continue;
+                CandidateTable ct = byTable.computeIfAbsent(fullName.toLowerCase(), k -> {
+                    CandidateTable x = new CandidateTable();
+                    x.setFullTableName(fullName.toLowerCase());
+                    int dot = fullName.indexOf('.');
+                    x.setSchemaName(dot > 0 ? fullName.substring(0, dot) : "");
+                    x.setFields(new ArrayList<>());
+                    x.setScore(0);
+                    x.setSource("BUSINESS_TERM");
+                    return x;
+                });
+                ct.setScore(ct.getScore() + 15); // 权威业务表强优先
+            }
+        }
+    }
+
+    /** 为字段缺失的候选表（如血缘召回）补全字段：数据日期字段优先，再按列序补足 */
+    private void backfillFields(CandidateTable ct) {
+        if (ct.getFields() == null || !ct.getFields().isEmpty()) return;
+        List<TableColumnMeta> cols = columnMetaMapper.selectColumnsByFullTable(ct.getFullTableName());
+        if (cols == null || cols.isEmpty()) return;
+        List<CandidateTable.FieldBrief> fields = new ArrayList<>();
+        for (TableColumnMeta c : cols) {
+            CandidateTable.FieldBrief fb = new CandidateTable.FieldBrief();
+            fb.setColumnName(c.getColumnName());
+            fb.setColumnType(c.getColumnType());
+            fb.setColumnComment(c.getColumnComment());
+            fields.add(fb);
+        }
+        ct.setFields(fields);
+    }
+
+    /** 把数据日期（分区）字段移到列表头部，确保字段裁剪后仍保留，供 LLM 生成 SQL 时卡数据日期 */
+    private void promoteDateFields(List<CandidateTable.FieldBrief> fields) {
+        List<CandidateTable.FieldBrief> dateParts = fields.stream()
+                .filter(f -> f.getColumnName() != null
+                        && LlmClient.DATE_PARTITION_FIELDS.contains(f.getColumnName().toLowerCase()))
+                .collect(Collectors.toList());
+        if (dateParts.isEmpty()) return;
+        fields.removeAll(dateParts);
+        fields.addAll(0, dateParts);
     }
 
     /** 提取中文 2-gram（用于注释 LIKE 匹配） */

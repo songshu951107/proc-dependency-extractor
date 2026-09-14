@@ -1,0 +1,1350 @@
+﻿13:33:47.824 [main] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.hb.extractor.controller.LineageControllerTest]: LineageControllerTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+13:33:47.931 [main] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.hb.extractor.ProcExtractorApplication for test class com.hb.extractor.controller.LineageControllerTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::                (v3.2.5)
+
+2026-08-31T13:33:48.298+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.controller.LineageControllerTest   : Starting LineageControllerTest using Java 17.0.20 with PID 2896 (started by cj199 in D:\HB\work_zuoye\proc-dependency-extractor)
+2026-08-31T13:33:48.298+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.h.e.controller.LineageControllerTest   : Running with Spring Boot v3.2.5, Spring v6.1.6
+2026-08-31T13:33:48.299+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.controller.LineageControllerTest   : No active profile set, falling back to 1 default profile: "default"
+2026-08-31T13:33:48.889+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Neo4j repositories in DEFAULT mode.
+2026-08-31T13:33:48.896+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 3 ms. Found 0 Neo4j repository interfaces.
+2026-08-31T13:33:49.039+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Neo4j repositories in DEFAULT mode.
+2026-08-31T13:33:49.056+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 15 ms. Found 0 Neo4j repository interfaces.
+2026-08-31T13:33:49.742+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] o.neo4j.driver.internal.DriverFactory    : Direct driver instance 687608114 created for server address localhost:7687
+2026-08-31T13:33:49.999+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ�������ɹ�: CREATE CONSTRAINT table_name_unique IF NOT EXISTS 
+2026-08-31T13:33:50.019+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ������ʧ�ܣ������Ѵ��ڻ� Neo4j �����ã�: There already exists an index (:Column {col_key}). A constraint cannot be created until the index has been dropped.; Error code 'Neo.ClientError.Schema.IndexAlreadyExists'
+2026-08-31T13:33:50.023+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ������ʧ�ܣ������Ѵ��ڻ� Neo4j �����ã�: There already exists an index (:Script {file}). A constraint cannot be created until the index has been dropped.; Error code 'Neo.ClientError.Schema.IndexAlreadyExists'
+2026-08-31T13:33:50.026+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ�������ɹ�: CREATE CONSTRAINT report_file_unique IF NOT EXISTS
+2026-08-31T13:33:50.031+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ�������ɹ�: CREATE CONSTRAINT dataset_key_unique IF NOT EXISTS
+2026-08-31T13:33:50.034+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ�������ɹ�: CREATE CONSTRAINT transform_id_unique IF NOT EXIST
+Logging initialized using 'class org.apache.ibatis.logging.stdout.StdOutImpl' adapter.
+Get /192.168.1.100 network interface 
+Get network interface info: name:wlan0 (Intel(R) Wi-Fi 6E AX211 160MHz)
+Initialization Sequence datacenterId:16 workerId:8
+ _ _   |_  _ _|_. ___ _ |    _ 
+| | |\/|_)(_| | |_\  |_)||_|_\ 
+     /               |         
+                        3.5.7 
+2026-08-31T13:33:51.995+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
+2026-08-31T13:33:52.993+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-08-31T13:33:52.993+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-08-31T13:33:52.996+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 2 ms
+2026-08-31T13:33:53.053+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.controller.LineageControllerTest   : Started LineageControllerTest in 4.993 seconds (process running for 5.862)
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@51f0f613] was not registered for synchronization because synchronization is not active
+2026-08-31T13:33:53.292+08:00  INFO 2896 --- [proc-dependency-extractor] [   scheduling-1] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+D:\HB\maven\bin\mvn.cmd : OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because b
+ootstrap classpath has been appended
+At line:15 char:3416
++ ... es\@vscode\ripgrep\bin'; D:\HB\maven\bin\mvn.cmd test -q 2>&1 | Out-F ...
++                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (OpenJDK 64-Bit ...s been appended:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+2026-08-31T13:33:53.477+08:00  INFO 2896 --- [proc-dependency-extractor] [   scheduling-1] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@448c6991
+2026-08-31T13:33:53.479+08:00  INFO 2896 --- [proc-dependency-extractor] [   scheduling-1] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+JDBC Connection [HikariProxyConnection@42426122 wrapping com.mysql.cj.jdbc.ConnectionImpl@448c6991] will not be managed by Spring
+==>  Preparing: SELECT id,proc_name,sync_status,error_message,retry_count,create_time,update_time FROM neo4j_sync_log WHERE (sync_status = ? AND retry_count < ?)
+==> Parameters: FAILED(String), 3(Integer)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@51f0f613]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@30d5fc1b] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@2035788375 wrapping com.mysql.cj.jdbc.ConnectionImpl@448c6991] will not be managed by Spring
+==>  Preparing: SELECT id,proc_name,proc_file_name,file_path,proc_desc,update_target,table_count,temp_table_count,extract_time,create_time FROM proc_info WHERE (proc_name = ?)
+==> Parameters: non_existent_proc(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@30d5fc1b]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6b756a62] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@961256994 wrapping com.mysql.cj.jdbc.ConnectionImpl@448c6991] will not be managed by Spring
+==>  Preparing: WITH RECURSIVE upstream AS ( SELECT id, proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, main_table, 1 AS depth FROM table_lineage WHERE target_table_short = ? UNION ALL SELECT t.id, t.proc_id, t.proc_name, t.source_table, t.source_table_short, t.target_table, t.target_table_short, t.target_is_temp, t.operation, t.sql_block_seq, t.main_table, u.depth + 1 FROM table_lineage t JOIN upstream u ON t.target_table_short = u.source_table_short WHERE u.depth < ? ) SELECT DISTINCT id, proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, main_table, depth FROM upstream ORDER BY depth, sql_block_seq
+==> Parameters: NON_EXISTENT(String), 5(Integer)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6b756a62]
+2026-08-31T13:33:54.360+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.hb.extractor.parser.CptXmlParserTest]: CptXmlParserTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-08-31T13:33:54.389+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.hb.extractor.ProcExtractorApplication for test class com.hb.extractor.parser.CptXmlParserTest
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::                (v3.2.5)
+
+2026-08-31T13:33:54.432+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.CptXmlParserTest   : Starting CptXmlParserTest using Java 17.0.20 with PID 2896 (started by cj199 in D:\HB\work_zuoye\proc-dependency-extractor)
+2026-08-31T13:33:54.432+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.CptXmlParserTest   : Running with Spring Boot v3.2.5, Spring v6.1.6
+2026-08-31T13:33:54.432+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.CptXmlParserTest   : No active profile set, falling back to 1 default profile: "default"
+2026-08-31T13:33:54.620+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Neo4j repositories in DEFAULT mode.
+2026-08-31T13:33:54.621+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 0 ms. Found 0 Neo4j repository interfaces.
+2026-08-31T13:33:54.654+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Neo4j repositories in DEFAULT mode.
+2026-08-31T13:33:54.663+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 8 ms. Found 0 Neo4j repository interfaces.
+2026-08-31T13:33:54.797+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] o.neo4j.driver.internal.DriverFactory    : Direct driver instance 150499707 created for server address localhost:7687
+2026-08-31T13:33:54.816+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ�������ɹ�: CREATE CONSTRAINT table_name_unique IF NOT EXISTS 
+2026-08-31T13:33:54.822+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ������ʧ�ܣ������Ѵ��ڻ� Neo4j �����ã�: There already exists an index (:Column {col_key}). A constraint cannot be created until the index has been dropped.; Error code 'Neo.ClientError.Schema.IndexAlreadyExists'
+2026-08-31T13:33:54.828+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ������ʧ�ܣ������Ѵ��ڻ� Neo4j �����ã�: There already exists an index (:Script {file}). A constraint cannot be created until the index has been dropped.; Error code 'Neo.ClientError.Schema.IndexAlreadyExists'
+2026-08-31T13:33:54.832+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ�������ɹ�: CREATE CONSTRAINT report_file_unique IF NOT EXISTS
+2026-08-31T13:33:54.836+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ�������ɹ�: CREATE CONSTRAINT dataset_key_unique IF NOT EXISTS
+2026-08-31T13:33:54.839+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ�������ɹ�: CREATE CONSTRAINT transform_id_unique IF NOT EXIST
+Logging initialized using 'class org.apache.ibatis.logging.stdout.StdOutImpl' adapter.
+Get /192.168.1.100 network interface 
+Get network interface info: name:wlan0 (Intel(R) Wi-Fi 6E AX211 160MHz)
+Initialization Sequence datacenterId:16 workerId:8
+ _ _   |_  _ _|_. ___ _ |    _ 
+| | |\/|_)(_| | |_\  |_)||_|_\ 
+     /               |         
+                        3.5.7 
+2026-08-31T13:33:55.349+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@91f5763] was not registered for synchronization because synchronization is not active
+2026-08-31T13:33:55.493+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.CptXmlParserTest   : Started CptXmlParserTest in 1.096 seconds (process running for 8.302)
+2026-08-31T13:33:55.494+08:00  INFO 2896 --- [proc-dependency-extractor] [   scheduling-1] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Starting...
+2026-08-31T13:33:55.499+08:00  INFO 2896 --- [proc-dependency-extractor] [   scheduling-1] com.zaxxer.hikari.pool.HikariPool        : HikariPool-2 - Added connection com.mysql.cj.jdbc.ConnectionImpl@46e5a20b
+2026-08-31T13:33:55.500+08:00  INFO 2896 --- [proc-dependency-extractor] [   scheduling-1] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Start completed.
+JDBC Connection [HikariProxyConnection@900878843 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,proc_name,sync_status,error_message,retry_count,create_time,update_time FROM neo4j_sync_log WHERE (sync_status = ? AND retry_count < ?)
+==> Parameters: FAILED(String), 3(Integer)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@91f5763]
+2026-08-31T13:33:55.512+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.hb.extractor.parser.DdlParserTest]: DdlParserTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-08-31T13:33:55.513+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.hb.extractor.ProcExtractorApplication for test class com.hb.extractor.parser.DdlParserTest
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@744199bb] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1827192676 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_agt_deposit_acct_inf(String)
+<==    Columns: column_name
+<==        Row: data_dt
+<==        Row: acct_no
+<==        Row: acct_name
+<==        Row: prod_no
+<==        Row: prod_type
+<==        Row: biz_cd
+<==        Row: subj_no
+<==        Row: cust_acct_no
+<==        Row: sub_acct_serial_no
+<==        Row: cust_acct_no_type_cd
+<==        Row: acct_type_cd
+<==        Row: acct_addit_type_cd
+<==        Row: finan_deposit_acct_type_cd
+<==        Row: deposit_category_cd
+<==        Row: acct_sts_cd
+<==        Row: cash_remitt_flag
+<==        Row: term_cycle_cd
+<==        Row: term_cycle
+<==        Row: rnewa_mode_cd
+<==        Row: frozen_mode_cd
+<==        Row: alw_adv_withd_flag
+<==        Row: alw_overd_flag
+<==        Row: fx_supvs_flag
+<==        Row: stl_acct_flag
+<==        Row: cust_no
+<==        Row: cust_name
+<==        Row: cust_type_cd
+<==        Row: agent_cust_no
+<==        Row: gover_affairs_dtl_class
+<==        Row: open_acct_org_no
+<==        Row: open_acct_dt
+<==        Row: open_acct_teller
+<==        Row: acct_cance_org
+<==        Row: acct_cance_dt
+<==        Row: acct_cance_teller_no
+<==        Row: val_dt
+<==        Row: expir_dt
+<==        Row: rgst_dt
+<==        Row: agr_deposit_begin_save_amt
+<==        Row: agr_retn_amt
+<==        Row: int_rate_no
+<==        Row: int_rate_no_eff_day
+<==        Row: int_rate
+<==        Row: base_int_rate
+<==        Row: int_rate_float_ratio
+<==        Row: int_rate_float_mode_cd
+<==        Row: int_rate_float_point
+<==        Row: int_rate_adjust_freq
+<==        Row: last_int_rate_adjust_dt
+<==        Row: next_int_rate_adjust_dt
+<==        Row: open_acct_int_rate
+<==        Row: open_acct_amt
+<==        Row: stop_pay_amt
+<==        Row: frozen_amt
+<==        Row: curr_frozen_amt
+<==        Row: ldr_frozen_principal
+<==        Row: acct_grade_cd
+<==        Row: ctrl_measure_cd
+<==        Row: recen_movg_acct_dt
+<==        Row: currcy_cd
+<==        Row: acct_bal
+<==        Row: month_daily_avg
+<==        Row: quart_daily_avg
+<==        Row: half_year_daily_avg
+<==        Row: year_daily_avg
+<==        Row: roll_month_daily_avg
+<==        Row: roll_quart_daily_avg
+<==        Row: roll_half_year_daily_avg
+<==        Row: roll_year_daily_avg
+<==        Row: day_intst
+<==        Row: month_intst
+<==        Row: quart_intst
+<==        Row: year_intst
+<==        Row: data_sourc_tab_name
+<==      Total: 74
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@744199bb]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@1c24639e] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1553033411 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: table_not_exist_999(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@1c24639e]
+2026-08-31T13:33:55.590+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\table_not_exist_999_ddl.TXT
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@678b3746] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1164481922 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: vt_p4_x(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@678b3746]
+2026-08-31T13:33:56.672+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\vt_p4_x_ddl.TXT
+2026-08-31T13:33:56.675+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=2, target=c_p4_t, aliasMap={VT_P4_X=vt_p4_x}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@2ded31cc] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1203180886 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_p4_t(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@2ded31cc]
+2026-08-31T13:33:56.678+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\c_p4_t_ddl.TXT
+2026-08-31T13:33:56.700+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=target, aliasMap={A=f_a, SQ=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@5a5024eb] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1198375087 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: target(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@5a5024eb]
+2026-08-31T13:33:56.705+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\target_ddl.TXT
+2026-08-31T13:33:56.725+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=2, target=vt_test_02, aliasMap={T=c_agt_deposit_acct_inf}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@18c432ed] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@34004511 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: vt_test_02(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@18c432ed]
+2026-08-31T13:33:56.727+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\vt_test_02_ddl.TXT
+2026-08-31T13:33:56.742+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=c_p2_rela, aliasMap={A=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@186e254] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1786936076 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_p2_rela(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@186e254]
+2026-08-31T13:33:56.745+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\c_p2_rela_ddl.TXT
+2026-08-31T13:33:56.763+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=a_p5_t, aliasMap={T1=a_d_fin_mkt_prft_loss_dtl_10, T2=f_pt_crbs_teller_param}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4607cbe2] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@2146698020 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: a_p5_t(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4607cbe2]
+2026-08-31T13:33:56.766+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\a_p5_t_ddl.TXT
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7f36cd8f] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@537136238 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: a_d_fin_mkt_prft_loss_dtl_10(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7f36cd8f]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@70fcd3e5] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1880872680 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: a_d_fin_mkt_prft_loss_dtl(String)
+<==    Columns: id, ddl_info_id, schema_name, table_name, full_table_name, column_name, ordinal_position, column_default, is_nullable, data_type, column_type, character_maximum_length, numeric_precision, numeric_scale, character_set_name, collation_name, column_key, extra, column_comment, create_time
+<==        Row: 379602, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, data_dt, 1, <<BLOB>>, YES, date, date, null, null, null, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379603, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, asset_type, 2, <<BLOB>>, YES, varchar, varchar(255), 255, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379604, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, txn_type, 3, <<BLOB>>, YES, varchar, varchar(255), 255, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379605, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, agt_num, 4, <<BLOB>>, YES, varchar, varchar(255), 255, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379606, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, vs_name, 5, <<BLOB>>, YES, varchar, varchar(255), 255, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379607, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, dtl_sub_num, 6, <<BLOB>>, YES, varchar, varchar(255), 255, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379608, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, fst_term_remai_term_repur_term, 7, <<BLOB>>, YES, decimal, decimal(24,6), null, 24, 6, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379609, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, val_related_desc, 8, <<BLOB>>, YES, varchar, varchar(255), 255, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379610, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, bal, 9, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379611, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, hold_cost, 10, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379612, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, evenh_val_chang_prft_loss, 11, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379613, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, intst_revenu, 12, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379614, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, price_diff_revenu, 13, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379615, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, amort_revenu, 14, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379616, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, benqitouzhangw, 15, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 379617, 11527, pid, a_d_fin_mkt_prft_loss_dtl, pid.a_d_fin_mkt_prft_loss_dtl, benqitoukaohe, 16, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:27
+<==        Row: 394026, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, data_dt, 1, <<BLOB>>, YES, date, date, null, null, null, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394027, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, asset_type, 2, <<BLOB>>, YES, varchar, varchar(255), 255, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394028, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, txn_type, 3, <<BLOB>>, YES, varchar, varchar(255), 255, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394029, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, agt_num, 4, <<BLOB>>, YES, varchar, varchar(255), 255, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394030, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, vs_name, 5, <<BLOB>>, YES, varchar, varchar(255), 255, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394031, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, dtl_sub_num, 6, <<BLOB>>, YES, varchar, varchar(255), 255, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394032, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, fst_term_remai_term_repur_term, 7, <<BLOB>>, YES, int, int(11), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394033, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, val_related_desc, 8, <<BLOB>>, YES, varchar, varchar(255), 255, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394034, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, bal, 9, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394035, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, hold_cost, 10, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394036, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, evenh_val_chang_prft_loss, 11, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394037, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, intst_revenu, 12, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394038, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, price_diff_revenu, 13, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394039, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, amort_revenu, 14, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394040, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, benqitouzhangw, 15, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==        Row: 394041, 12170, rpt, a_d_fin_mkt_prft_loss_dtl, rpt.a_d_fin_mkt_prft_loss_dtl, benqitoukaohe, 16, <<BLOB>>, YES, decimal, decimal(24,3), null, 24, 3, null, null, null, null, <<BLOB>>, 2026-08-18 11:44:34
+<==      Total: 32
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@70fcd3e5]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@772589ed] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@877918108 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: f_pt_crbs_teller_param(String)
+<==    Columns: id, ddl_info_id, schema_name, table_name, full_table_name, column_name, ordinal_position, column_default, is_nullable, data_type, column_type, character_maximum_length, numeric_precision, numeric_scale, character_set_name, collation_name, column_key, extra, column_comment, create_time
+<==        Row: 268542, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_no, 1, <<BLOB>>, NO, varchar, varchar(16), 16, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268543, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, biz_org_no, 2, <<BLOB>>, YES, varchar, varchar(8), 8, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268544, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, acctg_org_no, 3, <<BLOB>>, YES, varchar, varchar(8), 8, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268545, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, txn_biz_org_no, 4, <<BLOB>>, YES, varchar, varchar(8), 8, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268546, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, txn_acctg_org_no, 5, <<BLOB>>, YES, varchar, varchar(8), 8, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268547, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_name_no, 6, <<BLOB>>, YES, varchar, varchar(44), 44, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268548, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_prop_no, 7, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268549, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_role_no, 8, <<BLOB>>, YES, varchar, varchar(4), 4, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268550, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, belo_dept_cd, 9, <<BLOB>>, YES, varchar, varchar(4), 4, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268551, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, acct_lvl_cd, 10, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268552, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_type_no, 11, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268553, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, activa_dt, 12, <<BLOB>>, YES, varchar, varchar(16), 16, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268554, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, term_dt, 13, <<BLOB>>, YES, varchar, varchar(16), 16, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268555, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, emp_no, 14, <<BLOB>>, YES, varchar, varchar(20), 20, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268556, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, cust_no, 15, <<BLOB>>, YES, varchar, varchar(24), 24, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268557, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, curr_txn_seq_no, 16, <<BLOB>>, YES, varchar, varchar(12), 12, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268558, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_media_cd, 17, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268559, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_passwd_no, 18, <<BLOB>>, YES, varchar, varchar(32), 32, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268560, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, passwd_modif_dt, 19, <<BLOB>>, YES, varchar, varchar(16), 16, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268561, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, passwd_vld_days, 20, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268562, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, passwd_cannot_repet_tms, 21, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268563, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, passwd_alw_error_tms, 22, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268564, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, passwd_error_tms, 23, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268565, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, cash_boot_tot_limitamt, 24, <<BLOB>>, YES, decimal, decimal(17,2), null, 17, 2, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268566, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, currcy_ctrl_flag, 25, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268567, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, currcy_sync_flag, 26, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268568, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, txn_grp_type_list, 27, <<BLOB>>, YES, varchar, varchar(1200), 1200, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268569, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, autho_grp_type_list, 28, <<BLOB>>, YES, varchar, varchar(1200), 1200, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268570, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, prod_txn_list, 29, <<BLOB>>, YES, varchar, varchar(800), 800, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268571, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, prod_autho_list, 30, <<BLOB>>, YES, varchar, varchar(800), 800, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268572, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, cut_txn, 31, <<BLOB>>, YES, varchar, varchar(500), 500, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268573, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, sign_in_tm, 32, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268574, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, sign_out_tm, 33, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268575, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, term_no, 34, <<BLOB>>, YES, varchar, varchar(10), 10, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268576, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, ip_addr, 35, <<BLOB>>, YES, varchar, varchar(30), 30, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268577, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, risk_lvl_cd, 36, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268578, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, daily_sett_flag, 37, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268579, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_activa_flag, 38, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268580, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_permis_sts_cd, 39, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268581, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_sign_in_sts_cd, 40, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268582, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_sts_cd, 41, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268583, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, curr_non_roll_acct_seq_no, 42, <<BLOB>>, YES, varchar, varchar(160), 160, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268584, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, safeg_dt, 43, <<BLOB>>, YES, varchar, varchar(16), 16, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268585, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, safeg_tm, 44, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268586, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, safeg_teller_no, 45, <<BLOB>>, YES, varchar, varchar(16), 16, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268587, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, safeg_org_no, 46, <<BLOB>>, YES, varchar, varchar(8), 8, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268588, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, record_sts_cd, 47, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268589, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, start_dt, 48, <<BLOB>>, YES, date, date, null, null, null, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268590, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, end_dt, 49, <<BLOB>>, YES, date, date, null, null, null, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==      Total: 49
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@772589ed]
+2026-08-31T13:33:56.878+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=c_credit_card_dtl, aliasMap={T1=c_test_nometab_a, COLL=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@785477e5] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@774194879 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_credit_card_dtl(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@785477e5]
+2026-08-31T13:33:56.892+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\c_credit_card_dtl_ddl.TXT
+2026-08-31T13:33:56.908+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=2, target=a_pfal_deposit_term_inf_v, aliasMap={T=f_ac_ctds_ldr_acct}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@39f3285d] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1529948259 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: a_pfal_deposit_term_inf_v(String)
+<==    Columns: column_name
+<==        Row: data_dt
+<==        Row: acct_no
+<==        Row: belo_line
+<==        Row: prod_no
+<==        Row: deposit_term
+<==        Row: subj_no
+<==        Row: open_acct_org
+<==        Row: exec_int_rate
+<==        Row: is_xdck
+<==        Row: acct_bal
+<==        Row: year_daily_avg_deposit_bal_rmb
+<==        Row: year_intst
+<==        Row: ftpyear_transfer_income
+<==      Total: 13
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@39f3285d]
+2026-08-31T13:33:56.920+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=target, aliasMap={A=f_a}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@39dee5fd] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@461996027 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: target(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@39dee5fd]
+2026-08-31T13:33:56.923+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\target_ddl.TXT
+2026-08-31T13:33:56.933+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=c_credit_card_dtl, aliasMap={T1=c_test_nometab_a, T14=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@1254a3cd] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@8972378 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_credit_card_dtl(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@1254a3cd]
+2026-08-31T13:33:56.937+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\c_credit_card_dtl_ddl.TXT
+2026-08-31T13:33:56.949+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=2, target=c_agent_pay_cus_inf, aliasMap={T=c_test_nometab_a, T1=a_d_agent_pay_cus_inf_, T2=f_test_nometab_b}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@13288174] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@615391619 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_agent_pay_cus_inf(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@13288174]
+2026-08-31T13:33:56.952+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\c_agent_pay_cus_inf_ddl.TXT
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@280f061e] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@2105051301 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: c_test_nometab_a(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@280f061e]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4accc3de] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@438506351 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: a_d_agent_pay_cus_inf_(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4accc3de]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@20724c21] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@202160578 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: a_d_agent_pay_cus_inf(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@20724c21]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@11e75942] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@600185883 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: f_test_nometab_b(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@11e75942]
+2026-08-31T13:33:56.972+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=c_agt_ldr_acct_intst, aliasMap={TAA=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7692c0e9] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1126139952 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_agt_ldr_acct_intst(String)
+<==    Columns: column_name
+<==        Row: data_dt
+<==        Row: acct_no
+<==        Row: day_intst
+<==        Row: month_intst
+<==        Row: quart_intst
+<==        Row: year_intst
+<==      Total: 6
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7692c0e9]
+2026-08-31T13:33:56.986+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=2, target=vt_gbase_test, aliasMap={T=c_agt_deposit_acct_inf}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@55a2ca5e] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1790748582 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: vt_gbase_test(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@55a2ca5e]
+2026-08-31T13:33:56.988+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\vt_gbase_test_ddl.TXT
+2026-08-31T13:33:57.004+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=a_d_ln_credit_card_acct_inf, aliasMap={T=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@f047670] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@2056323708 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: a_d_ln_credit_card_acct_inf(String)
+<==    Columns: column_name
+<==        Row: acct_no
+<==        Row: cust_no
+<==        Row: cust_iden_no
+<==        Row: card_no
+<==        Row: org_no
+<==        Row: card_nature
+<==        Row: open_acct_dt
+<==        Row: acct_name
+<==        Row: fiveclass_class_cd
+<==        Row: currcy_cd
+<==        Row: vrfctn_proce_flag
+<==        Row: overdue_setou
+<==        Row: tot_bal
+<==        Row: over_pay
+<==        Row: overdue_bal
+<==        Row: alre_impair_bal
+<==        Row: nor_bal
+<==        Row: credit_limit
+<==        Row: overdue_terms
+<==        Row: expir_dt
+<==        Row: check_day
+<==        Row: bal_noint
+<==        Row: stm_noint
+<==        Row: fee
+<==        Row: bal_mppl
+<==        Row: bal_l_mppl
+<==        Row: bal_mppl2
+<==        Row: p_amtz_bal
+<==        Row: acct_close_cd
+<==        Row: acct_class
+<==        Row: appl_cd
+<==        Row: prod_no
+<==        Row: credit_card_item_bal
+<==        Row: stages_pay_curr_bal
+<==        Row: stm_balmp
+<==        Row: stm_bmflag
+<==        Row: bal_mp
+<==        Row: bal_mpflag
+<==        Row: credit_card_stages_bal
+<==        Row: stm_balfre
+<==        Row: stm_balint
+<==        Row: stmbalintflag
+<==        Row: bal_free
+<==        Row: bal_int
+<==        Row: bal_intflag
+<==        Row: credit_card_overd_bal
+<==        Row: acct_sts
+<==        Row: close_chdy
+<==        Row: used_credit_amt
+<==        Row: overdue_amt
+<==        Row: mp_rem_ppl_2
+<==        Row: np_ind
+<==        Row: begin_year_np_ind
+<==        Row: mp_rem_ppl
+<==        Row: consm_bal
+<==        Row: cash_withd_bal
+<==        Row: default_day_intst
+<==        Row: stages_day_intst
+<==        Row: item_stages_day_intst
+<==        Row: overd_day_intst
+<==        Row: pre_default_day_intst
+<==        Row: pre_stages_day_intst
+<==        Row: pre_item_stages_day_intst
+<==        Row: pre_overd_day_intst
+<==        Row: lp_no
+<==        Row: data_dt
+<==        Row: acctg_org
+<==      Total: 67
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@f047670]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@18419ab7] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1603529730 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: vt_x(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@18419ab7]
+2026-08-31T13:33:57.022+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\vt_x_ddl.TXT
+2026-08-31T13:33:57.032+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=c_cus_emp_no_mapp_inf, aliasMap={B=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@1a916120] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@762522842 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_cus_emp_no_mapp_inf(String)
+<==    Columns: column_name
+<==        Row: data_dt
+<==        Row: wage_no
+<==        Row: new_wage_no
+<==        Row: cust_no
+<==        Row: teller_no
+<==        Row: emp_name
+<==        Row: iden_type_cd
+<==        Row: identt_card_no
+<==        Row: gender_cd
+<==        Row: birth_dt
+<==        Row: highest_edu_degree_cd
+<==        Row: highest_academic_degree_cd
+<==        Row: highest_tech_title_cd
+<==        Row: org_no
+<==        Row: new_org_no
+<==        Row: biz_org_no
+<==        Row: oa_org_no
+<==        Row: mh_org_no
+<==        Row: org_biz_no
+<==        Row: dept_no
+<==        Row: teller_prop_cd
+<==        Row: teller_sts_cd
+<==        Row: record_sts_cd
+<==        Row: curr_sts_cd
+<==        Row: move_tel
+<==        Row: tel_no
+<==        Row: mail_addr
+<==        Row: post_cd
+<==        Row: post_name
+<==        Row: dept_name
+<==        Row: use_type_cd
+<==        Row: safeg_fin_cust_num
+<==        Row: join_socie_work_tm
+<==        Row: enrol_dt
+<==      Total: 34
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@1a916120]
+2026-08-31T13:33:57.051+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=a_p3_loan, aliasMap={A=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4b8ac512] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1485974016 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: a_p3_loan(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4b8ac512]
+2026-08-31T13:33:57.053+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\a_p3_loan_ddl.TXT
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@380e470a] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@398051839 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: vt_agent_pay_(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@380e470a]
+2026-08-31T13:33:57.072+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\vt_agent_pay__ddl.TXT
+2026-08-31T13:33:57.075+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=2, target=c_agent_pay_cus, aliasMap={T=c_test_nometab_a, T1=vt_agent_pay_}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4e77f29e] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@442076720 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_agent_pay_cus(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4e77f29e]
+2026-08-31T13:33:57.077+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\c_agent_pay_cus_ddl.TXT
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@40c92dfa] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@381096925 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: c_test_nometab_a(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@40c92dfa]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@58fb5b8f] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1372855191 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: vt_agent_pay_(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@58fb5b8f]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@27260f9c] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@620961748 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: vt_agent_pay(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@27260f9c]
+2026-08-31T13:33:57.100+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=a_p3_np, aliasMap={B=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@64096a41] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@870227333 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: a_p3_np(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@64096a41]
+2026-08-31T13:33:57.103+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\a_p3_np_ddl.TXT
+2026-08-31T13:33:57.118+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=c_ln_card_dtl, aliasMap={T1=a_d_ln_credit_card_acct_relax_tab, T3=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@5f5076f9] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@423861956 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_ln_card_dtl(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@5f5076f9]
+2026-08-31T13:33:57.120+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\c_ln_card_dtl_ddl.TXT
+2026-08-31T13:33:57.132+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=target, aliasMap={A=target, B=f_b}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7325b786] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@261371975 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: target(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7325b786]
+2026-08-31T13:33:57.134+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\target_ddl.TXT
+2026-08-31T13:33:57.181+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=6, target=vt_c_agt_deposit_acct_inf_01, aliasMap={TA=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@3f36c191] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1939291767 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: vt_c_agt_deposit_acct_inf_01(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@3f36c191]
+2026-08-31T13:33:57.183+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\vt_c_agt_deposit_acct_inf_01_ddl.TXT
+2026-08-31T13:33:57.208+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=7, target=vt_c_agt_deposit_acct_inf_02, aliasMap={TAP=f_ac_crbs_deposit_acct_int_rate_def, TRP=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6a7cbeed] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1033287931 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: vt_c_agt_deposit_acct_inf_02(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6a7cbeed]
+2026-08-31T13:33:57.211+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\vt_c_agt_deposit_acct_inf_02_ddl.TXT
+2026-08-31T13:33:57.247+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=8, target=vt_c_agt_deposit_acct_inf_03, aliasMap={TXX=f_ac_crbs_deposit_acct, TCA=f_ac_crbs_cust_acct_no_compar_rela, TCU=f_ac_crbs_cust_acct_no, TAS=f_ac_crbs_acct_no_assis_inf, TLV=f_ac_crbs_acct_no_assis_inf, TFO=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@28dd038f] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@836252974 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: vt_c_agt_deposit_acct_inf_03(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@28dd038f]
+2026-08-31T13:33:57.249+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\vt_c_agt_deposit_acct_inf_03_ddl.TXT
+2026-08-31T13:33:57.271+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=9, target=vt_c_agt_deposit_acct_inf_04, aliasMap={T1=f_pt_ecif_whole_bank_cust_inf, T2=f_pt_ecif_pub_cust_inf}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@2c376461] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@656689800 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: vt_c_agt_deposit_acct_inf_04(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@2c376461]
+2026-08-31T13:33:57.274+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\vt_c_agt_deposit_acct_inf_04_ddl.TXT
+2026-08-31T13:33:57.298+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=10, target=c_agt_deposit_acct_inf, aliasMap={T01=vt_c_agt_deposit_acct_inf_03, T02=null, T03=f_co_crbs_biz_cd, TM1=vt_c_agt_deposit_acct_inf_01, TM2=vt_c_agt_deposit_acct_inf_02, TM4=vt_c_agt_deposit_acct_inf_04, TCB=c_agt_deposit_acct_calcu_base, TAI=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@78d52d4c] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1202261290 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_agt_deposit_acct_inf(String)
+<==    Columns: column_name
+<==        Row: data_dt
+<==        Row: acct_no
+<==        Row: acct_name
+<==        Row: prod_no
+<==        Row: prod_type
+<==        Row: biz_cd
+<==        Row: subj_no
+<==        Row: cust_acct_no
+<==        Row: sub_acct_serial_no
+<==        Row: cust_acct_no_type_cd
+<==        Row: acct_type_cd
+<==        Row: acct_addit_type_cd
+<==        Row: finan_deposit_acct_type_cd
+<==        Row: deposit_category_cd
+<==        Row: acct_sts_cd
+<==        Row: cash_remitt_flag
+<==        Row: term_cycle_cd
+<==        Row: term_cycle
+<==        Row: rnewa_mode_cd
+<==        Row: frozen_mode_cd
+<==        Row: alw_adv_withd_flag
+<==        Row: alw_overd_flag
+<==        Row: fx_supvs_flag
+<==        Row: stl_acct_flag
+<==        Row: cust_no
+<==        Row: cust_name
+<==        Row: cust_type_cd
+<==        Row: agent_cust_no
+<==        Row: gover_affairs_dtl_class
+<==        Row: open_acct_org_no
+<==        Row: open_acct_dt
+<==        Row: open_acct_teller
+<==        Row: acct_cance_org
+<==        Row: acct_cance_dt
+<==        Row: acct_cance_teller_no
+<==        Row: val_dt
+<==        Row: expir_dt
+<==        Row: rgst_dt
+<==        Row: agr_deposit_begin_save_amt
+<==        Row: agr_retn_amt
+<==        Row: int_rate_no
+<==        Row: int_rate_no_eff_day
+<==        Row: int_rate
+<==        Row: base_int_rate
+<==        Row: int_rate_float_ratio
+<==        Row: int_rate_float_mode_cd
+<==        Row: int_rate_float_point
+<==        Row: int_rate_adjust_freq
+<==        Row: last_int_rate_adjust_dt
+<==        Row: next_int_rate_adjust_dt
+<==        Row: open_acct_int_rate
+<==        Row: open_acct_amt
+<==        Row: stop_pay_amt
+<==        Row: frozen_amt
+<==        Row: curr_frozen_amt
+<==        Row: ldr_frozen_principal
+<==        Row: acct_grade_cd
+<==        Row: ctrl_measure_cd
+<==        Row: recen_movg_acct_dt
+<==        Row: currcy_cd
+<==        Row: acct_bal
+<==        Row: month_daily_avg
+<==        Row: quart_daily_avg
+<==        Row: half_year_daily_avg
+<==        Row: year_daily_avg
+<==        Row: roll_month_daily_avg
+<==        Row: roll_quart_daily_avg
+<==        Row: roll_half_year_daily_avg
+<==        Row: roll_year_daily_avg
+<==        Row: day_intst
+<==        Row: month_intst
+<==        Row: quart_intst
+<==        Row: year_intst
+<==        Row: data_sourc_tab_name
+<==      Total: 74
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@78d52d4c]
+2026-08-31T13:33:57.393+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=11, target=c_agt_deposit_acct_inf, aliasMap={T01=f_ac_ctds_ldr_acct, TCB=c_agt_ldr_acct_calcu_base, TPD=f_pd_ctds_ldr_prod_inf, TM4=vt_c_agt_deposit_acct_inf_04, TAI=c_agt_ldr_acct_intst, TCA=null, T02=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@15ade272] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@576229564 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_agt_deposit_acct_inf(String)
+<==    Columns: column_name
+<==        Row: data_dt
+<==        Row: acct_no
+<==        Row: acct_name
+<==        Row: prod_no
+<==        Row: prod_type
+<==        Row: biz_cd
+<==        Row: subj_no
+<==        Row: cust_acct_no
+<==        Row: sub_acct_serial_no
+<==        Row: cust_acct_no_type_cd
+<==        Row: acct_type_cd
+<==        Row: acct_addit_type_cd
+<==        Row: finan_deposit_acct_type_cd
+<==        Row: deposit_category_cd
+<==        Row: acct_sts_cd
+<==        Row: cash_remitt_flag
+<==        Row: term_cycle_cd
+<==        Row: term_cycle
+<==        Row: rnewa_mode_cd
+<==        Row: frozen_mode_cd
+<==        Row: alw_adv_withd_flag
+<==        Row: alw_overd_flag
+<==        Row: fx_supvs_flag
+<==        Row: stl_acct_flag
+<==        Row: cust_no
+<==        Row: cust_name
+<==        Row: cust_type_cd
+<==        Row: agent_cust_no
+<==        Row: gover_affairs_dtl_class
+<==        Row: open_acct_org_no
+<==        Row: open_acct_dt
+<==        Row: open_acct_teller
+<==        Row: acct_cance_org
+<==        Row: acct_cance_dt
+<==        Row: acct_cance_teller_no
+<==        Row: val_dt
+<==        Row: expir_dt
+<==        Row: rgst_dt
+<==        Row: agr_deposit_begin_save_amt
+<==        Row: agr_retn_amt
+<==        Row: int_rate_no
+<==        Row: int_rate_no_eff_day
+<==        Row: int_rate
+<==        Row: base_int_rate
+<==        Row: int_rate_float_ratio
+<==        Row: int_rate_float_mode_cd
+<==        Row: int_rate_float_point
+<==        Row: int_rate_adjust_freq
+<==        Row: last_int_rate_adjust_dt
+<==        Row: next_int_rate_adjust_dt
+<==        Row: open_acct_int_rate
+<==        Row: open_acct_amt
+<==        Row: stop_pay_amt
+<==        Row: frozen_amt
+<==        Row: curr_frozen_amt
+<==        Row: ldr_frozen_principal
+<==        Row: acct_grade_cd
+<==        Row: ctrl_measure_cd
+<==        Row: recen_movg_acct_dt
+<==        Row: currcy_cd
+<==        Row: acct_bal
+<==        Row: month_daily_avg
+<==        Row: quart_daily_avg
+<==        Row: half_year_daily_avg
+<==        Row: year_daily_avg
+<==        Row: roll_month_daily_avg
+<==        Row: roll_quart_daily_avg
+<==        Row: roll_half_year_daily_avg
+<==        Row: roll_year_daily_avg
+<==        Row: day_intst
+<==        Row: month_intst
+<==        Row: quart_intst
+<==        Row: year_intst
+<==        Row: data_sourc_tab_name
+<==      Total: 74
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@15ade272]
+��ȡ�� 26 ��������ϵ
+��ȡ�� 67 �� JOIN/WHERE ����
+  f_ev_crbs_agr_deposit_book -> vt_c_agt_deposit_acct_inf_01 (INSERT SELECT)
+  f_ac_crbs_deposit_acct_int_rate_def -> vt_c_agt_deposit_acct_inf_02 (INSERT SELECT)
+  f_co_crbs_actual_int_rate_param -> vt_c_agt_deposit_acct_inf_02 (INSERT SELECT)
+  f_ac_crbs_deposit_acct -> vt_c_agt_deposit_acct_inf_03 (INSERT SELECT)
+  f_ac_crbs_cust_acct_no_compar_rela -> vt_c_agt_deposit_acct_inf_03 (INSERT SELECT)
+  f_ac_crbs_cust_acct_no -> vt_c_agt_deposit_acct_inf_03 (INSERT SELECT)
+  f_ac_crbs_acct_no_assis_inf -> vt_c_agt_deposit_acct_inf_03 (INSERT SELECT)
+  f_ac_crbs_acct_no_assis_inf -> vt_c_agt_deposit_acct_inf_03 (INSERT SELECT)
+  f_ev_crbs_deposit_acct_frozen_book -> vt_c_agt_deposit_acct_inf_03 (INSERT SELECT)
+  f_pt_ecif_whole_bank_cust_inf -> vt_c_agt_deposit_acct_inf_04 (INSERT SELECT)
+  f_pt_ecif_pub_cust_inf -> vt_c_agt_deposit_acct_inf_04 (INSERT SELECT)
+  vt_c_agt_deposit_acct_inf_03 -> c_agt_deposit_acct_inf (INSERT SELECT)
+  f_fi_crbs_new_acctg_entry_config_file_biz -> c_agt_deposit_acct_inf (INSERT SELECT)
+  f_co_crbs_biz_cd -> c_agt_deposit_acct_inf (INSERT SELECT)
+  vt_c_agt_deposit_acct_inf_01 -> c_agt_deposit_acct_inf (INSERT SELECT)
+  vt_c_agt_deposit_acct_inf_02 -> c_agt_deposit_acct_inf (INSERT SELECT)
+  vt_c_agt_deposit_acct_inf_04 -> c_agt_deposit_acct_inf (INSERT SELECT)
+  c_agt_deposit_acct_calcu_base -> c_agt_deposit_acct_inf (INSERT SELECT)
+  c_agt_deposit_acct_intst -> c_agt_deposit_acct_inf (INSERT SELECT)
+  f_ac_ctds_ldr_acct -> c_agt_deposit_acct_inf (INSERT SELECT)
+  c_agt_ldr_acct_calcu_base -> c_agt_deposit_acct_inf (INSERT SELECT)
+  f_pd_ctds_ldr_prod_inf -> c_agt_deposit_acct_inf (INSERT SELECT)
+  vt_c_agt_deposit_acct_inf_04 -> c_agt_deposit_acct_inf (INSERT SELECT)
+  c_agt_ldr_acct_intst -> c_agt_deposit_acct_inf (INSERT SELECT)
+  f_ac_ctds_ldr_acct -> c_agt_deposit_acct_inf (INSERT SELECT)
+  f_ac_ctds_ldr_frozen_inf -> c_agt_deposit_acct_inf (INSERT SELECT)
+2026-08-31T13:33:57.444+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.JsqlSqlAnalyzer    : JsqlParser ����ʧ�ܣ��齫������: net.sf.jsqlparser.parser.ParseException: Encountered unexpected token:<EOF>
+    at line 1, column 20.
+
+Was expecting one of:
+
+    "("
+    "ALTER"
+    "ANALYZE"
+    "BEGIN"
+    "CALL"
+    "COMMENT"
+    "COMMIT"
+    "CREATE"
+    "DECLARE"
+    "DELETE"
+    "DESC"
+    "DESCRIBE"
+    "DROP"
+    "EXEC"
+    "EXECUTE"
+    "EXPLAIN"
+    "GRANT"
+    "IF"
+    "INSERT"
+    "MERGE"
+    "PURGE"
+    "REFRESH"
+    "RENAME"
+    "REPLACE"
+    "RESET"
+    "ROLLBACK"
+    "SAVEPOINT"
+    "SET"
+    "SHOW"
+    "TABLE"
+    "TRUNCATE"
+    "UPDATE"
+    "UPSERT"
+    "USE"
+    "VALUE"
+    "VALUES"
+    "WITH"
+    <K_SELECT>
+ | preprocess �� SQL Ԥ��(ǰ200�ַ�): -- this is a comment
+2026-08-31T13:33:57.446+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.JsqlSqlAnalyzer    : JsqlParser ����ʧ�ܣ��齫������: net.sf.jsqlparser.parser.ParseException: Encountered unexpected token: "x" <S_IDENTIFIER>
+    at line 1, column 1.
+
+Was expecting one of:
+
+    "("
+    "ALTER"
+    "ANALYZE"
+    "BEGIN"
+    "CALL"
+    "COMMENT"
+    "COMMIT"
+    "CREATE"
+    "DECLARE"
+    "DELETE"
+    "DESC"
+    "DESCRIBE"
+    "DROP"
+    "EXEC"
+    "EXECUTE"
+    "EXPLAIN"
+    "GRANT"
+    "IF"
+    "INSERT"
+    "MERGE"
+    "PURGE"
+    "REFRESH"
+    "RENAME"
+    "REPLACE"
+    "RESET"
+    "ROLLBACK"
+    "SAVEPOINT"
+    "SET"
+    "SHOW"
+    "TABLE"
+    "TRUNCATE"
+    "UPDATE"
+    "UPSERT"
+    "USE"
+    "VALUE"
+    "VALUES"
+    "WITH"
+    <K_SELECT>
+ | preprocess �� SQL Ԥ��(ǰ200�ַ�): x = 1
+2026-08-31T13:33:57.452+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=target, aliasMap={A=f_a, B=f_b}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6347f9cc] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@646910575 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: target(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6347f9cc]
+2026-08-31T13:33:57.455+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\target_ddl.TXT
+2026-08-31T13:33:57.465+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=3, target=c_p1_sum, aliasMap={T=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7d741200] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@920722272 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: c_p1_sum(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7d741200]
+2026-08-31T13:33:57.468+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\c_p1_sum_ddl.TXT
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@9cdf13e] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1005445961 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: vt_p1_loan(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@9cdf13e]
+2026-08-31T13:33:57.487+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=a_d_ln_credit_card_acct_inf, aliasMap={T=null}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4ee80a94] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@2063255706 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: a_d_ln_credit_card_acct_inf(String)
+<==    Columns: column_name
+<==        Row: acct_no
+<==        Row: cust_no
+<==        Row: cust_iden_no
+<==        Row: card_no
+<==        Row: org_no
+<==        Row: card_nature
+<==        Row: open_acct_dt
+<==        Row: acct_name
+<==        Row: fiveclass_class_cd
+<==        Row: currcy_cd
+<==        Row: vrfctn_proce_flag
+<==        Row: overdue_setou
+<==        Row: tot_bal
+<==        Row: over_pay
+<==        Row: overdue_bal
+<==        Row: alre_impair_bal
+<==        Row: nor_bal
+<==        Row: credit_limit
+<==        Row: overdue_terms
+<==        Row: expir_dt
+<==        Row: check_day
+<==        Row: bal_noint
+<==        Row: stm_noint
+<==        Row: fee
+<==        Row: bal_mppl
+<==        Row: bal_l_mppl
+<==        Row: bal_mppl2
+<==        Row: p_amtz_bal
+<==        Row: acct_close_cd
+<==        Row: acct_class
+<==        Row: appl_cd
+<==        Row: prod_no
+<==        Row: credit_card_item_bal
+<==        Row: stages_pay_curr_bal
+<==        Row: stm_balmp
+<==        Row: stm_bmflag
+<==        Row: bal_mp
+<==        Row: bal_mpflag
+<==        Row: credit_card_stages_bal
+<==        Row: stm_balfre
+<==        Row: stm_balint
+<==        Row: stmbalintflag
+<==        Row: bal_free
+<==        Row: bal_int
+<==        Row: bal_intflag
+<==        Row: credit_card_overd_bal
+<==        Row: acct_sts
+<==        Row: close_chdy
+<==        Row: used_credit_amt
+<==        Row: overdue_amt
+<==        Row: mp_rem_ppl_2
+<==        Row: np_ind
+<==        Row: begin_year_np_ind
+<==        Row: mp_rem_ppl
+<==        Row: consm_bal
+<==        Row: cash_withd_bal
+<==        Row: default_day_intst
+<==        Row: stages_day_intst
+<==        Row: item_stages_day_intst
+<==        Row: overd_day_intst
+<==        Row: pre_default_day_intst
+<==        Row: pre_stages_day_intst
+<==        Row: pre_item_stages_day_intst
+<==        Row: pre_overd_day_intst
+<==        Row: lp_no
+<==        Row: data_dt
+<==        Row: acctg_org
+<==      Total: 67
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4ee80a94]
+2026-08-31T13:33:57.502+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=target, aliasMap={A=f_a, X=vt_x}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@90b9695] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@242204546 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: target(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@90b9695]
+2026-08-31T13:33:57.504+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\target_ddl.TXT
+2026-08-31T13:33:57.521+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.JsqlSqlAnalyzer    : JsqlParser ����ʧ�ܣ��齫������: net.sf.jsqlparser.parser.ParseException: Encountered unexpected token:<EOF>
+    at line 1, column 79.
+
+Was expecting one of:
+
+    ")"
+    "LATERAL"
+ | preprocess �� SQL Ԥ��(ǰ200�ַ�): INSERT INTO CDM.TARGET SELECT a.id FROM FDM.F_A a JOIN (SELECT * FROM FDM.F_B b
+2026-08-31T13:33:57.528+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=target, aliasMap={A=f_a, B=f_b}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7c55e559] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@69207690 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: target(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7c55e559]
+2026-08-31T13:33:57.530+08:00 DEBUG 2896 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\target_ddl.TXT
+2026-08-31T13:33:57.542+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.hb.extractor.parser.ReportSqlParserTest]: ReportSqlParserTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-08-31T13:33:57.546+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.hb.extractor.ProcExtractorApplication for test class com.hb.extractor.parser.ReportSqlParserTest
+2026-08-31T13:33:57.860+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ�� layer ʧ��: Neo4j ������
+2026-08-31T13:33:57.861+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ��ڵ������ʧ�� table=cdm.test_table: Neo4j ������
+2026-08-31T13:33:57.863+08:00 ERROR 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ���Ӱ���ѯʧ��: Neo4j ������
+2026-08-31T13:33:57.876+08:00 ERROR 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ���� impactedByDepth ʧ��: Neo4j ������
+2026-08-31T13:33:57.909+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ�� layer ʧ��: Neo4j ������
+2026-08-31T13:33:57.910+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ��ڵ������ʧ�� table=cdm.test_table: Neo4j ������
+2026-08-31T13:33:57.910+08:00 ERROR 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ���Ӱ���ѯʧ��: Neo4j ������
+2026-08-31T13:33:57.912+08:00 ERROR 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ���� impactedByDepth ʧ��: Neo4j ������
+2026-08-31T13:33:58.095+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ�� layer ʧ��: Cannot invoke "org.springframework.data.neo4j.core.Neo4jClient$MappingSpec.mappedBy(java.util.function.BiFunction)" because the return value of "org.springframework.data.neo4j.core.Neo4jClient$RunnableSpec.fetchAs(java.lang.Class)" is null
+2026-08-31T13:33:58.096+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ��ڵ������ʧ�� table=cdm.src: Cannot invoke "org.springframework.data.neo4j.core.Neo4jClient$MappingSpec.mappedBy(java.util.function.BiFunction)" because the return value of "org.springframework.data.neo4j.core.Neo4jClient$RunnableSpec.fetchAs(java.lang.Class)" is null
+2026-08-31T13:33:58.103+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ�� layer ʧ��: Neo4j ������
+2026-08-31T13:33:58.104+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ��ڵ������ʧ�� table=cdm.test_table: Neo4j ������
+2026-08-31T13:33:58.105+08:00 ERROR 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ���Ӱ���ѯʧ��: Neo4j ������
+2026-08-31T13:33:58.106+08:00 ERROR 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ���� impactedByDepth ʧ��: Neo4j ������
+2026-08-31T13:33:58.109+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ�� layer ʧ��: Neo4j ������
+2026-08-31T13:33:58.110+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ��ڵ������ʧ�� table=cdm.test_table: Neo4j ������
+2026-08-31T13:33:58.118+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ�� layer ʧ��: Cannot invoke "org.springframework.data.neo4j.core.Neo4jClient$MappingSpec.mappedBy(java.util.function.BiFunction)" because the return value of "org.springframework.data.neo4j.core.Neo4jClient$RunnableSpec.fetchAs(java.lang.Class)" is null
+2026-08-31T13:33:58.120+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ��ڵ������ʧ�� table=cdm.src: Cannot invoke "org.springframework.data.neo4j.core.Neo4jClient$MappingSpec.mappedBy(java.util.function.BiFunction)" because the return value of "org.springframework.data.neo4j.core.Neo4jClient$RunnableSpec.fetchAs(java.lang.Class)" is null
+2026-08-31T13:33:58.124+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ��Ԫ����ʧ�� cdm.tgt: Cannot invoke "org.springframework.data.neo4j.core.Neo4jClient$MappingSpec.mappedBy(java.util.function.BiFunction)" because the return value of "org.springframework.data.neo4j.core.Neo4jClient$RunnableSpec.fetchAs(java.lang.Class)" is null
+2026-08-31T13:33:58.133+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ�� layer ʧ��: Neo4j ������
+2026-08-31T13:33:58.133+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ��ѯ��ڵ������ʧ�� table=cdm.test_table: Neo4j ������
+2026-08-31T13:33:58.134+08:00 ERROR 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ���Ӱ���ѯʧ��: Neo4j ������
+2026-08-31T13:33:58.136+08:00 ERROR 2896 --- [proc-dependency-extractor] [           main] c.h.e.s.impl.ImpactAnalysisServiceImpl   : ���� impactedByDepth ʧ��: Neo4j ������
+2026-08-31T13:33:58.141+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.hb.extractor.service.LineageServiceTest]: LineageServiceTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-08-31T13:33:58.163+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.hb.extractor.ProcExtractorApplication for test class com.hb.extractor.service.LineageServiceTest
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7de2c19c] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@427665153 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: INSERT INTO proc_info ( proc_name, proc_file_name, file_path, update_target, table_count, temp_table_count, extract_time ) VALUES ( ?, ?, ?, ?, ?, ?, ? )
+==> Parameters: test_lineage_service_proc(String), test_lineage_service_proc.py(String), /tmp/test_lineage_service_proc.py(String), CDM.TARGET_TABLE(String), 1(Integer), 1(Integer), 2026-08-31T13:33:58.169131600(LocalDateTime)
+<==    Updates: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7de2c19c]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@57f1fbae] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@680533991 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: INSERT INTO table_lineage ( proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, extract_time ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )
+==> Parameters: 4257(Long), test_lineage_service_proc(String), FDM.F_A(String), F_A(String), CDM.VT_B(String), VT_B(String), 1(Integer), CREATE TEMP(String), 1(Integer), 2026-08-31T13:33:58.241221100(LocalDateTime)
+<==    Updates: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@57f1fbae]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6cd8c373] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1151309352 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: INSERT INTO table_lineage ( proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, extract_time ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )
+==> Parameters: 4257(Long), test_lineage_service_proc(String), CDM.VT_B(String), VT_B(String), CDM.TARGET_TABLE(String), TARGET_TABLE(String), 0(Integer), INSERT SELECT(String), 2(Integer), 2026-08-31T13:33:58.250552900(LocalDateTime)
+<==    Updates: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6cd8c373]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4a84beb7] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1922191129 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: WITH RECURSIVE downstream AS ( SELECT id, proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, main_table, 1 AS depth FROM table_lineage WHERE source_table_short = ? UNION ALL SELECT t.id, t.proc_id, t.proc_name, t.source_table, t.source_table_short, t.target_table, t.target_table_short, t.target_is_temp, t.operation, t.sql_block_seq, t.main_table, d.depth + 1 FROM table_lineage t JOIN downstream d ON t.source_table_short = d.target_table_short WHERE d.depth < ? ) SELECT DISTINCT id, proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, main_table, depth FROM downstream ORDER BY depth, sql_block_seq
+==> Parameters: F_A(String), 5(Integer)
+<==    Columns: id, proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, main_table, depth
+<==        Row: 58607, 4257, test_lineage_service_proc, FDM.F_A, F_A, CDM.VT_B, VT_B, 1, CREATE TEMP, 1, null, 1
+<==        Row: 58608, 4257, test_lineage_service_proc, CDM.VT_B, VT_B, CDM.TARGET_TABLE, TARGET_TABLE, 0, INSERT SELECT, 2, null, 2
+<==      Total: 2
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4a84beb7]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@1e8b0ab5] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@655954847 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,lineage_id,proc_name,filter_type,filter_clause,fields_involved,extract_time FROM table_lineage_filter WHERE (lineage_id IN (?,?))
+==> Parameters: 58607(Long), 58608(Long)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@1e8b0ab5]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7f065f9e] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@483939310 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,lineage_id,proc_name,target_field,field_order,source_expr,source_alias,source_table_short,logic_type,extract_time FROM table_field_mapping WHERE (lineage_id IN (?,?))
+==> Parameters: 58607(Long), 58608(Long)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7f065f9e]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@3f9ee527] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@708956538 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: DELETE FROM table_lineage WHERE (proc_name = ?)
+==> Parameters: test_lineage_service_proc(String)
+<==    Updates: 2
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@3f9ee527]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6a08113d] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1208989446 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: DELETE FROM proc_info WHERE id=?
+==> Parameters: 4257(Long)
+<==    Updates: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6a08113d]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@f36c8b1] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@622702995 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: INSERT INTO proc_info ( proc_name, proc_file_name, file_path, update_target, table_count, temp_table_count, extract_time ) VALUES ( ?, ?, ?, ?, ?, ?, ? )
+==> Parameters: test_lineage_service_proc(String), test_lineage_service_proc.py(String), /tmp/test_lineage_service_proc.py(String), CDM.TARGET_TABLE(String), 1(Integer), 1(Integer), 2026-08-31T13:33:58.299445400(LocalDateTime)
+<==    Updates: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@f36c8b1]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@74eae1e0] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1009997767 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: INSERT INTO table_lineage ( proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, extract_time ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )
+==> Parameters: 4258(Long), test_lineage_service_proc(String), FDM.F_A(String), F_A(String), CDM.VT_B(String), VT_B(String), 1(Integer), CREATE TEMP(String), 1(Integer), 2026-08-31T13:33:58.304200500(LocalDateTime)
+<==    Updates: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@74eae1e0]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@381d7c4c] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@506890727 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: INSERT INTO table_lineage ( proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, extract_time ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )
+==> Parameters: 4258(Long), test_lineage_service_proc(String), CDM.VT_B(String), VT_B(String), CDM.TARGET_TABLE(String), TARGET_TABLE(String), 0(Integer), INSERT SELECT(String), 2(Integer), 2026-08-31T13:33:58.308273400(LocalDateTime)
+<==    Updates: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@381d7c4c]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@411e567e] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1314450850 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: WITH RECURSIVE upstream AS ( SELECT id, proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, main_table, 1 AS depth FROM table_lineage WHERE target_table_short = ? UNION ALL SELECT t.id, t.proc_id, t.proc_name, t.source_table, t.source_table_short, t.target_table, t.target_table_short, t.target_is_temp, t.operation, t.sql_block_seq, t.main_table, u.depth + 1 FROM table_lineage t JOIN upstream u ON t.target_table_short = u.source_table_short WHERE u.depth < ? ) SELECT DISTINCT id, proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, main_table, depth FROM upstream ORDER BY depth, sql_block_seq
+==> Parameters: TARGET_TABLE(String), 5(Integer)
+<==    Columns: id, proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, main_table, depth
+<==        Row: 58610, 4258, test_lineage_service_proc, CDM.VT_B, VT_B, CDM.TARGET_TABLE, TARGET_TABLE, 0, INSERT SELECT, 2, null, 1
+<==        Row: 58609, 4258, test_lineage_service_proc, FDM.F_A, F_A, CDM.VT_B, VT_B, 1, CREATE TEMP, 1, null, 2
+<==      Total: 2
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@411e567e]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@49d5c751] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1089013300 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,lineage_id,proc_name,filter_type,filter_clause,fields_involved,extract_time FROM table_lineage_filter WHERE (lineage_id IN (?,?))
+==> Parameters: 58610(Long), 58609(Long)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@49d5c751]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@3b4b2c03] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@865814008 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,lineage_id,proc_name,target_field,field_order,source_expr,source_alias,source_table_short,logic_type,extract_time FROM table_field_mapping WHERE (lineage_id IN (?,?))
+==> Parameters: 58610(Long), 58609(Long)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@3b4b2c03]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@149ef64a] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1730158315 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: DELETE FROM table_lineage WHERE (proc_name = ?)
+==> Parameters: test_lineage_service_proc(String)
+<==    Updates: 2
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@149ef64a]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4d25943d] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@787089269 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: DELETE FROM proc_info WHERE id=?
+==> Parameters: 4258(Long)
+<==    Updates: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@4d25943d]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6a0a0f12] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@191883794 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,proc_name,proc_file_name,file_path,proc_desc,update_target,table_count,temp_table_count,extract_time,create_time FROM proc_info WHERE (proc_name = ?)
+==> Parameters: non_existent_proc_xyz(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6a0a0f12]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@689fe2a3] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1381438013 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: DELETE FROM table_lineage WHERE (proc_name = ?)
+==> Parameters: test_lineage_service_proc(String)
+<==    Updates: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@689fe2a3]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@570089c4] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1084093309 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: INSERT INTO proc_info ( proc_name, proc_file_name, file_path, update_target, table_count, temp_table_count, extract_time ) VALUES ( ?, ?, ?, ?, ?, ?, ? )
+==> Parameters: test_lineage_service_proc(String), test_lineage_service_proc.py(String), /tmp/test_lineage_service_proc.py(String), CDM.TARGET_TABLE(String), 1(Integer), 1(Integer), 2026-08-31T13:33:58.343643300(LocalDateTime)
+<==    Updates: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@570089c4]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@3d9c69f8] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@305492781 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: INSERT INTO table_lineage ( proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, extract_time ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )
+==> Parameters: 4259(Long), test_lineage_service_proc(String), FDM.F_A(String), F_A(String), CDM.VT_B(String), VT_B(String), 1(Integer), CREATE TEMP(String), 1(Integer), 2026-08-31T13:33:58.347534(LocalDateTime)
+<==    Updates: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@3d9c69f8]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@a6924ad] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@93672808 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: INSERT INTO table_lineage ( proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, extract_time ) VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )
+==> Parameters: 4259(Long), test_lineage_service_proc(String), CDM.VT_B(String), VT_B(String), CDM.TARGET_TABLE(String), TARGET_TABLE(String), 0(Integer), INSERT SELECT(String), 2(Integer), 2026-08-31T13:33:58.351645200(LocalDateTime)
+<==    Updates: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@a6924ad]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@3db145f7] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@633170154 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,proc_name,proc_file_name,file_path,proc_desc,update_target,table_count,temp_table_count,extract_time,create_time FROM proc_info WHERE (proc_name = ?)
+==> Parameters: test_lineage_service_proc(String)
+<==    Columns: id, proc_name, proc_file_name, file_path, proc_desc, update_target, table_count, temp_table_count, extract_time, create_time
+<==        Row: 4259, test_lineage_service_proc, test_lineage_service_proc.py, /tmp/test_lineage_service_proc.py, null, CDM.TARGET_TABLE, 1, 1, 2026-08-31 13:33:58, 2026-08-31 13:33:58
+<==      Total: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@3db145f7]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7ae75ba6] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1466268566 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,proc_id,proc_name,source_table,source_table_short,target_table,target_table_short,target_is_temp,operation,sql_block_seq,main_table,extract_time FROM table_lineage WHERE (proc_name = ?) ORDER BY sql_block_seq ASC
+==> Parameters: test_lineage_service_proc(String)
+<==    Columns: id, proc_id, proc_name, source_table, source_table_short, target_table, target_table_short, target_is_temp, operation, sql_block_seq, main_table, extract_time
+<==        Row: 58611, 4259, test_lineage_service_proc, FDM.F_A, F_A, CDM.VT_B, VT_B, 1, CREATE TEMP, 1, null, 2026-08-31 13:33:58
+<==        Row: 58612, 4259, test_lineage_service_proc, CDM.VT_B, VT_B, CDM.TARGET_TABLE, TARGET_TABLE, 0, INSERT SELECT, 2, null, 2026-08-31 13:33:58
+<==      Total: 2
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7ae75ba6]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@12ae75f1] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1860900345 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,lineage_id,proc_name,filter_type,filter_clause,fields_involved,extract_time FROM table_lineage_filter WHERE (proc_name = ?)
+==> Parameters: test_lineage_service_proc(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@12ae75f1]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@376c5950] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@18794137 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: SELECT id,lineage_id,proc_name,target_field,field_order,source_expr,source_alias,source_table_short,logic_type,extract_time FROM table_field_mapping WHERE (proc_name = ?)
+==> Parameters: test_lineage_service_proc(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@376c5950]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7f219e84] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1122694271 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: DELETE FROM table_lineage WHERE (proc_name = ?)
+==> Parameters: test_lineage_service_proc(String)
+<==    Updates: 2
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@7f219e84]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@5c960f64] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@2138211677 wrapping com.mysql.cj.jdbc.ConnectionImpl@46e5a20b] will not be managed by Spring
+==>  Preparing: DELETE FROM proc_info WHERE id=?
+==> Parameters: 4259(Long)
+<==    Updates: 1
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@5c960f64]
+2026-08-31T13:33:59.014+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.service.impl.Neo4jSyncServiceImpl  : Neo4j ͬ���ɹ� proc=test_proc
+2026-08-31T13:33:59.052+08:00  WARN 2896 --- [proc-dependency-extractor] [           main] c.h.e.service.impl.Neo4jSyncServiceImpl  : ɾ�� Neo4j ������ʧ�� proc=test_proc: Neo4j ������
+2026-08-31T13:33:59.076+08:00  INFO 2896 --- [proc-dependency-extractor] [           main] c.h.e.service.impl.Neo4jSyncServiceImpl  : Neo4j ͬ���ɹ� proc=test_proc

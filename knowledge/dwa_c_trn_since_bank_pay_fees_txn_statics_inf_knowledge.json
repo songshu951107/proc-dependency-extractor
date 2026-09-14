@@ -1,0 +1,191 @@
+{
+  "scriptName": "dwa_c_trn_since_bank_pay_fees_txn_statics_inf.py",
+  "extractTime": "2026-05-10T11:00:00",
+  "totalBlocks": 6,
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "alias": null,
+      "sqlCode": "INSERT INTO CDM.C_TRN_SINCE_BANK_PAY_FEES_TXN_STATICS_INF SELECT DATE '{ETL_TX_DT}', DECODE(T1.pri_acct_no, '', T4.cust_no, T1.pri_acct_no), NVL(T2.main_cust_no, T4.cust_no), T1.iden_type_cd, T1.iden_no, T1.currcy_cd, CASE WHEN T1.entr_org_no <> '0098' THEN T1.entr_org_no ELSE CASE WHEN T2.open_acct_org_no <> '' THEN T2.open_acct_org_no ELSE T1.entr_org_no END END, CASE WHEN T3.levy_proj_name = '基本医疗保险费' THEN '01' ELSE null END, T1.term_type_cd, SUM(CASE WHEN T1.etl_tx_dt >= DATE '{I_MB_DT}' AND T1.etl_tx_dt <= DATE '{ETL_TX_DT}' THEN txn_amt ELSE 0 END), ... FROM FDM.F_EV_FSSQ_SBSY_JFXX t1 LEFT JOIN FDM.F_AC_CRBS_CUST_ACCT_NO T2 ON T1.pri_acct_no = T2.cust_acct_no LEFT JOIN FDM.F_EV_FSSQ_SBSY_JFMX T3 ON T1.entr_dt = T3.entr_dt AND T1.etl_tx_dt = T3.etl_tx_dt LEFT JOIN (SELECT B.unifi_cust_no AS cust_no, B.iden_no FROM CDM.C_CUS_PRI_CUST_BASIC_INF A WHERE A.data_dt = DATE '{ETL_TX_DT}') T4 ON T1.iden_no = T4.iden_no WHERE T1.etl_tx_dt >= ADD_MONTHS(DATE '{ETL_TX_DT}',-12) AND T1.txn_sts_cd = '1' AND T3.levy_proj_name = '基本医疗保险费' GROUP BY ...",
+      "businessScenario": "基础层社保业务-统计客户基本医疗保险费自行缴费交易，按月、季、半年、年及滚动周期汇总交易笔数和金额",
+      "sqlFunction": "多表关联聚合统计",
+      "involvedTables": ["F_EV_FSSQ_SBSY_JFXX", "F_EV_FSSQ_SBSY_JFMX", "F_AC_CRBS_CUST_ACCT_NO", "C_CUS_PRI_CUST_BASIC_INF"],
+      "tableJoinLogic": "通过个人账号关联客户账号表获取主客户号，通过委托日期关联缴费明细表获取征收项目名称，通过证件号关联个人客户基本信息表获取统一客户号",
+      "queryDimensions": "数据日期、交易账号、客户号、证件信息、币种、机构号、缴费种类、缴费渠道、多周期累计金额和笔数",
+      "tags": ["自行缴费", "基本医疗保险", "社保税银", "多周期统计"],
+      "synonyms": ["医保缴费", "社保缴费统计"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期; {I_MB_DT}: 月初日期; {I_QB_DT}: 季初日期; {I_HB_DT}: 半年初日期; {I_YB_DT}: 年初日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "基本医疗保险费交易",
+          "derivedSql": "SELECT pri_acct_no, iden_no, txn_amt FROM {FDM}.F_EV_FSSQ_SBSY_JFXX T1 LEFT JOIN {FDM}.F_EV_FSSQ_SBSY_JFMX T3 ON T1.entr_dt = T3.entr_dt AND T1.etl_tx_dt = T3.etl_tx_dt WHERE T1.txn_sts_cd = '1' AND T3.levy_proj_name = '基本医疗保险费'",
+          "businessMeaning": "筛选交易状态为成功且征收项目为基本医疗保险费的社保税银交易记录",
+          "sourceTable": "F_EV_FSSQ_SBSY_JFXX"
+        },
+        {
+          "knowledgeName": "成功交易记录",
+          "derivedSql": "SELECT * FROM {FDM}.F_EV_FSSQ_SBSY_JFXX WHERE txn_sts_cd = '1'",
+          "businessMeaning": "通过交易状态代码为'1'筛选成功的社保税银交易记录",
+          "sourceTable": "F_EV_FSSQ_SBSY_JFXX"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 1,
+      "blockType": "SELECT",
+      "depth": 1,
+      "alias": "T4",
+      "sqlCode": "SELECT B.unifi_cust_no AS cust_no, B.iden_no FROM (SELECT A.unifi_cust_no, A.iden_no, ROW_NUMBER() OVER(PARTITION BY A.iden_no ORDER BY A.unifi_cust_no DESC) RN FROM CDM.C_CUS_PRI_CUST_BASIC_INF A WHERE A.data_dt = DATE '{ETL_TX_DT}') B WHERE B.rn = '1'",
+      "businessScenario": "共性层客户管理-按证件号去重获取个人客户最新统一客户号",
+      "sqlFunction": "窗口函数去重",
+      "involvedTables": ["C_CUS_PRI_CUST_BASIC_INF"],
+      "tableJoinLogic": "单表查询，通过证件号分区并按统一客户号降序排列取第一条记录",
+      "queryDimensions": "统一客户号、证件号",
+      "tags": ["个人客户", "去重", "子查询", "证件号匹配"],
+      "synonyms": ["个人客户号查询", "证件号对应客户号"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "证件号对应统一客户号",
+          "derivedSql": "SELECT unifi_cust_no, iden_no FROM {CDM}.C_CUS_PRI_CUST_BASIC_INF WHERE data_dt = DATE '{ETL_TX_DT}' GROUP BY iden_no",
+          "businessMeaning": "通过证件号获取个人客户的统一客户号，用于客户身份识别",
+          "sourceTable": "C_CUS_PRI_CUST_BASIC_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "alias": null,
+      "sqlCode": "INSERT INTO CDM.C_TRN_SINCE_BANK_PAY_FEES_TXN_STATICS_INF SELECT DATE '{ETL_TX_DT}', DECODE(T1.trans_out_acct_no, '', NVL(T4.cust_no, t1.stl_acct_no), T1.trans_out_acct_no), nvl(nvl(NVL(T2.main_cust_no, t3.UNIFI_CUST_NO), t4.cust_no), t1.cust_no), NVL(T4.iden_type_cd, ''), NVL(T1.iden_no, ''), '156', CASE WHEN T1.cust_side_org_no <> '0098' AND LENGTH(T1.cust_side_org_no)= 4 THEN T1.cust_side_org_no ELSE CASE WHEN T2.open_acct_org_no <> '' THEN T2.open_acct_org_no ELSE T1.cust_side_org_no END END, T1.biz_cd, T1.chan_cd, ... FROM FDM.F_EV_UPMP_TXN_FLOWS_DTL t1 LEFT JOIN FDM.F_AC_CRBS_CUST_ACCT_NO T2 ON T1.trans_out_acct_no = T2.cust_acct_no LEFT JOIN CDM.C_AGT_CREDIT_CARD_INFO T3 ON T1.trans_out_acct_no = T3.CARD_NO LEFT JOIN (SELECT B.unifi_cust_no AS cust_no, B.iden_no, b.iden_type_cd FROM CDM.C_CUS_PRI_CUST_BASIC_INF A WHERE A.data_dt = DATE '{ETL_TX_DT}') T4 ON T1.iden_no = T4.iden_no WHERE T1.etl_tx_dt >= ADD_MONTHS(DATE '{ETL_TX_DT}',-12) AND T1.txn_sts_cd = '9' AND biz_cd IN ('101','103','104','112','119') GROUP BY 1,2,3,4,5,6,7,8,9",
+      "businessScenario": "基础层支付平台业务-统计客户话费充值、取暖费、水费、燃气费、电费等自行缴费交易，按多周期汇总交易笔数和金额",
+      "sqlFunction": "多表关联聚合统计",
+      "involvedTables": ["F_EV_UPMP_TXN_FLOWS_DTL", "F_AC_CRBS_CUST_ACCT_NO", "C_AGT_CREDIT_CARD_INFO", "C_CUS_PRI_CUST_BASIC_INF"],
+      "tableJoinLogic": "通过转出账号关联客户账号表获取主客户号，关联信用卡信息表获取统一客户号，通过证件号关联个人客户基本信息表获取客户号",
+      "queryDimensions": "数据日期、交易账号、客户号、证件信息、币种、机构号、缴费种类(101话费/103取暖/104水费/112燃气/119电费)、缴费渠道、多周期累计金额和笔数",
+      "tags": ["自行缴费", "支付平台", "话费充值", "生活缴费", "多周期统计"],
+      "synonyms": ["银联缴费", "便民缴费"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期; {I_MB_DT}: 月初日期; {I_QB_DT}: 季初日期; {I_HB_DT}: 半年初日期; {I_YB_DT}: 年初日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "生活缴费交易",
+          "derivedSql": "SELECT trans_out_acct_no, iden_no, rcvd_amt, biz_cd FROM {FDM}.F_EV_UPMP_TXN_FLOWS_DTL WHERE txn_sts_cd = '9' AND biz_cd IN ('101','103','104','112','119')",
+          "businessMeaning": "筛选交易状态为成功且业务代码为101(全国话费)、103(取暖费)、104(水费)、112(燃气费)、119(电费)的支付平台交易记录",
+          "sourceTable": "F_EV_UPMP_TXN_FLOWS_DTL"
+        },
+        {
+          "knowledgeName": "支付平台成功交易",
+          "derivedSql": "SELECT * FROM {FDM}.F_EV_UPMP_TXN_FLOWS_DTL WHERE txn_sts_cd = '9'",
+          "businessMeaning": "通过交易状态代码为'9'筛选支付平台成功交易记录",
+          "sourceTable": "F_EV_UPMP_TXN_FLOWS_DTL"
+        },
+        {
+          "knowledgeName": "缴费业务类型",
+          "derivedSql": "SELECT biz_cd, biz_desc FROM {FDM}.F_EV_UPMP_TXN_FLOWS_DTL WHERE biz_cd IN ('101','103','104','112','119') GROUP BY biz_cd, biz_desc",
+          "businessMeaning": "获取101(全国话费充值)、103(取暖费)、104(水费)、112(燃气费)、119(电费)五种缴费业务类型",
+          "sourceTable": "F_EV_UPMP_TXN_FLOWS_DTL"
+        }
+      ]
+    },
+    {
+      "blockIndex": 4,
+      "parentBlockIndex": 3,
+      "blockType": "SELECT",
+      "depth": 1,
+      "alias": "T4",
+      "sqlCode": "SELECT B.unifi_cust_no AS cust_no, B.iden_no, b.iden_type_cd FROM (SELECT A.unifi_cust_no, A.iden_no, a.iden_type_cd, ROW_NUMBER() OVER(PARTITION BY A.iden_no ORDER BY A.fst_open_acct_dt DESC) RN FROM CDM.C_CUS_PRI_CUST_BASIC_INF A WHERE A.data_dt = DATE '{ETL_TX_DT}') B WHERE B.rn = '1'",
+      "businessScenario": "共性层客户管理-按证件号去重获取个人客户首次开户日期最新的统一客户号",
+      "sqlFunction": "窗口函数去重",
+      "involvedTables": ["C_CUS_PRI_CUST_BASIC_INF"],
+      "tableJoinLogic": "单表查询，通过证件号分区并按首次开户日期降序排列取第一条记录",
+      "queryDimensions": "统一客户号、证件号、证件类型代码",
+      "tags": ["个人客户", "去重", "子查询", "首次开户日期"],
+      "synonyms": ["个人客户号查询", "证件号对应客户号"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "客户证件信息",
+          "derivedSql": "SELECT unifi_cust_no, iden_no, iden_type_cd FROM {CDM}.C_CUS_PRI_CUST_BASIC_INF WHERE data_dt = DATE '{ETL_TX_DT}'",
+          "businessMeaning": "获取个人客户的统一客户号、证件号和证件类型代码",
+          "sourceTable": "C_CUS_PRI_CUST_BASIC_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 5,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "alias": null,
+      "sqlCode": "INSERT INTO CDM.C_TRN_SINCE_BANK_PAY_FEES_TXN_STATICS_INF SELECT DATE '{ETL_TX_DT}', T1.pri_acct_no, T2.main_cust_no, NVL(NVL(T4.iden_type_cd, T41.iden_type_cd), ''), NVL(NVL(T4.iden_no, T41.iden_no), ''), T1.currcy_cd, CASE WHEN T1.submit_org_no <> '0098' AND LENGTH(T1.submit_org_no)= 4 THEN T1.submit_org_no ELSE CASE WHEN T2.open_acct_org_no <> '' THEN T2.open_acct_org_no ELSE T1.submit_org_no END END, T1.INTAL_TXN_CD, T1.term_type_cd, ... FROM FDM.F_EV_FSSQ_TODAY_TRADE_LOG t1 LEFT JOIN FDM.F_AC_CRBS_CUST_ACCT_NO T2 ON T1.pri_acct_no = T2.cust_acct_no LEFT JOIN cdm.c_agt_credit_card_info T3 ON T1.pri_acct_no = T3.CARD_NO LEFT JOIN (SELECT B.unifi_cust_no AS cust_no, B.iden_no, b.iden_type_cd FROM CDM.C_CUS_PRI_CUST_BASIC_INF A WHERE A.data_dt = DATE '{ETL_TX_DT}') T4 ON T2.main_cust_no = T4.cust_no LEFT JOIN (SELECT B.unifi_cust_no AS cust_no, B.iden_no, b.iden_type_cd FROM CDM.C_CUS_PRI_CUST_BASIC_INF A WHERE A.data_dt = DATE '{ETL_TX_DT}') T41 ON T3.UNIFI_CUST_NO = T41.cust_no WHERE T1.etl_tx_dt >= ADD_MONTHS(DATE '{ETL_TX_DT}',-12) AND INTAL_TXN_CD in ('m5836','m5826','m5847','m5831') AND REV_CD <> '1' AND RECON_FLAG = '1' GROUP BY 1,2,3,4,5,6,7,8,9",
+      "businessScenario": "基础层分行前置业务-统计客户网通话费、电信话费、有线电视费、移动话费等自行缴费交易，按多周期汇总交易笔数和金额",
+      "sqlFunction": "多表关联聚合统计",
+      "involvedTables": ["F_EV_FSSQ_TODAY_TRADE_LOG", "F_AC_CRBS_CUST_ACCT_NO", "C_AGT_CREDIT_CARD_INFO", "C_CUS_PRI_CUST_BASIC_INF"],
+      "tableJoinLogic": "通过个人账号关联客户账号表获取主客户号，关联信用卡信息表，再通过主客户号和统一客户号分别关联个人客户基本信息表获取证件信息",
+      "queryDimensions": "数据日期、交易账号、客户号、证件信息、币种、机构号、缴费种类(m5836网通话费/m5826电信话费/m5847有线电视/m5831移动话费)、缴费渠道、多周期累计金额和笔数",
+      "tags": ["自行缴费", "分行前置", "话费充值", "有线电视", "多周期统计"],
+      "synonyms": ["缴费话费", "通信缴费"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期; {I_MB_DT}: 月初日期; {I_QB_DT}: 季初日期; {I_HB_DT}: 半年初日期; {I_YB_DT}: 年初日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "话费有线电视缴费交易",
+          "derivedSql": "SELECT pri_acct_no, txn_amt, INTAL_TXN_CD FROM {FDM}.F_EV_FSSQ_TODAY_TRADE_LOG WHERE INTAL_TXN_CD IN ('m5836','m5826','m5847','m5831') AND REV_CD <> '1' AND RECON_FLAG = '1'",
+          "businessMeaning": "筛选内部交易码为m5836(网通话费)、m5826(电信话费)、m5847(有线电视费)、m5831(移动话费)且非冲正已对账的交易记录",
+          "sourceTable": "F_EV_FSSQ_TODAY_TRADE_LOG"
+        },
+        {
+          "knowledgeName": "已对账非冲正交易",
+          "derivedSql": "SELECT * FROM {FDM}.F_EV_FSSQ_TODAY_TRADE_LOG WHERE REV_CD <> '1' AND RECON_FLAG = '1'",
+          "businessMeaning": "筛选冲正标志不为'1'且对账标志为'1'的有效交易记录",
+          "sourceTable": "F_EV_FSSQ_TODAY_TRADE_LOG"
+        },
+        {
+          "knowledgeName": "话费业务类型",
+          "derivedSql": "SELECT INTAL_TXN_CD, COUNT(*) FROM {FDM}.F_EV_FSSQ_TODAY_TRADE_LOG WHERE INTAL_TXN_CD IN ('m5836','m5826','m5847','m5831') GROUP BY INTAL_TXN_CD",
+          "businessMeaning": "获取m5836(网通话费)、m5826(电信话费)、m5847(有线电视费)、m5831(移动话费)四种话费业务类型",
+          "sourceTable": "F_EV_FSSQ_TODAY_TRADE_LOG"
+        }
+      ]
+    },
+    {
+      "blockIndex": 6,
+      "parentBlockIndex": 5,
+      "blockType": "SELECT",
+      "depth": 1,
+      "alias": "T4/T41",
+      "sqlCode": "SELECT B.unifi_cust_no AS cust_no, B.iden_no, b.iden_type_cd FROM (SELECT A.unifi_cust_no, A.iden_no, a.iden_type_cd, ROW_NUMBER() OVER(PARTITION BY A.iden_no ORDER BY A.fst_open_acct_dt DESC) RN FROM CDM.C_CUS_PRI_CUST_BASIC_INF A WHERE A.data_dt = DATE '{ETL_TX_DT}') B WHERE B.rn = '1'",
+      "businessScenario": "共性层客户管理-通过客户号或证件号关联获取个人客户证件信息",
+      "sqlFunction": "窗口函数去重",
+      "involvedTables": ["C_CUS_PRI_CUST_BASIC_INF"],
+      "tableJoinLogic": "单表查询，通过证件号或客户号分区并按首次开户日期降序排列取第一条记录",
+      "queryDimensions": "统一客户号、证件号、证件类型代码",
+      "tags": ["个人客户", "去重", "子查询", "客户号关联"],
+      "synonyms": ["个人客户证件信息"],
+      "parameterDescription": "{ETL_TX_DT}: ETL数据日期",
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "客户证件类型查询",
+          "derivedSql": "SELECT unifi_cust_no, iden_type_cd, iden_no FROM {CDM}.C_CUS_PRI_CUST_BASIC_INF WHERE data_dt = DATE '{ETL_TX_DT}'",
+          "businessMeaning": "获取个人客户的统一客户号、证件类型和证件号码，用于客户身份识别",
+          "sourceTable": "C_CUS_PRI_CUST_BASIC_INF"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": [
+    "F_EV_FSSQ_SBSY_JFXX",
+    "F_EV_FSSQ_SBSY_JFMX",
+    "F_EV_UPMP_TXN_FLOWS_DTL",
+    "F_EV_FSSQ_TODAY_TRADE_LOG",
+    "F_AC_CRBS_CUST_ACCT_NO",
+    "C_CUS_PRI_CUST_BASIC_INF",
+    "C_AGT_CREDIT_CARD_INFO",
+    "C_TRN_SINCE_BANK_PAY_FEES_TXN_STATICS_INF"
+  ]
+}

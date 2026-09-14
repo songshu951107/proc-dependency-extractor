@@ -29,6 +29,10 @@
             <el-icon><Document /></el-icon>
             <span>报表影响分析</span>
           </el-menu-item>
+          <el-menu-item index="/nl2sql">
+            <el-icon><MagicStick /></el-icon>
+            <span>智能查数</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       <el-main>
@@ -39,7 +43,7 @@
 </template>
 
 <script setup>
-import { Upload, List, Connection, Aim, Document } from '@element-plus/icons-vue'
+import { Upload, List, Connection, Aim, Document, MagicStick } from '@element-plus/icons-vue'
 </script>
 
 <style>

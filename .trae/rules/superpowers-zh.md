@@ -26,7 +26,7 @@ Skills 位于 `.trae/skills/` 目录，每个 skill 有独立的 `SKILL.md` 文�
 | chinese-git-workflow | 国内 Git 平台配置参考——Gitee、Coding.net、极狐 GitLab、CNB 的 SSH/HTTPS/凭据/CI 接入差异与镜像同步配置。仅在用户显式 /chinese-git-workflow 时调用，不要根据上下文自动触发。 |
 | dispatching-parallel-agents | 当面对 2 个以上可以独立进行、无共享状态或顺序依赖的任务时使用 |
 | executing-plans | 当你有一份书面实现计划需要在单独的会话中执行，并设有审查检查点时使用 |
-| finishing-a-development-branch | 当实现完成、所有测试通过、需要决定如何集成工作时使用——通过提供合并、PR 或清理等结构化选项来引导开发工作的收尾 |
+| finishing-a-development-branch | 当实现完成、所有测试通过、需要决定如何集成这份工作时使用 |
 | mcp-builder | MCP 服务器构建方法论 — 系统化构建生产级 MCP 工具，让 AI 助手连接外部能力 |
 | receiving-code-review | 收到代码审查反馈后、实施建议之前使用，尤其当反馈不明确或技术上有疑问时——需要技术严谨性和验证，而非敷衍附和或盲目执行 |
 | requesting-code-review | 完成任务、实现重要功能或合并前使用，用于验证工作成果是否符合要求 |

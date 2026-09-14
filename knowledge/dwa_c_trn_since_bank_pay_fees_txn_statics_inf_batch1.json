@@ -1,0 +1,332 @@
+{
+  "scriptName": "dwa_c_trn_since_bank_pay_fees_txn_statics_inf.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2025-05-10T10:00:00",
+  "totalBlocks": 3,
+  "batchInfo": {
+    "batchNumber": 1,
+    "totalBatches": 1,
+    "blocksInBatch": [1, 2, 3]
+  },
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_EV_FSSQ_SBSY_JFXX",
+      "fdmScript": "dwa_f_ev_fssq_sbsy_jfxx.py",
+      "found": true,
+      "sourceTable": "TDM.T_FSSQ_SBSY_JFXX_{ETL_TX_DT}",
+      "odmTable": "O_FSSQ_SBSY_JFXX",
+      "transformLogic": "字段标准化，码值转换（证件类型、币种代码）"
+    },
+    {
+      "fdmTable": "F_AC_CRBS_CUST_ACCT_NO",
+      "fdmScript": "dwa_f_ac_crbs_cust_acct_no.py",
+      "found": true,
+      "sourceTable": "TDM.T_CRBS_BCUAC_{ETL_TX_DT}",
+      "odmTable": "O_CRBS_BCUAC",
+      "transformLogic": "拉链表处理，字段直接映射"
+    },
+    {
+      "fdmTable": "F_EV_FSSQ_SBSY_JFMX",
+      "fdmScript": "dwa_f_ev_fssq_sbsy_jfmx.py",
+      "found": true,
+      "sourceTable": "TDM.T_FSSQ_SBSY_JFMX_{ETL_TX_DT}",
+      "odmTable": "O_FSSQ_SBSY_JFMX",
+      "transformLogic": "字段直接映射"
+    },
+    {
+      "fdmTable": "F_EV_UPMP_TXN_FLOWS_DTL",
+      "fdmScript": "dwa_f_ev_upmp_txn_flows_dtl.py",
+      "found": true,
+      "sourceTable": "TDM.T_UPMP_PY_TRANFLOW_{ETL_TX_DT}",
+      "odmTable": "O_UPMP_PY_TRANFLOW",
+      "transformLogic": "字段直接映射"
+    },
+    {
+      "fdmTable": "F_EV_FSSQ_TODAY_TRADE_LOG",
+      "fdmScript": "dwa_f_ev_fssq_today_trade_log.py",
+      "found": true,
+      "sourceTable": "TDM.T_FSSQ_MBTRLG_{ETL_TX_DT}",
+      "odmTable": "O_FSSQ_MBTRLG",
+      "transformLogic": "字段标准化，码值转换（币种代码）"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "blockType": "INSERT",
+      "depth": 0,
+      "businessScenario": "分行前置系统社保业务-基本医疗保险费自行缴费交易统计",
+      "sqlFunction": "多表关联汇总查询",
+      "involvedTables": ["O_FSSQ_SBSY_JFXX", "O_CRBS_BCUAC", "O_FSSQ_SBSY_JFMX"],
+      "originalTables": ["F_EV_FSSQ_SBSY_JFXX", "F_AC_CRBS_CUST_ACCT_NO", "F_EV_FSSQ_SBSY_JFMX"],
+      "tableJoinLogic": "通过个人账号关联客户账号表获取主客户号，通过委托日期+日切日期+税务交易流水号关联缴费明细表获取征收项目名称",
+      "queryDimensions": "数据日期、客户号、交易账号、证件号码、缴费种类、交易机构",
+      "tags": ["自行缴费", "基本医疗保险费", "社保税银", "交易统计", "滚动累计"],
+      "keyFilterConditions": [
+        {
+          "field": "txn_sts_cd",
+          "value": "1",
+          "meaning": "交易状态为成功"
+        },
+        {
+          "field": "levy_proj_name",
+          "value": "基本医疗保险费",
+          "meaning": "征收项目名称为基本医疗保险费"
+        },
+        {
+          "field": "etl_tx_dt",
+          "condition": "最近12个月",
+          "meaning": "统计最近12个月的交易数据"
+        }
+      ],
+      "traceChains": [
+        {
+          "originalTable": "F_EV_FSSQ_SBSY_JFXX",
+          "fdmScript": "dwa_f_ev_fssq_sbsy_jfxx.py",
+          "targetTable": "O_FSSQ_SBSY_JFXX",
+          "fieldMappings": [
+            {"fdmField": "pri_acct_no", "odmField": "grzhao", "description": "个人账号"},
+            {"fdmField": "txn_amt", "odmField": "jioyje", "description": "交易金额"},
+            {"fdmField": "txn_sts_cd", "odmField": "trstatus", "description": "交易状态代码"},
+            {"fdmField": "iden_no", "odmField": "zjhm", "description": "证件号码"},
+            {"fdmField": "entr_org_no", "odmField": "wtjgh", "description": "委托机构号"}
+          ],
+          "filterConditions": "txn_sts_cd = '1'"
+        },
+        {
+          "originalTable": "F_AC_CRBS_CUST_ACCT_NO",
+          "fdmScript": "dwa_f_ac_crbs_cust_acct_no.py",
+          "targetTable": "O_CRBS_BCUAC",
+          "fieldMappings": [
+            {"fdmField": "cust_acct_no", "odmField": "CUACNO", "description": "客户账号"},
+            {"fdmField": "main_cust_no", "odmField": "KEHHAO", "description": "主客户号"},
+            {"fdmField": "open_acct_org_no", "odmField": "ACOPBR", "description": "开户机构号"}
+          ]
+        },
+        {
+          "originalTable": "F_EV_FSSQ_SBSY_JFMX",
+          "fdmScript": "dwa_f_ev_fssq_sbsy_jfmx.py",
+          "targetTable": "O_FSSQ_SBSY_JFMX",
+          "fieldMappings": [
+            {"fdmField": "levy_proj_name", "odmField": "ZSXMMC", "description": "征收项目名称"},
+            {"fdmField": "pay_fees_amt", "odmField": "JFJE", "description": "缴费金额"}
+          ]
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "基本医疗保险费成功交易",
+          "derivedSql": "SELECT pri_acct_no, txn_amt, iden_no FROM O_FSSQ_SBSY_JFXX WHERE trstatus = '1'",
+          "businessMeaning": "筛选社保税银渠道成功的基本医疗保险费交易记录",
+          "sourceTable": "O_FSSQ_SBSY_JFXX",
+          "originalTable": "F_EV_FSSQ_SBSY_JFXX"
+        },
+        {
+          "knowledgeName": "个人账号关联主客户号",
+          "derivedSql": "SELECT a.grzhao, b.KEHHAO FROM O_FSSQ_SBSY_JFXX a LEFT JOIN O_CRBS_BCUAC b ON a.grzhao = b.CUACNO WHERE b.end_dt > CURRENT_DATE",
+          "businessMeaning": "通过个人账号获取对应的主客户号",
+          "sourceTable": "O_FSSQ_SBSY_JFXX, O_CRBS_BCUAC",
+          "originalTable": "F_EV_FSSQ_SBSY_JFXX, F_AC_CRBS_CUST_ACCT_NO"
+        },
+        {
+          "knowledgeName": "基本医疗保险费缴费明细",
+          "derivedSql": "SELECT a.grzhao, a.jioyje, b.ZSXMMC FROM O_FSSQ_SBSY_JFXX a JOIN O_FSSQ_SBSY_JFMX b ON a.wtrq = b.wtrq AND a.swjylsh = b.swjylsh WHERE b.ZSXMMC = '基本医疗保险费'",
+          "businessMeaning": "获取基本医疗保险费的缴费明细信息",
+          "sourceTable": "O_FSSQ_SBSY_JFXX, O_FSSQ_SBSY_JFMX",
+          "originalTable": "F_EV_FSSQ_SBSY_JFXX, F_EV_FSSQ_SBSY_JFMX"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "blockType": "INSERT",
+      "depth": 0,
+      "businessScenario": "银联支付平台缴费业务-生活缴费（话费/取暖费/水费/燃气费/电费）交易统计",
+      "sqlFunction": "多表关联汇总查询",
+      "involvedTables": ["O_UPMP_PY_TRANFLOW", "O_CRBS_BCUAC"],
+      "originalTables": ["F_EV_UPMP_TXN_FLOWS_DTL", "F_AC_CRBS_CUST_ACCT_NO"],
+      "tableJoinLogic": "通过转出账号关联客户账号表获取主客户号",
+      "queryDimensions": "数据日期、客户号、交易账号、证件号码、业务代码、交易机构",
+      "tags": ["自行缴费", "生活缴费", "银联支付", "交易统计", "滚动累计"],
+      "keyFilterConditions": [
+        {
+          "field": "txn_sts_cd",
+          "value": "9",
+          "meaning": "交易状态为成功"
+        },
+        {
+          "field": "biz_cd",
+          "value": "IN ('101','103','104','112','119')",
+          "meaning": "业务代码：101=全国话费充,103=取暖费,104=水费,112=燃气费,119=电费"
+        },
+        {
+          "field": "etl_tx_dt",
+          "condition": "最近12个月",
+          "meaning": "统计最近12个月的交易数据"
+        }
+      ],
+      "traceChains": [
+        {
+          "originalTable": "F_EV_UPMP_TXN_FLOWS_DTL",
+          "fdmScript": "dwa_f_ev_upmp_txn_flows_dtl.py",
+          "targetTable": "O_UPMP_PY_TRANFLOW",
+          "fieldMappings": [
+            {"fdmField": "trans_out_acct_no", "odmField": "py_rolloutaccno", "description": "转出账号"},
+            {"fdmField": "rcvd_amt", "odmField": "py_realamount", "description": "实收金额"},
+            {"fdmField": "biz_cd", "odmField": "py_businesstype_id", "description": "业务代码"},
+            {"fdmField": "txn_sts_cd", "odmField": "py_flowstate", "description": "交易状态代码"}
+          ],
+          "filterConditions": "txn_sts_cd = '9' AND biz_cd IN ('101','103','104','112','119')"
+        },
+        {
+          "originalTable": "F_AC_CRBS_CUST_ACCT_NO",
+          "fdmScript": "dwa_f_ac_crbs_cust_acct_no.py",
+          "targetTable": "O_CRBS_BCUAC",
+          "fieldMappings": [
+            {"fdmField": "cust_acct_no", "odmField": "CUACNO", "description": "客户账号"},
+            {"fdmField": "main_cust_no", "odmField": "KEHHAO", "description": "主客户号"}
+          ]
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "银联生活缴费成功交易",
+          "derivedSql": "SELECT py_rolloutaccno, py_realamount, py_businesstype_id FROM O_UPMP_PY_TRANFLOW WHERE py_flowstate = '9' AND py_businesstype_id IN ('101','103','104','112','119')",
+          "businessMeaning": "筛选银联渠道成功的生活缴费交易记录（话费/取暖费/水费/燃气费/电费）",
+          "sourceTable": "O_UPMP_PY_TRANFLOW",
+          "originalTable": "F_EV_UPMP_TXN_FLOWS_DTL"
+        },
+        {
+          "knowledgeName": "电费缴费交易",
+          "derivedSql": "SELECT py_rolloutaccno, py_realamount FROM O_UPMP_PY_TRANFLOW WHERE py_flowstate = '9' AND py_businesstype_id = '119'",
+          "businessMeaning": "筛选银联渠道成功的电费缴费交易",
+          "sourceTable": "O_UPMP_PY_TRANFLOW",
+          "originalTable": "F_EV_UPMP_TXN_FLOWS_DTL"
+        },
+        {
+          "knowledgeName": "水费缴费交易",
+          "derivedSql": "SELECT py_rolloutaccno, py_realamount FROM O_UPMP_PY_TRANFLOW WHERE py_flowstate = '9' AND py_businesstype_id = '104'",
+          "businessMeaning": "筛选银联渠道成功的水费缴费交易",
+          "sourceTable": "O_UPMP_PY_TRANFLOW",
+          "originalTable": "F_EV_UPMP_TXN_FLOWS_DTL"
+        },
+        {
+          "knowledgeName": "燃气费缴费交易",
+          "derivedSql": "SELECT py_rolloutaccno, py_realamount FROM O_UPMP_PY_TRANFLOW WHERE py_flowstate = '9' AND py_businesstype_id = '112'",
+          "businessMeaning": "筛选银联渠道成功的燃气费缴费交易",
+          "sourceTable": "O_UPMP_PY_TRANFLOW",
+          "originalTable": "F_EV_UPMP_TXN_FLOWS_DTL"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "blockType": "INSERT",
+      "depth": 0,
+      "businessScenario": "分行前置系统缴费业务-通信及有线电视费（网通话费/电信话费/有线电视费/移动话费）交易统计",
+      "sqlFunction": "多表关联汇总查询",
+      "involvedTables": ["O_FSSQ_MBTRLG", "O_CRBS_BCUAC"],
+      "originalTables": ["F_EV_FSSQ_TODAY_TRADE_LOG", "F_AC_CRBS_CUST_ACCT_NO"],
+      "tableJoinLogic": "通过个人账号关联客户账号表获取主客户号",
+      "queryDimensions": "数据日期、客户号、个人账号、内部交易码、交易机构",
+      "tags": ["自行缴费", "通信费", "有线电视费", "分行前置", "交易统计", "滚动累计"],
+      "keyFilterConditions": [
+        {
+          "field": "INTAL_TXN_CD",
+          "value": "IN ('m5836','m5826','m5847','m5831')",
+          "meaning": "内部交易码：m5836=网通话费,m5826=电信话费,m5847=有线电视费,m5831=移动话费"
+        },
+        {
+          "field": "REV_CD",
+          "value": "<> '1'",
+          "meaning": "非冲正交易"
+        },
+        {
+          "field": "RECON_FLAG",
+          "value": "= '1'",
+          "meaning": "已对账"
+        },
+        {
+          "field": "etl_tx_dt",
+          "condition": "最近12个月",
+          "meaning": "统计最近12个月的交易数据"
+        }
+      ],
+      "traceChains": [
+        {
+          "originalTable": "F_EV_FSSQ_TODAY_TRADE_LOG",
+          "fdmScript": "dwa_f_ev_fssq_today_trade_log.py",
+          "targetTable": "O_FSSQ_MBTRLG",
+          "fieldMappings": [
+            {"fdmField": "pri_acct_no", "odmField": "grzhao", "description": "个人账号"},
+            {"fdmField": "txn_amt", "odmField": "jioyje", "description": "交易金额"},
+            {"fdmField": "INTAL_TXN_CD", "odmField": "itrcd", "description": "内部交易码"},
+            {"fdmField": "REV_CD", "odmField": "czbz", "description": "冲正代码"},
+            {"fdmField": "RECON_FLAG", "odmField": "dzbz", "description": "对账标志"}
+          ],
+          "filterConditions": "INTAL_TXN_CD IN ('m5836','m5826','m5847','m5831') AND REV_CD <> '1' AND RECON_FLAG = '1'"
+        },
+        {
+          "originalTable": "F_AC_CRBS_CUST_ACCT_NO",
+          "fdmScript": "dwa_f_ac_crbs_cust_acct_no.py",
+          "targetTable": "O_CRBS_BCUAC",
+          "fieldMappings": [
+            {"fdmField": "cust_acct_no", "odmField": "CUACNO", "description": "客户账号"},
+            {"fdmField": "main_cust_no", "odmField": "KEHHAO", "description": "主客户号"}
+          ]
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "网通话费成功交易",
+          "derivedSql": "SELECT grzhao, jioyje FROM O_FSSQ_MBTRLG WHERE itrcd = 'm5836' AND czbz <> '1' AND dzbz = '1'",
+          "businessMeaning": "筛选分行前置渠道成功的网通话费交易",
+          "sourceTable": "O_FSSQ_MBTRLG",
+          "originalTable": "F_EV_FSSQ_TODAY_TRADE_LOG"
+        },
+        {
+          "knowledgeName": "电信话费成功交易",
+          "derivedSql": "SELECT grzhao, jioyje FROM O_FSSQ_MBTRLG WHERE itrcd = 'm5826' AND czbz <> '1' AND dzbz = '1'",
+          "businessMeaning": "筛选分行前置渠道成功的电信话费交易",
+          "sourceTable": "O_FSSQ_MBTRLG",
+          "originalTable": "F_EV_FSSQ_TODAY_TRADE_LOG"
+        },
+        {
+          "knowledgeName": "有线电视费成功交易",
+          "derivedSql": "SELECT grzhao, jioyje FROM O_FSSQ_MBTRLG WHERE itrcd = 'm5847' AND czbz <> '1' AND dzbz = '1'",
+          "businessMeaning": "筛选分行前置渠道成功的有线电视费交易",
+          "sourceTable": "O_FSSQ_MBTRLG",
+          "originalTable": "F_EV_FSSQ_TODAY_TRADE_LOG"
+        },
+        {
+          "knowledgeName": "移动话费成功交易",
+          "derivedSql": "SELECT grzhao, jioyje FROM O_FSSQ_MBTRLG WHERE itrcd = 'm5831' AND czbz <> '1' AND dzbz = '1'",
+          "businessMeaning": "筛选分行前置渠道成功的移动话费交易",
+          "sourceTable": "O_FSSQ_MBTRLG",
+          "originalTable": "F_EV_FSSQ_TODAY_TRADE_LOG"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": [
+    "O_FSSQ_SBSY_JFXX",
+    "O_CRBS_BCUAC",
+    "O_FSSQ_SBSY_JFMX",
+    "O_UPMP_PY_TRANFLOW",
+    "O_FSSQ_MBTRLG"
+  ],
+  "allOriginalTables": [
+    "F_EV_FSSQ_SBSY_JFXX",
+    "F_AC_CRBS_CUST_ACCT_NO",
+    "F_EV_FSSQ_SBSY_JFMX",
+    "F_EV_UPMP_TXN_FLOWS_DTL",
+    "F_EV_FSSQ_TODAY_TRADE_LOG"
+  ],
+  "traceSummary": {
+    "totalFdmTables": 5,
+    "scriptsFound": 5,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  }
+}

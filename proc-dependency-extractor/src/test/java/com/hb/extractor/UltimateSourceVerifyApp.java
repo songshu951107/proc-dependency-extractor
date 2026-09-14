@@ -10,8 +10,9 @@ import com.hb.extractor.mapper.TableLineageMapper;
 import com.hb.extractor.service.LineageService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Component;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.LocalDateTime;
@@ -19,12 +20,19 @@ import java.time.LocalDateTime;
 /**
  * 场景3端到端验证：临时表多层链 + DECODE 多字段表达式，验证最终来源是否卡在临时表。
  * 直接启动 Spring 上下文，构造测试数据后调用 LineageService.getFieldMapping。
+ *
+ * 注意：不使用 @SpringBootApplication，避免与 ProcExtractorApplication 冲突导致
+ * @SpringBootTest 找到多个 @SpringBootConfiguration。改用 @Component + @Profile("verify")，
+ * 由主程序的 @SpringBootApplication(scanBasePackages = "com.hb.extractor") 扫描到 @Bean。
+ * 仅在 verify profile 激活时加载（main 启动时通过 --spring.profiles.active=verify 激活），
+ * 避免 @SpringBootTest 启动时 CommandLineRunner 自动执行污染数据库。
  */
-@SpringBootApplication(scanBasePackages = "com.hb.extractor")
+@Component
+@Profile("verify")
 public class UltimateSourceVerifyApp {
 
     public static void main(String[] args) {
-        SpringApplication.run(UltimateSourceVerifyApp.class, args).close();
+        SpringApplication.run(ProcExtractorApplication.class, args).close();
     }
 
     @Bean

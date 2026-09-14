@@ -1,0 +1,12 @@
+﻿dwa_pid_a_d_dm_credit_card_org_in	21
+dwa_pid_a_d_dm_credit_card_org_in	23
+dwa_pid_a_d_dm_credit_card_org_in	25
+dwa_pid_a_d_dm_credit_card_org_in	27
+dwa_pid_a_d_dm_credit_card_org_in	32
+dwa_pid_a_g_dp_deposit_report	16
+dwa_pid_a_g_dp_deposit_report	17
+dwa_pid_a_g_dp_deposit_report	18
+dwa_pid_a_g_dp_deposit_report	19
+dwa_pid_a_g_dp_deposit_report	20
+dwa_pid_a_g_dp_deposit_report	21
+dwa_pid_a_g_ln_loan_acct_prft_sum	6

@@ -1,0 +1,348 @@
+{
+  "scriptName": "dwa_c_cus_pos_mect_inf.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T00:00:00",
+  "businessScenario": "共性层POS商户信息加工",
+  "updateMethod": "每日全量",
+  "targetTable": "C_CUS_POS_MECT_INF",
+  "totalBlocks": 5,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_PT_POSP_MECT_INF",
+      "fdmScript": "dwa_f_pt_posp_mect_inf.py",
+      "found": true,
+      "tdmTable": "T_POSP_T_MERCH_{日期}",
+      "odmTable": "O_POSP_T_MERCH",
+      "transformLogic": "TDM层POSP商户信息表，按日期分表，字段名从源系统字段映射为标准化字段名"
+    },
+    {
+      "fdmTable": "F_CO_POSP_TERM_INF",
+      "fdmScript": "dwa_f_co_posp_term_inf.py",
+      "found": true,
+      "tdmTable": "T_POSP_T_TERM_{日期}",
+      "odmTable": "O_POSP_T_TERM",
+      "transformLogic": "TDM层POSP终端信息表，按日期分表，字段名从源系统字段映射为标准化字段名"
+    },
+    {
+      "fdmTable": "F_AC_CRBS_CUST_ACCT_NO",
+      "fdmScript": "dwa_f_ac_crbs_cust_acct_no.py",
+      "found": true,
+      "tdmTable": "T_CRBS_BCUAC_{日期}",
+      "odmTable": "O_CRBS_BCUAC",
+      "transformLogic": "TDM层核心客户账号表，按日期分表，字段名从核心系统字段(如CUACNO)映射为标准化字段名(如cust_acct_no)"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "商户临时表-关联终端表给商户打标签",
+      "depth": 0,
+      "sqlCode": "INSERT INTO VT_C_CUS_POS_MECT_INFO_01 SELECT mect_cd, MAX(CASE WHEN mect_vld_flg='1' AND flg1='1' THEN '1' ELSE '0' END) AS pos_flg, MAX(CASE WHEN mect_vld_flg='1' AND flg2='1' THEN '1' ELSE '0' END) AS mobile_flg FROM (SELECT T1.mect_cd, CASE WHEN (T2.term_no<>'' AND T2.term_sts_cd<>'2' AND T2.term_lock_flag='0' AND T1.activa_flag='1') THEN '1' ELSE '0' END AS flg1, CASE WHEN (T1.txn_autho_mode_cd='2' AND T1.move_pay_mect_no<>'' AND T1.move_pay_flag='1' AND T2.term_lock_flag='0') OR (T1.txn_autho_mode_cd='0' AND T1.move_pay_mect_no<>'' AND T1.move_pay_flag='1') THEN '1' ELSE '0' END AS flg2 FROM F_PT_POSP_MECT_INF T1 LEFT JOIN F_CO_POSP_TERM_INF T2 ON T1.mect_cd=T2.mect_cd) P GROUP BY P.mect_cd",
+      "tracedSqlCode": "INSERT INTO VT_C_CUS_POS_MECT_INFO_01 SELECT mect_cd, MAX(CASE WHEN mect_vld_flg='1' AND flg1='1' THEN '1' ELSE '0' END) AS pos_flg, MAX(CASE WHEN mect_vld_flg='1' AND flg2='1' THEN '1' ELSE '0' END) AS mobile_flg FROM (SELECT T1.mect_cd, CASE WHEN (T2.term_no<>'' AND T2.term_sts_cd<>'2' AND T2.term_lock_flag='0' AND T1.activa_flag='1') THEN '1' ELSE '0' END AS flg1, CASE WHEN (T1.txn_autho_mode_cd='2' AND T1.move_pay_mect_no<>'' AND T1.move_pay_flag='1' AND T2.term_lock_flag='0') OR (T1.txn_autho_mode_cd='0' AND T1.move_pay_mect_no<>'' AND T1.move_pay_flag='1') THEN '1' ELSE '0' END AS flg2 FROM O_POSP_T_MERCH T1 LEFT JOIN O_POSP_T_TERM T2 ON T1.merch_id=T2.merch_id) P GROUP BY P.mect_cd",
+      "businessScenario": "平台系统POS业务-关联终端表为商户打POS标志和移动端标志",
+      "sqlFunction": "多表关联聚合查询",
+      "involvedTables": ["O_POSP_T_MERCH", "O_POSP_T_TERM"],
+      "originalTables": ["F_PT_POSP_MECT_INF", "F_CO_POSP_TERM_INF"],
+      "tableJoinLogic": "POSP商户信息表 LEFT JOIN POSP终端信息表 ON 商户号",
+      "queryDimensions": "商户号、POS标志、移动端标志、商户有效标志、助农商户标志、有效终端数量",
+      "tags": ["POS商户", "终端关联", "商户标签", "移动支付"],
+      "traceChains": [
+        {
+          "originalTable": "F_PT_POSP_MECT_INF",
+          "fdmScript": "dwa_f_pt_posp_mect_inf.py",
+          "tdmTable": "T_POSP_T_MERCH_{日期}",
+          "odmTable": "O_POSP_T_MERCH",
+          "fieldMappings": [
+            {"fdmField": "mect_cd", "odmField": "merch_id", "description": "商户号"},
+            {"fdmField": "mect_name", "odmField": "merch_name_cn", "description": "商户名称"},
+            {"fdmField": "activa_flag", "odmField": "effect_flag", "description": "启用标志"},
+            {"fdmField": "move_pay_flag", "odmField": "mobie_flag", "description": "移动支付标志"},
+            {"fdmField": "txn_autho_mode_cd", "odmField": "auth_flag", "description": "交易授权方式代码"}
+          ],
+          "filterConditions": "start_dt <= 数据日期 AND end_dt > 数据日期"
+        },
+        {
+          "originalTable": "F_CO_POSP_TERM_INF",
+          "fdmScript": "dwa_f_co_posp_term_inf.py",
+          "tdmTable": "T_POSP_T_TERM_{日期}",
+          "odmTable": "O_POSP_T_TERM",
+          "fieldMappings": [
+            {"fdmField": "mect_cd", "odmField": "merch_id", "description": "商户代码"},
+            {"fdmField": "term_no", "odmField": "term_id", "description": "终端号"},
+            {"fdmField": "term_sts_cd", "odmField": "n_term_stat", "description": "终端状态代码"},
+            {"fdmField": "term_lock_flag", "odmField": "n_term_lock", "description": "终端锁定标志"}
+          ],
+          "filterConditions": "start_dt <= 数据日期 AND end_dt > 数据日期"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "有效POS商户",
+          "derivedSql": "SELECT merch_id FROM O_POSP_T_MERCH T1 LEFT JOIN O_POSP_T_TERM T2 ON T1.merch_id=T2.merch_id WHERE T2.term_id<>'' AND T2.n_term_stat<>'2' AND T2.n_term_lock='0' AND T1.effect_flag='1'",
+          "businessMeaning": "筛选有有效POS终端的商户，条件：终端号不为空、终端状态非冻结(不为2)、终端未锁定、商户启用标志为1",
+          "sourceTable": "O_POSP_T_MERCH",
+          "originalTable": "F_PT_POSP_MECT_INF"
+        },
+        {
+          "knowledgeName": "有效移动端商户",
+          "derivedSql": "SELECT merch_id FROM O_POSP_T_MERCH WHERE mobie_flag='1' AND (auth_flag='0' OR (auth_flag='2' AND mch_no<>''))",
+          "businessMeaning": "筛选开通移动支付的商户，条件：移动支付标志为1，且(手机端授权或POS端授权且有移动支付商户编号)",
+          "sourceTable": "O_POSP_T_MERCH",
+          "originalTable": "F_PT_POSP_MECT_INF"
+        },
+        {
+          "knowledgeName": "助农商户",
+          "derivedSql": "SELECT merch_id FROM O_POSP_T_MERCH T1 LEFT JOIN O_POSP_T_TERM T2 ON T1.merch_id=T2.merch_id WHERE SUBSTR(T1.merch_id,8,4)='5441' AND T2.n_term_stat IN ('0','1') AND T2.n_term_lock='0'",
+          "businessMeaning": "筛选助农商户，条件：商户号第8-11位为5441，终端状态为签退或签到，终端未锁定",
+          "sourceTable": "O_POSP_T_MERCH",
+          "originalTable": "F_PT_POSP_MECT_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "商户临时表-合并商户信息",
+      "depth": 0,
+      "sqlCode": "INSERT INTO VT_C_CUS_POS_MECT_INFO_02 SELECT T1.mect_cd, T1.mect_name, CASE WHEN T1.move_pay_flag='1' AND T4.main_cust_no IS NOT NULL THEN T4.main_cust_no ELSE T3.main_cust_no END AS cust_no, T1.mect_lp_name, T1.lp_identt_card_no, T1.stl_acct_no FROM F_PT_POSP_MECT_INF T1 LEFT JOIN VT_C_CUS_POS_MECT_INFO_01 T2 ON T1.mect_cd=T2.mect_no LEFT JOIN F_AC_CRBS_CUST_ACCT_NO T3 ON T1.stl_acct_no=T3.cust_acct_no LEFT JOIN F_AC_CRBS_CUST_ACCT_NO T4 ON T1.move_pay_stl_acct_no=T4.cust_acct_no WHERE DATE BETWEEN T1.start_dt AND T1.end_dt-1",
+      "tracedSqlCode": "SELECT T1.merch_id AS mect_cd, T1.merch_name_cn AS mect_name, CASE WHEN T1.mobie_flag='1' AND T4.KEHHAO IS NOT NULL THEN T4.KEHHAO ELSE T3.KEHHAO END AS main_cust_no FROM O_POSP_T_MERCH T1 LEFT JOIN O_CRBS_BCUAC T3 ON T1.settle_account=T3.CUACNO LEFT JOIN O_CRBS_BCUAC T4 ON T1.mobile_account=T4.CUACNO",
+      "businessScenario": "平台系统POS业务-合并商户基本信息和客户账号信息",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["O_POSP_T_MERCH", "O_CRBS_BCUAC"],
+      "originalTables": ["F_PT_POSP_MECT_INF", "F_AC_CRBS_CUST_ACCT_NO"],
+      "tableJoinLogic": "POSP商户信息表 LEFT JOIN 核心客户账号表 ON 结算账号，移动支付结算账号",
+      "queryDimensions": "商户号、商户名称、客户号、法人姓名、法人身份证号、结算账号、移动支付标志、POS标志",
+      "tags": ["商户信息", "客户账号关联", "结算账号", "移动支付"],
+      "traceChains": [
+        {
+          "originalTable": "F_PT_POSP_MECT_INF",
+          "fdmScript": "dwa_f_pt_posp_mect_inf.py",
+          "tdmTable": "T_POSP_T_MERCH_{日期}",
+          "odmTable": "O_POSP_T_MERCH",
+          "fieldMappings": [
+            {"fdmField": "mect_cd", "odmField": "merch_id", "description": "商户号"},
+            {"fdmField": "stl_acct_no", "odmField": "settle_account", "description": "结算账号"},
+            {"fdmField": "move_pay_stl_acct_no", "odmField": "mobile_account", "description": "移动支付结算账号"},
+            {"fdmField": "mect_lp_name", "odmField": "pre_lawer", "description": "商户法人姓名"},
+            {"fdmField": "lp_identt_card_no", "odmField": "precardid", "description": "法人身份证号"}
+          ]
+        },
+        {
+          "originalTable": "F_AC_CRBS_CUST_ACCT_NO",
+          "fdmScript": "dwa_f_ac_crbs_cust_acct_no.py",
+          "tdmTable": "T_CRBS_BCUAC_{日期}",
+          "odmTable": "O_CRBS_BCUAC",
+          "fieldMappings": [
+            {"fdmField": "cust_acct_no", "odmField": "CUACNO", "description": "客户账号"},
+            {"fdmField": "main_cust_no", "odmField": "KEHHAO", "description": "主客户号"},
+            {"fdmField": "open_acct_org_no", "odmField": "ACOPBR", "description": "开户机构号"},
+            {"fdmField": "record_sts_cd", "odmField": "RECSTA", "description": "记录状态代码"}
+          ]
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "商户客户号获取",
+          "derivedSql": "SELECT T1.merch_id, CASE WHEN T1.mobie_flag='1' AND T4.KEHHAO IS NOT NULL THEN T4.KEHHAO ELSE T3.KEHHAO END AS main_cust_no FROM O_POSP_T_MERCH T1 LEFT JOIN O_CRBS_BCUAC T3 ON T1.settle_account=T3.CUACNO LEFT JOIN O_CRBS_BCUAC T4 ON T1.mobile_account=T4.CUACNO",
+          "businessMeaning": "通过结算账号关联客户账号表获取主客户号，优先使用移动支付结算账号对应的客户号",
+          "sourceTable": "O_POSP_T_MERCH",
+          "originalTable": "F_PT_POSP_MECT_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "商户临时表-加工商户机构信息",
+      "depth": 0,
+      "sqlCode": "INSERT INTO VT_C_CUS_POS_MECT_INFO_03 SELECT T1.mect_no, T1.mect_name, T1.core_cust_no, T2.ORG_NO, T2.org_abre, T2.level_scd_org_no, T2.level_scd_org_abre FROM VT_C_CUS_POS_MECT_INFO_02 T1 LEFT JOIN C_ORG_ORG_INF T2 ON T1.mect_belo_org_no=T2.org_no LEFT JOIN F_AC_CRBS_CUST_ACCT_NO T5 ON T1.move_pay_stl_acct_no=T5.cust_acct_no LEFT JOIN F_AC_CRBS_CUST_ACCT_NO T6 ON T1.stl_acct_no=T6.cust_acct_no",
+      "tracedSqlCode": "SELECT T1.mect_no, T1.mect_name, T1.core_cust_no, T2.org_no, T2.org_abre, T5.RECSTA AS move_stl_acct_no_sts_cd, T6.RECSTA AS stl_acct_no_sts_cd FROM VT_C_CUS_POS_MECT_INFO_02 T1 LEFT JOIN C_ORG_ORG_INF T2 ON T1.mect_belo_org_no=T2.org_no LEFT JOIN O_CRBS_BCUAC T5 ON T1.move_pay_stl_acct_no=T5.CUACNO LEFT JOIN O_CRBS_BCUAC T6 ON T1.stl_acct_no=T6.CUACNO",
+      "businessScenario": "共性层机构管理-关联机构信息表和客户账号表获取机构名称和账号状态",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["O_CRBS_BCUAC"],
+      "originalTables": ["F_AC_CRBS_CUST_ACCT_NO"],
+      "tableJoinLogic": "商户临时表 LEFT JOIN 机构信息表 ON 商户所属机构号，LEFT JOIN 客户账号表 ON 结算账号和移动支付结算账号",
+      "queryDimensions": "商户号、所属机构号、所属机构名称、所属分行、结算账号状态、移动支付结算账号状态",
+      "tags": ["机构关联", "账号状态", "商户机构"],
+      "traceChains": [
+        {
+          "originalTable": "F_AC_CRBS_CUST_ACCT_NO",
+          "fdmScript": "dwa_f_ac_crbs_cust_acct_no.py",
+          "tdmTable": "T_CRBS_BCUAC_{日期}",
+          "odmTable": "O_CRBS_BCUAC",
+          "fieldMappings": [
+            {"fdmField": "cust_acct_no", "odmField": "CUACNO", "description": "客户账号"},
+            {"fdmField": "record_sts_cd", "odmField": "RECSTA", "description": "记录状态代码"}
+          ]
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "商户类型分类",
+          "derivedSql": "SELECT mect_no, CASE WHEN pos_flg='1' AND mobile_flg='1' THEN 'POS+聚合' WHEN pos_flg='1' THEN 'POS' WHEN mobile_flg='1' THEN '聚合' ELSE '' END AS mect_type_cd FROM VT_C_CUS_POS_MECT_INFO_02",
+          "businessMeaning": "根据POS标志和移动端标志判断商户类型：POS+聚合、POS、聚合",
+          "sourceTable": "VT_C_CUS_POS_MECT_INFO_02",
+          "originalTable": "VT_C_CUS_POS_MECT_INFO_02"
+        },
+        {
+          "knowledgeName": "商户性质判断",
+          "derivedSql": "SELECT mect_no, CASE WHEN cust_type_cd='01' THEN '个人户' WHEN cust_type_cd='02' THEN '对公户' END AS mect_nature_cd FROM VT_C_CUS_POS_MECT_INFO_02",
+          "businessMeaning": "根据客户类型判断商户性质：01-个人户，02-对公户",
+          "sourceTable": "VT_C_CUS_POS_MECT_INFO_02",
+          "originalTable": "VT_C_CUS_POS_MECT_INFO_02"
+        }
+      ]
+    },
+    {
+      "blockIndex": 4,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "商户临时表-账户开户机构",
+      "depth": 0,
+      "sqlCode": "INSERT INTO VT_C_CUS_POS_MECT_INFO_04 SELECT T1.stl_acct_no, T2.open_acct_org_no, T3.org_abre FROM (SELECT stl_acct_no FROM VT_C_CUS_POS_MECT_INFO_03 GROUP BY 1)T1 LEFT JOIN F_AC_CRBS_CUST_ACCT_NO T2 ON T1.stl_acct_no=T2.cust_acct_no LEFT JOIN C_ORG_ORG_INF T3 ON T2.open_acct_org_no=T3.org_no",
+      "tracedSqlCode": "INSERT INTO VT_C_CUS_POS_MECT_INFO_04 SELECT T1.stl_acct_no, T2.ACOPBR AS open_acct_org_no, T3.org_abre FROM (SELECT stl_acct_no FROM VT_C_CUS_POS_MECT_INFO_03 GROUP BY 1)T1 LEFT JOIN O_CRBS_BCUAC T2 ON T1.stl_acct_no=T2.CUACNO LEFT JOIN C_ORG_ORG_INF T3 ON T2.ACOPBR=T3.org_no",
+      "businessScenario": "核心系统客户账号管理-获取结算账号的开户机构信息",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["O_CRBS_BCUAC"],
+      "originalTables": ["F_AC_CRBS_CUST_ACCT_NO"],
+      "tableJoinLogic": "商户临时表 LEFT JOIN 客户账号表 ON 结算账号，LEFT JOIN 机构信息表 ON 开户机构号",
+      "queryDimensions": "结算账号、开户机构号、机构简称",
+      "tags": ["开户机构", "账号机构关联"],
+      "traceChains": [
+        {
+          "originalTable": "F_AC_CRBS_CUST_ACCT_NO",
+          "fdmScript": "dwa_f_ac_crbs_cust_acct_no.py",
+          "tdmTable": "T_CRBS_BCUAC_{日期}",
+          "odmTable": "O_CRBS_BCUAC",
+          "fieldMappings": [
+            {"fdmField": "cust_acct_no", "odmField": "CUACNO", "description": "客户账号"},
+            {"fdmField": "open_acct_org_no", "odmField": "ACOPBR", "description": "开户机构号"}
+          ]
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "账号开户机构查询",
+          "derivedSql": "SELECT CUACNO AS cust_acct_no, ACOPBR AS open_acct_org_no FROM O_CRBS_BCUAC",
+          "businessMeaning": "通过客户账号获取开户机构号",
+          "sourceTable": "O_CRBS_BCUAC",
+          "originalTable": "F_AC_CRBS_CUST_ACCT_NO"
+        }
+      ]
+    },
+    {
+      "blockIndex": 5,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "插入结果表-最终商户信息",
+      "depth": 0,
+      "sqlCode": "INSERT INTO C_CUS_POS_MECT_INF SELECT T1.mect_no, T1.mect_name, T1.core_cust_no, T1.mect_vld_flg, T1.stl_acct_no, CASE WHEN T4.aum_roll_quart_daily_avg>=500 THEN '1' ELSE '0' END AS base_cust_flag, CASE WHEN T4.aum_roll_quart_daily_avg>=5000 THEN '1' ELSE '0' END AS medi_high_side_cust_flag, NVL((CASE WHEN T9.wechat_signe_flag='1' OR T9.wbank_signe_flag='1' OR T9.mb_bank_signe_flag='1' THEN '1' ELSE '0' END),'0') AS e_bank_cust_flag FROM VT_C_CUS_POS_MECT_INFO_03 T1 LEFT JOIN VT_C_CUS_POS_MECT_INFO_04 T3 ON T1.stl_acct_no=T3.stl_acct_no LEFT JOIN C_CUS_PRI_CUST_AUM_INF T4 ON T1.core_cust_no=T4.cust_no LEFT JOIN C_CUS_CHAN_SIGNE_IND T9 ON T1.core_cust_no=T9.cust_no",
+      "tracedSqlCode": "INSERT INTO C_CUS_POS_MECT_INF SELECT T1.mect_no, T1.mect_name, T1.core_cust_no, T1.mect_vld_flg, T1.stl_acct_no, CASE WHEN T4.aum_roll_quart_daily_avg>=500 THEN '1' ELSE '0' END AS base_cust_flag, CASE WHEN T4.aum_roll_quart_daily_avg>=5000 THEN '1' ELSE '0' END AS medi_high_side_cust_flag, NVL((CASE WHEN T9.wechat_signe_flag='1' OR T9.wbank_signe_flag='1' OR T9.mb_bank_signe_flag='1' THEN '1' ELSE '0' END),'0') AS e_bank_cust_flag FROM VT_C_CUS_POS_MECT_INFO_03 T1 LEFT JOIN VT_C_CUS_POS_MECT_INFO_04 T3 ON T1.stl_acct_no=T3.stl_acct_no LEFT JOIN C_CUS_PRI_CUST_AUM_INF T4 ON T1.core_cust_no=T4.cust_no LEFT JOIN C_CUS_CHAN_SIGNE_IND T9 ON T1.core_cust_no=T9.cust_no",
+      "businessScenario": "共性层客户管理-关联客户AUM和渠道签约信息，打客户标签",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["O_POSP_T_MERCH", "O_POSP_T_TERM", "O_CRBS_BCUAC"],
+      "originalTables": ["F_PT_POSP_MECT_INF", "F_CO_POSP_TERM_INF", "F_AC_CRBS_CUST_ACCT_NO"],
+      "tableJoinLogic": "商户临时表 LEFT JOIN 客户AUM信息表 ON 客户号，LEFT JOIN 渠道签约表 ON 客户号",
+      "queryDimensions": "商户号、商户名称、客户号、商户有效标志、结算账号、基础客户标志、中高端客户标志、电子银行客户标志、助农商户标志",
+      "tags": ["客户标签", "基础客户", "中高端客户", "电子银行客户", "AUM"],
+      "traceChains": [],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "基础客户判断",
+          "derivedSql": "SELECT cust_no, CASE WHEN aum_roll_quart_daily_avg>=500 THEN '1' ELSE '0' END AS base_cust_flag FROM C_CUS_PRI_CUST_AUM_INF",
+          "businessMeaning": "AUM滚动季日均>=500元的客户为基础客户",
+          "sourceTable": "C_CUS_PRI_CUST_AUM_INF",
+          "originalTable": "C_CUS_PRI_CUST_AUM_INF"
+        },
+        {
+          "knowledgeName": "中高端客户判断",
+          "derivedSql": "SELECT cust_no, CASE WHEN aum_roll_quart_daily_avg>=5000 THEN '1' ELSE '0' END AS medi_high_side_cust_flag FROM C_CUS_PRI_CUST_AUM_INF",
+          "businessMeaning": "AUM滚动季日均>=5000元的客户为中高端客户",
+          "sourceTable": "C_CUS_PRI_CUST_AUM_INF",
+          "originalTable": "C_CUS_PRI_CUST_AUM_INF"
+        },
+        {
+          "knowledgeName": "电子银行客户判断",
+          "derivedSql": "SELECT cust_no, CASE WHEN wechat_signe_flag='1' OR wbank_signe_flag='1' OR mb_bank_signe_flag='1' THEN '1' ELSE '0' END AS e_bank_cust_flag FROM C_CUS_CHAN_SIGNE_IND",
+          "businessMeaning": "签约微信银行、网银或手机银行的客户为电子银行客户",
+          "sourceTable": "C_CUS_CHAN_SIGNE_IND",
+          "originalTable": "C_CUS_CHAN_SIGNE_IND"
+        },
+        {
+          "knowledgeName": "有效商户判断",
+          "derivedSql": "SELECT mect_no FROM VT_C_CUS_POS_MECT_INFO_03 WHERE mect_vld_flg='1'",
+          "businessMeaning": "商户有效标志为1的商户为有效商户",
+          "sourceTable": "VT_C_CUS_POS_MECT_INFO_03",
+          "originalTable": "VT_C_CUS_POS_MECT_INFO_03"
+        },
+        {
+          "knowledgeName": "POS商户完整信息",
+          "derivedSql": "SELECT T1.merch_id AS mect_no, T1.merch_name_cn AS mect_name, T3.KEHHAO AS core_cust_no, T1.settle_account AS stl_acct_no, T1.pre_lawer AS mect_lp_name, T1.precardid AS lp_identt_card_no FROM O_POSP_T_MERCH T1 LEFT JOIN O_CRBS_BCUAC T3 ON T1.settle_account=T3.CUACNO",
+          "businessMeaning": "获取POS商户的完整信息，包括商户号、商户名称、客户号、结算账号、法人信息等",
+          "sourceTable": "O_POSP_T_MERCH",
+          "originalTable": "F_PT_POSP_MECT_INF"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["O_POSP_T_MERCH", "O_POSP_T_TERM", "O_CRBS_BCUAC", "C_ORG_ORG_INF", "C_CUS_PRI_CUST_AUM_INF", "C_CUS_CHAN_SIGNE_IND"],
+  "allOriginalTables": ["F_PT_POSP_MECT_INF", "F_CO_POSP_TERM_INF", "F_AC_CRBS_CUST_ACCT_NO", "C_ORG_ORG_INF", "C_CUS_PRI_CUST_AUM_INF", "C_CUS_CHAN_SIGNE_IND"],
+  "traceSummary": {
+    "totalFdmTables": 3,
+    "scriptsFound": 3,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "POS有效商户判断条件",
+      "condition": "终端号不为空 AND 终端状态<>2(冻结) AND 终端锁定标志=0 AND 商户启用标志=1",
+      "description": "商户有有效POS终端"
+    },
+    {
+      "ruleName": "移动端有效商户判断条件",
+      "condition": "移动支付标志=1 AND ((交易授权方式=0(手机端)) OR (交易授权方式=2(POS端) AND 移动支付商户编号不为空 AND 终端有效))",
+      "description": "商户开通移动支付且配置正确"
+    },
+    {
+      "ruleName": "助农商户判断条件",
+      "condition": "商户号第8-11位='5441' AND 终端状态 IN (0签退,1签到) AND 终端锁定标志=0",
+      "description": "商户号包含5441标识的助农商户"
+    },
+    {
+      "ruleName": "基础客户AUM阈值",
+      "condition": "AUM滚动季日均 >= 500元",
+      "description": "金融资产达到基础客户标准"
+    },
+    {
+      "ruleName": "中高端客户AUM阈值",
+      "condition": "AUM滚动季日均 >= 5000元",
+      "description": "金融资产达到中高端客户标准"
+    },
+    {
+      "ruleName": "电子银行客户判断",
+      "condition": "微信签约标志=1 OR 网银签约标志=1 OR 手机银行签约标志=1",
+      "description": "签约任一电子渠道"
+    }
+  ],
+  "codeValues": {
+    "term_sts_cd": {
+      "0": "签退",
+      "1": "签到",
+      "2": "冻结"
+    },
+    "txn_autho_mode_cd": {
+      "0": "手机端",
+      "2": "POS端"
+    },
+    "cust_type_cd": {
+      "01": "个人户",
+      "02": "对公户"
+    }
+  }
+}

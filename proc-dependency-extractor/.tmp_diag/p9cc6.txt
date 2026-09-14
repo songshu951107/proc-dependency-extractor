@@ -1,0 +1,198 @@
+﻿insert into  {PID}.a_d_credit_card_prov_outer_finang_dtl_tab
+\nselect
+\ndistinct 
+\na.regions
+\n,a.IDEN_NO
+\n,'非车分期' as IS_CFQ
+\n,A.LICEN_PLATE_NO
+\n,a.CUST_NAME
+\n,PROM_PROJECTS 
+\n,'' as  ACCT_STS
+\n,a.SUP_PROM_ORG
+\n,a.SUP_PROM_NAME
+\n,a.FAMILY_ADDR
+\n,a.FST_RGST_FAMILY_ADDR
+\n,a.COMPY_ADDR
+\n,a.FST_RGST_COMPY_ADDR
+\n,CASE  
+\n        when d.LOAN_BAL_REMAI_TERM is null or CEIL(d.LOAN_BAL_REMAI_TERM / 12) <= 1 THEN '一年以内'
+\n        WHEN CEIL(d.LOAN_BAL_REMAI_TERM / 12) > 1 and  CEIL(d.LOAN_BAL_REMAI_TERM / 12)<=5 THEN '一年至五年'
+\n        WHEN CEIL(d.LOAN_BAL_REMAI_TERM / 12) > 5 AND  CEIL(d.LOAN_BAL_REMAI_TERM / 12) <=10 THEN '五年至十年'
+\n        ELSE '十年及以上'
+\n    END AS LOAN_BAL_REMAI_TERM 
+\n,'2' as FLAG
+\n,c.CREDIT_LIMIT  as WEI_CREDIT_LIMIT
+\n,b.loan_bal
+\n,DATE'{ETL_TX_DT}'
+\n    from (
+\nselect
+\n   distinct
+\nLICEN_PLATE_NO,
+\nSUP_PROM_ORG,
+\nSUP_PROM_NAME,
+\nPROM_PROJECTS,
+\nROW_NUMBER() OVER ( PARTITION BY IDEN_NO ORDER BY CARD_NO DESC) RN
+\n,CASE
+\n         
+\n        WHEN FAMILY_ADDR RLIKE '河北|石家庄|唐山|邯郸|廊坊|沧州|保定|邢台|张家口|衡水|秦皇岛|承德|三河|燕郊|雄县|正定|藁城|辛集|霸州'
+\n            OR FST_RGST_FAMILY_ADDR RLIKE '河北|石家庄|唐山|邯郸|廊坊|沧州|保定|邢台|张家口|衡水|秦皇岛|承德|三河|燕郊|雄县|正定|藁城|辛集|霸州'
+\n            OR COMPY_ADDR RLIKE '河北|石家庄|唐山|邯郸|廊坊|沧州|保定|邢台|张家口|衡水|秦皇岛|承德|三河|燕郊|雄县|正定|藁城|辛集|霸州'
+\n            OR FST_RGST_COMPY_ADDR RLIKE '河北|石家庄|唐山|邯郸|廊坊|沧州|保定|邢台|张家口|衡水|秦皇岛|承德|三河|燕郊|雄县|正定|藁城|辛集|霸州'
+\n            OR IDEN_NO LIKE '13%' THEN '剔除'
+\n        ELSE
+\n            CASE
+\n                
+\n                WHEN FST_RGST_COMPY_ADDR LIKE '天津%' THEN '天津'
+\n                WHEN FST_RGST_COMPY_ADDR LIKE '山东%' OR FST_RGST_COMPY_ADDR LIKE '青岛%' THEN '山东'
+\n                ELSE
+\n                    CASE
+\n                        WHEN IDEN_NO LIKE '11%' THEN '北京'
+\n                        WHEN IDEN_NO LIKE '12%' THEN '天津'
+\n                        WHEN IDEN_NO LIKE '13%' THEN '河北' 
+\n                        WHEN IDEN_NO LIKE '14%' THEN '山西'
+\n                        WHEN IDEN_NO LIKE '15%' THEN '内蒙古'
+\n                        WHEN IDEN_NO LIKE '21%' THEN '辽宁'
+\n                        WHEN IDEN_NO LIKE '22%' THEN '吉林'
+\n                        WHEN IDEN_NO LIKE '23%' THEN '黑龙江'\t
+\n                        WHEN IDEN_NO LIKE '31%' THEN '上海'
+\n                        WHEN IDEN_NO LIKE '32%' THEN '江苏'
+\n                        WHEN IDEN_NO LIKE '33%' THEN '浙江'
+\n                        WHEN IDEN_NO LIKE '34%' THEN '安徽'
+\n                        WHEN IDEN_NO LIKE '35%' THEN '福建'
+\n                        WHEN IDEN_NO LIKE '36%' THEN '江西'
+\n                        WHEN IDEN_NO LIKE '37%' THEN '山东'
+\n                        WHEN IDEN_NO LIKE '41%' THEN '河南'
+\n                        WHEN IDEN_NO LIKE '42%' THEN '湖北'
+\n                        WHEN IDEN_NO LIKE '43%' THEN '湖南'
+\n                        WHEN IDEN_NO LIKE '44%' THEN '广东'
+\n                        WHEN IDEN_NO LIKE '45%' THEN '广西'
+\n                        WHEN IDEN_NO LIKE '46%' THEN '海南'
+\n                        WHEN IDEN_NO LIKE '50%' THEN '重庆'
+\n                        WHEN IDEN_NO LIKE '51%' THEN '四川'
+\n                        WHEN IDEN_NO LIKE '52%' THEN '贵州'
+\n                        WHEN IDEN_NO LIKE '53%' THEN '云南'
+\n                        WHEN IDEN_NO LIKE '54%' THEN '西藏'
+\n                        WHEN IDEN_NO LIKE '61%' THEN '陕西'
+\n                        WHEN IDEN_NO LIKE '62%' THEN '甘肃'
+\n                        WHEN IDEN_NO LIKE '63%' THEN '青海'
+\n                        WHEN IDEN_NO LIKE '64%' THEN '宁夏'
+\n                        WHEN IDEN_NO LIKE '65%' THEN '新疆'
+\n                        ELSE '未知'
+\n                    END
+\n            END
+\n            END AS regions 
+\n    ,IDEN_NO
+\n    ,SUP_PROM_NAME
+\n    ,'是'
+\n    ,CUST_NAME
+\n    ,FAMILY_ADDR
+\n    ,FST_RGST_FAMILY_ADDR
+\n    ,FST_RGST_COMPY_ADDR
+\n    ,COMPY_ADDR
+\n    
+\nfrom {PID}.VT_A_PLOA_CREDIT_CARD_PROV_OUTER_FINANG_DTL_TAB_02 
+\nwhere PROM_PROJECTS not  like 'QCFQ%'  and  ACCT_STS_DESC<>'核销' and  ACCT_STS not in ('WQ','W')  and FAMILY_ADDR <>''
+\n)a
+\n
+\nleft join (select IDEN_NO,sum(loan_bal) as  loan_bal
+\nfrom  {PID}.VT_A_PLOA_CREDIT_CARD_PROV_OUTER_FINANG_DTL_TAB_02 t1
+\nwhere "ACCT_STS" not in ('W','WQ')
+\ngroup by 1)b
+\non A.IDEN_NO=b.IDEN_NO
+\n
+\nleft join (
+\nselect A.custr_nbr  
+\n
+\n,sum(CASE WHEN B.acct_credit_limit-A.LOAN_BAL< 0 then 0 else  B.acct_credit_limit-A.LOAN_BAL   end)   as  credit_limit
+\nfrom (select  
+\nt1.custr_nbr
+\n,sum(case when CAST((t1.BAL_INTFLAG||t1.bal_int) AS decimal(32,2))  +  CAST((t1.STMBALINTFLAG||t1.stm_balint)AS decimal(32,2)) >=0 
+\n             then  t1.NOT_OUT_ACCT_RCPT_CONSM_BAL
+\n            + t1.CHECK_CONSM_BAL
+\n            + CAST((t1.BAL_INTFLAG||t1.bal_int) AS decimal(32,2))
+\n            + CAST((t1.STMBALINTFLAG||t1.stm_balint) AS decimal(32,2))
+\n            + cast((t1.STAGES_PAY_NOT_OUT_ACCT_RCPT_BAL_SYMBO||t1.STAGES_PAY_NOT_OUT_ACCT_RCPT_BAL) AS decimal(32,2))
+\n            + cast((t1.STAGES_PAY_POSTED_RCPT_BAL_SYMBO||t1.STAGES_PAY_POSTED_RCPT_BAL) AS decimal(32,2)) 
+\n           
+\n            + nvl(t2.PRESS_DAY_LOAN_P_AMTZ_BAL,0)
+\n            + nvl(t2.CNY_STAGES_P_AMTZ_BAL,0) 
+\n         
+\n         else (nvl(t2.PRESS_DAY_LOAN_P_AMTZ_BAL,0) + nvl(t2.CNY_STAGES_P_AMTZ_BAL,0) ) end )    AS LOAN_BAL         
+\nfrom  fdm.F_AC_CCRD_CNY_CREDIT_ACCT t1    
+\nleft join fdm.F_AC_CCRD_ADDIT_SMS_SERVI_ACCT t2
+\non t1.ACCT_NO=t2.ACCT_NO
+\nAND t2.end_dt > DATE'{ETL_TX_DT}'-1
+\nAND t2.start_dt <= DATE'{ETL_TX_DT}'-1 
+\nWHERE   t1.end_dt > DATE'{ETL_TX_DT}' -1
+\nAND t1.start_dt <= DATE'{ETL_TX_DT}' -1  and t1.ACCT_STS_CD NOT in('WQ','W')   
+\n
+\ngroup by 1)A
+\nleft join (SELECT
+\n    TMP.custr_nbr,
+\n    MAX(all_cards.acct_credit_limit)AS acct_credit_limit  
+\nFROM (
+\n    
+\n    SELECT
+\n        t1.custr_nbr,
+\n        NVL(t1.acct_credit_limit, 0) AS acct_credit_limit  
+\n    FROM fdm.F_AC_CCRD_CNY_CREDIT_ACCT t1
+\n    
+\n    LEFT JOIN (
+\n        SELECT DISTINCT acct_no, CARD_LOGOUT_CD
+\n        FROM fdm.F_MD_CCRD_CARD_INFO
+\n        WHERE end_dt > DATE'{ETL_TX_DT}' - 1
+\n          AND start_dt <= DATE'{ETL_TX_DT}' - 1
+\n    ) t3 ON t1.acct_no = t3.acct_no
+\n    
+\n    LEFT JOIN fdm.F_AC_CCRD_ADDIT_SMS_SERVI_ACCT t2
+\n        ON t1.ACCT_NO = t2.ACCT_NO
+\n        AND t2.end_dt > DATE'{ETL_TX_DT}' - 1
+\n        AND t2.start_dt <= DATE'{ETL_TX_DT}' - 1
+\n    WHERE
+\n        t1.end_dt > DATE'{ETL_TX_DT}' - 1
+\n        AND t1.start_dt <= DATE'{ETL_TX_DT}' - 1
+\n        AND t1.ACCT_STS_CD=''
+\n        AND t3.CARD_LOGOUT_CD = ''  
+\n       
+\n) tmp
+\n
+\nJOIN (
+\n    SELECT
+\n        custr_nbr,
+\n        NVL(acct_credit_limit, 0) AS acct_credit_limit
+\n    FROM fdm.F_AC_CCRD_CNY_CREDIT_ACCT
+\n    WHERE end_dt > DATE'{ETL_TX_DT}' - 1
+\n      AND start_dt <= DATE'{ETL_TX_DT}' - 1
+\n    
+\n) all_cards ON tmp.custr_nbr = all_cards.custr_nbr
+\nGROUP BY custr_nbr
+\n)B
+\non A.custr_nbr= B.custr_nbr
+\ngroup by 1)c
+\nON A.IDEN_NO=c.custr_nbr
+\n
+\nleft join (select 
+\nIDEN_NO
+\n,max(LOAN_BAL_REMAI_TERM) as LOAN_BAL_REMAI_TERM
+\nfrom {PID}.VT_A_PLOA_CREDIT_CARD_PROV_OUTER_FINANG_DTL_TAB_02
+\nwhere ACCT_STS_DESC='正常' and CARD_STS='正常' and PROM_PROJECTS not like 'QCFQ%' 
+\n
+\ngroup by 1)d
+\nON A.IDEN_NO=d.IDEN_NO 
+\n
+\nleft join (select 
+\nIDEN_NO
+\n,max(LOAN_BAL_REMAI_TERM) as LOAN_BAL_REMAI_TERM
+\nfrom {PID}.VT_A_PLOA_CREDIT_CARD_PROV_OUTER_FINANG_DTL_TAB_02
+\nwhere ACCT_STS_DESC='正常' and CARD_STS='正常' and PROM_PROJECTS not like 'QCFQ%' 
+\n
+\ngroup by 1)e
+\nON A.IDEN_NO=e.IDEN_NO  
+\nwhere a.regions<>'剔除' and A.RN=1
+\nand a.IDEN_NO not in (
+\nselect IDEN_NO
+\nfrom 
+\n{PID}.VT_A_PLOA_CREDIT_CARD_PROV_OUTER_FINANG_DTL_TAB_02 t1
+\nwhere t1.CUST_TYPE ='车分期'
+\n )
+\n  and a.COMPY_ADDR<>''

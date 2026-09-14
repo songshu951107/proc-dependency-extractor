@@ -1,0 +1,30 @@
+﻿diff --git a/proc-dependency-extractor/src/main/java/com/hb/extractor/parser/LineageExtractor.java b/proc-dependency-extractor/src/main/java/com/hb/extractor/parser/LineageExtractor.java
+index b5734e2..37e86fd 100644
+--- a/proc-dependency-extractor/src/main/java/com/hb/extractor/parser/LineageExtractor.java
++++ b/proc-dependency-extractor/src/main/java/com/hb/extractor/parser/LineageExtractor.java
+@@ -265,12 +265,24 @@ public class LineageExtractor {
+                 ddlFields = tempColumnCache.get(targetTableLower);
+             }
+             List<FieldMapping> mappings = fieldMappingExtractor.extract(
+-                    sqlBlock, targetTableLower, aliasMap, ddlFields);
++                    sqlBlock, targetTableLower, aliasMap, ddlFields, tempColumnCache);
+             int edgeIdx = edgeIndexBase;
+             for (FieldMapping fm : mappings) {
+                 fm.setEdgeIndex(edgeIdx);
+                 result.getFieldMappings().add(fm);
+             }
++            // CTAS 形式 CREATE TEMP（AS SELECT, 无内联列定义）: 派生列（SELECT 项别名/列名）也写入缓存,
++            // 供同 proc 后续块多表 JOIN 裸列唯一匹配归属（否则临时表列不进候选缓存, 裸列无法归属）
++            if ("CREATE TEMP".equals(operation) && targetIsTemp
++                    && !tempColumnCache.containsKey(targetTableLower)) {
++                List<String> derivedCols = new ArrayList<>();
++                for (FieldMapping fm : mappings) {
++                    if (fm.getTargetField() != null) derivedCols.add(fm.getTargetField());
++                }
++                if (!derivedCols.isEmpty()) {
++                    tempColumnCache.put(targetTableLower, derivedCols);
++                }
++            }
+         }
+ 
+         // 条件字段（行血缘）：独立于字段映射提取，归属到本块对应源表的 edge

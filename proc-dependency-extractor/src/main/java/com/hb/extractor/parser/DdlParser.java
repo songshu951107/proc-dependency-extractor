@@ -1,6 +1,8 @@
 package com.hb.extractor.parser;
 
+import com.hb.extractor.service.TableColumnMetaService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -15,35 +17,59 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * DDL 文件解析器
+ * DDL 解析器（字段列表来源）
  *
- * 从 DDL txt 文件中提取字段列表。
- * DDL 文件查找规则：目标表短名小写 + "_ddl.TXT"
- * 正则提取每行首个 "field_name" 引号内容。
+ * 解析顺序：
+ *   1. 数据库 table_column_meta（推荐，由 columns0818.xlsx 导入得到完整字段元数据）
+ *   2. 回退到本地 _ddl.TXT 文件（GBK，仅字段名，向后兼容）
+ *
+ * 调用方（如 Neo4jSyncServiceImpl）使用方式不变，仍调用 parse(tableShort)。
  */
 @Slf4j
 @Component
 public class DdlParser {
 
+    @Autowired
+    private TableColumnMetaService tableColumnMetaService;
+
     @Value("${extractor.ddl.dir:d:/HB/work_zuoye/jiaoben}")
     private String ddlDir;
 
-    /** DDL 文件实际为 GBK 编码（COMMENT 含中文），UTF-8 解码会抛 Input length = 1 */
+    /** 旧的 _ddl.TXT 文件为 GBK 编码（COMMENT 含中文） */
     private static final Charset DDL_CHARSET = Charset.forName("GBK");
 
     /** 匹配 DDL 行中首个双引号包裹的字段名，跳过 CREATE TABLE 行 */
     private static final Pattern FIELD_PATTERN = Pattern.compile("^\\s*\"(\\w+)\"");
 
     /**
-     * 按目标表短名查找 DDL 文件并解析字段列表
+     * 按目标表短名查询字段列表。
+     * 优先走数据库，DB 没有则回退到本地 _ddl.TXT 文件。
      *
      * @param tableShort 目标表短名（如 C_AGT_DEPOSIT_ACCT_INF）
-     * @return 字段名列表（DDL 顺序），文件不存在返回 null
+     * @return 字段名列表（小写，DDL 顺序）；都没有返回 null
      */
     public List<String> parse(String tableShort) {
         if (tableShort == null || tableShort.isEmpty()) {
             return null;
         }
+        // 1. 优先走数据库
+        try {
+            List<String> dbFields = tableColumnMetaService.getFieldNames(tableShort);
+            if (dbFields != null && !dbFields.isEmpty()) {
+                return dbFields;
+            }
+        } catch (Exception e) {
+            // DB 查询失败不影响主流程，降级到文件
+            log.warn("从数据库读取字段元数据失败 table={}, 降级到文件: {}", tableShort, e.getMessage());
+        }
+        // 2. 回退到本地文件
+        return parseFromFile(tableShort);
+    }
+
+    /**
+     * 从本地 _ddl.TXT 文件解析字段列表（向后兼容）
+     */
+    private List<String> parseFromFile(String tableShort) {
         String fileName = tableShort.toLowerCase() + "_ddl.TXT";
         Path ddlPath = Paths.get(ddlDir, fileName);
         if (!Files.exists(ddlPath)) {

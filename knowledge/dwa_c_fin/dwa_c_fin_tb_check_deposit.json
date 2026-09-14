@@ -1,0 +1,123 @@
+{
+  "scriptName": "dwa_c_fin_tb_check_deposit.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T10:05:00",
+  "businessScenario": "财务管理系统总分核对-将存款明细账（分户账）与总账科目余额进行比对，检测账务差异",
+  "updateMethod": "每日全量",
+  "targetTable": "C_FIN_TB_CHECK",
+  "totalBlocks": 1,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_FI_FIGL_SUBJ_BAL_TAB",
+      "fdmScript": "dwa_f_fi_figl_subj_bal_tab.py",
+      "found": true,
+      "tdmTable": "T_FIGL_ZFAGLFLEXT_1_${ETL_TX_DT}",
+      "odmTable": "O_FIGL_ZFAGLFLEXT_1",
+      "transformLogic": "从核心总账系统TDM表（T_FIGL_ZFAGLFLEXT_1）全量入FDM，通过F_CO_TRANS_CD转换币种代码"
+    },
+    {
+      "fdmTable": "F_FI_FIGL_SUBJ_LVL_RELA",
+      "fdmScript": "dwa_f_fi_figl_subj_lvl_rela.py",
+      "found": true,
+      "tdmTable": "T_FIGL_ZSAPKMCS_${ETL_TX_DT}",
+      "odmTable": "O_FIGL_ZSAPKMCS",
+      "transformLogic": "从TDM层科目表（T_FIGL_ZSAPKMCS）拉链入FDM，字段直接映射（ZKMUHAO→subj_no, ZKEMUMC→subj_name等），支持新增修改删除变更"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "depth": 0,
+      "blockName": "存款总分核对",
+      "sqlCode": "INSERT INTO CDM.C_FIN_TB_CHECK (check_no, check_desc, check_sub_no, check_sub_name, dtl_acct_bal, gl_bal, margin_val, check_dt)\nSELECT '40001' AS check_no, '总分核对-存款' AS check_desc,\n  A.subj_no AS check_sub_no, NVL(C.subj_name,'其它') AS check_sub_name,\n  NVL(A.acct_bal,0) AS dtl_acct_bal, NVL(B.acct_bal,0) AS gl_bal,\n  NVL(A.acct_bal,0) - NVL(B.acct_bal,0) AS margin_val, DATE'{ETL_TX_DT}' AS check_dt\nFROM (\n  SELECT CASE WHEN subj_no='220406' then '22040699' WHEN subj_no='220202' then '22020299' ELSE subj_no END AS SUBJ_NO,\n    SUM(acct_bal + CASE WHEN acct_no='20170609114410000012' THEN 0 ELSE ldr_frozen_principal END) AS acct_bal\n  FROM CDM.C_AGT_DEPOSIT_ACCT_INF\n  WHERE data_dt=DATE'{ETL_TX_DT}' AND subj_no NOT IN ('2217','615199','270501','2006')\n  GROUP BY 1\n) A\nLEFT JOIN (\n  SELECT T1.subj_no, SUM(term_end_bal_credit)-SUM(term_end_bal_debit) AS acct_bal\n  FROM FDM.F_FI_FIGL_SUBJ_BAL_TAB T1\n  WHERE period_dt='{ETL_TX_DT}' AND currcy_cd <> '@RMB' AND org_no = '0099'\n  GROUP BY 1 HAVING SUM(term_end_bal_credit)>0\n) B ON A.subj_no = B.subj_no\nLEFT JOIN FDM.F_FI_FIGL_SUBJ_LVL_RELA C\n  ON A.subj_no = C.subj_no AND C.start_dt<=DATE'{ETL_TX_DT}' AND C.end_dt>DATE'{ETL_TX_DT}' AND C.del_flag <> 'D'",
+      "tracedSqlCode": "INSERT INTO CDM.C_FIN_TB_CHECK(...)\nSELECT '40001', '总分核对-存款', A.subj_no, NVL(C.subj_name,'其它'),\n  NVL(A.acct_bal,0), NVL(B.acct_bal,0), NVL(A.acct_bal,0)-NVL(B.acct_bal,0), DATE'{ETL_TX_DT}'\nFROM (\n  SELECT 存款科目调整(subj_no='220406'→'22040699', '220202'→'22020299'), SUM(账户余额+冻结本金) AS acct_bal\n  FROM C_AGT_DEPOSIT_ACCT_INF\n  WHERE data_dt=当日 AND 排除特殊科目('2217','615199','270501','2006')\n  GROUP BY 调整后科目\n) A\nLEFT JOIN (\n  SELECT subj_no, SUM(期末贷方余额-期末借方余额) FROM ODM.O_FIGL_ZFAGLFLEXT_1\n  WHERE period_dt=当日 AND 非本币 AND org_no='0099'\n  GROUP BY subj_no HAVING SUM(term_end_bal_credit)>0\n) B ON A.subj_no=B.subj_no\nLEFT JOIN FDM科目层级关系表 C ON A.subj_no=C.subj_no AND 拉链有效 AND 未删除",
+      "businessScenario": "财务管理系统总分核对-对比存款明细账与总账科目余额，检查账实是否一致",
+      "sqlFunction": "多表关联查询（对账比较）",
+      "involvedTables": ["O_FIGL_ZFAGLFLEXT_1", "O_FIGL_ZSAPKMCS", "C_AGT_DEPOSIT_ACCT_INF"],
+      "originalTables": ["F_FI_FIGL_SUBJ_BAL_TAB", "F_FI_FIGL_SUBJ_LVL_RELA", "C_AGT_DEPOSIT_ACCT_INF"],
+      "tableJoinLogic": "存款明细账 A LEFT JOIN 总账科目余额 B ON 科目号，LEFT JOIN 科目层级关系 C ON 科目号（有效拉链）",
+      "queryDimensions": "检核编号、检核子编号（科目号）、科目名称、明细账余额、总账余额、差值",
+      "tags": ["总分核对", "存款", "对账", "科目余额", "差异检测"],
+      "traceChains": [
+        {
+          "originalTable": "F_FI_FIGL_SUBJ_BAL_TAB",
+          "fdmScript": "dwa_f_fi_figl_subj_bal_tab.py",
+          "tdmTable": "T_FIGL_ZFAGLFLEXT_1_${ETL_TX_DT}",
+          "odmTable": "O_FIGL_ZFAGLFLEXT_1",
+          "filterConditions": "非本币（currcy_cd <> '@RMB'），机构号='0099'，贷方余额>0"
+        },
+        {
+          "originalTable": "F_FI_FIGL_SUBJ_LVL_RELA",
+          "fdmScript": "dwa_f_fi_figl_subj_lvl_rela.py",
+          "tdmTable": "T_FIGL_ZSAPKMCS_${ETL_TX_DT}",
+          "odmTable": "O_FIGL_ZSAPKMCS",
+          "filterConditions": "start_dt<=当日 AND end_dt>当日 AND del_flag<>'D'",
+          "fieldMappings": [
+            {"fdmField": "subj_no", "odmField": "ZKMUHAO", "description": "科目号"},
+            {"fdmField": "subj_name", "odmField": "ZKEMUMC", "description": "科目名称"},
+            {"fdmField": "subj_lvl_cd", "odmField": "ZKEMUJB", "description": "科目级别代码"}
+          ]
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "存款明细账余额汇总",
+          "derivedSql": "SELECT CASE WHEN subj_no='220406' THEN '22040699' WHEN subj_no='220202' THEN '22020299' ELSE subj_no END AS subj_no, SUM(acct_bal + CASE WHEN acct_no='20170609114410000012' THEN 0 ELSE ldr_frozen_principal END) AS acct_bal FROM C_AGT_DEPOSIT_ACCT_INF WHERE data_dt=DATE'{日期}' AND subj_no NOT IN ('2217','615199','270501','2006') GROUP BY CASE WHEN subj_no IN ('220406','220202') THEN subj_no||'99' ELSE subj_no END",
+          "businessMeaning": "按科目汇总存款账户的余额（含余额+冻结本金），特殊科目220406和220202调整为99级科目",
+          "sourceTable": "C_AGT_DEPOSIT_ACCT_INF"
+        },
+        {
+          "knowledgeName": "总账存款科目余额查询",
+          "derivedSql": "SELECT subj_no, SUM(term_end_bal_credit) - SUM(term_end_bal_debit) AS acct_bal FROM O_FIGL_ZFAGLFLEXT_1 WHERE period_name='{日期}' AND currency_code NOT IN (SELECT stand_cd_val FROM F_CO_TRANS_CD WHERE stand_cd_tab_no='FIGL0004' AND src_cd_val='RMB') AND segment1='0099' GROUP BY subj_no HAVING SUM(term_end_bal_credit)>0",
+          "businessMeaning": "查询总账存款科目的余额净额（贷方-借方），仅保留贷方余额>0的科目",
+          "sourceTable": "O_FIGL_ZFAGLFLEXT_1",
+          "originalTable": "F_FI_FIGL_SUBJ_BAL_TAB"
+        },
+        {
+          "knowledgeName": "存款对账差异计算",
+          "derivedSql": "SELECT A.subj_no, A.acct_bal AS dtl_bal, B.acct_bal AS gl_bal, A.acct_bal - B.acct_bal AS margin FROM detail_account A LEFT JOIN general_ledger B ON A.subj_no = B.subj_no WHERE A.acct_bal <> B.acct_bal OR B.acct_bal IS NULL",
+          "businessMeaning": "对比存款分户账与总账的科目余额差异，定位账务不一致的科目",
+          "sourceTable": "C_AGT_DEPOSIT_ACCT_INF"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["O_FIGL_ZFAGLFLEXT_1", "O_FIGL_ZSAPKMCS", "C_AGT_DEPOSIT_ACCT_INF"],
+  "allOriginalTables": ["C_AGT_DEPOSIT_ACCT_INF", "F_FI_FIGL_SUBJ_BAL_TAB", "F_FI_FIGL_SUBJ_LVL_RELA"],
+  "traceSummary": {
+    "totalFdmTables": 2,
+    "scriptsFound": 2,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "特殊科目映射调整",
+      "condition": "subj_no='220406' → '22040699'; subj_no='220202' → '22020299'",
+      "description": "存款科目220406和220202需映射到99级科目进行对账"
+    },
+    {
+      "ruleName": "剔除特殊科目",
+      "condition": "subj_no NOT IN ('2217','615199','270501','2006')",
+      "description": "对账时排除科目2217、615199、270501、2006"
+    },
+    {
+      "ruleName": "排除特定账户",
+      "condition": "acct_no = '20170609114410000012' 时冻结本金取0",
+      "description": "特定账户不参与冻结本金计算"
+    },
+    {
+      "ruleName": "总账机构过滤",
+      "condition": "org_no = '0099'",
+      "description": "总账科目余额仅取机构0099的数据"
+    },
+    {
+      "ruleName": "总账贷方过滤",
+      "condition": "HAVING SUM(term_end_bal_credit) > 0",
+      "description": "总账中仅保留贷方余额大于0的科目参与核对"
+    }
+  ]
+}

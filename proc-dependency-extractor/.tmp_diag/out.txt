@@ -1,0 +1,118 @@
+﻿=== PROC dwa_c_agt_agent_compy_acct_inf ===
+  [b28] target=vt_c_agt_agent_compy_acct_inf_01 mappings=5 broken=0 aliasMap={T=null} ddl=null
+  [b34] target=vt_c_agt_agent_compy_acct_inf_07 mappings=2 broken=0 aliasMap={T=null} ddl=null
+  [b35] target=vt_c_agt_agent_compy_acct_inf_08 mappings=2 broken=1 aliasMap={T=null} ddl=null
+    BROKEN target=expr_2 <- cnt (alias=null, role=value)
+  [b36] target=vt_c_agt_agent_compy_acct_inf_09 mappings=2 broken=1 aliasMap={T=null} ddl=null
+    BROKEN target=expr_2 <- cnt (alias=null, role=value)
+  [b39] target=vt_c_agt_agent_compy_acct_inf_11_0 mappings=6 broken=0 aliasMap={T=null} ddl=null
+  [b45] target=vt_c_agt_agent_compy_acct_inf_15 mappings=2 broken=0 aliasMap={T2=null} ddl=null
+  [b49] target=vt_c_agt_agent_compy_acct_inf_18 mappings=2 broken=0 aliasMap={T=null} ddl=null
+=== PROC dwa_C_AGT_ITNET_LOAN_RCPT_INF ===
+  [b3] target=vt_c_agt_itnet_loan_rcpt_inf_00 mappings=11 broken=4 aliasMap={T=null} ddl=null
+    BROKEN target=expr_8 <- doubt_acct_principal_bal (alias=null, role=value)
+    BROKEN target=expr_9 <- core_off_bal_recvbl_int_bal (alias=null, role=value)
+    BROKEN target=expr_10 <- int_pay_freq_cd (alias=null, role=value)
+    BROKEN target=expr_11 <- int_pay_cycle_cd (alias=null, role=value)
+  [b6] target=vt_c_agt_itnet_loan_rcpt_inf_05 mappings=2 broken=0 aliasMap={T1=null} ddl=null
+  [b10] target=vt_c_agt_itnet_loan_rcpt_inf_07 mappings=2 broken=0 aliasMap={A=null} ddl=null
+  [b19] target=vt_c_agt_itnet_loan_rcpt_inf_091 mappings=2 broken=0 aliasMap={A=null} ddl=null
+  [b26] target=vt_c_agt_itnet_loan_rcpt_inf_scln_03 mappings=8 broken=0 aliasMap={T1=null} ddl=null
+  [b30] target=vt_c_agt_itnet_loan_rcpt_inf_scln_04 mappings=2 broken=0 aliasMap={T=null} ddl=null
+  [b37] target=vt_c_agt_itnet_loan_rcpt_inf_scconverted_03 mappings=8 broken=0 aliasMap={T1=null} ddl=null
+=== PROC dwa_c_cus_ent_wechat_cust_rela ===
+  [b9] target=vt_c_cus_ent_wechat_cust_rela_02 mappings=11 broken=0 aliasMap={A=null} ddl=null
+  [b11] target=c_cus_ent_wechat_cust_rela mappings=30 broken=2 aliasMap={A=null, T5=c_cus_pri_cust_basic_inf} ddl=null
+    BROKEN target=data_dt <- data_dt (alias=A, role=value)
+    BROKEN target=expr_18 <- activa_sts_cd (alias=null, role=value)
+  [b12] target=c_cus_ent_wechat_cust_rela mappings=30 broken=6 aliasMap={A=null, T5=c_cus_pri_cust_basic_inf} ddl=null
+    BROKEN target=expr_18 <- activa_sts_cd (alias=null, role=value)
+    BROKEN target=ent_wechat_rela_create_org_no <- ent_wechat_rela_create_org_no (alias=null, role=condition)
+    BROKEN target=ent_wechat_rela_create_org_no <- brch_no (alias=null, role=value)
+    BROKEN target=ent_wechat_rela_create_org_no <- ent_wechat_rela_create_org_no (alias=null, role=value)
+    BROKEN target=expr_21 <- brch_no (alias=null, role=value)
+    BROKEN target=expr_22 <- brch_nm (alias=null, role=value)
+=== PROC dwa_pid_a_d_dm_credit_card_org_in ===
+  [b21] target=a_d_fin_mkt_prft_loss_dtl mappings=16 broken=9 aliasMap={T1=a_d_fin_mkt_prft_loss_dtl_10, T2=f_pt_crbs_teller_param} ddl=null
+    BROKEN target=expr_1 <- data_dt (alias=null, role=value)
+    BROKEN target=expr_2 <- bil_flow_big (alias=null, role=value)
+    BROKEN target=expr_3 <- bil_flow_sts (alias=null, role=value)
+    BROKEN target=expr_4 <- batch_no (alias=null, role=value)
+    BROKEN target=expr_5 <- cntrpty_name (alias=null, role=value)
+    BROKEN target=expr_6 <- gl_sub_name (alias=null, role=value)
+    BROKEN target=intst_revenu <- all_inc (alias=null, role=value)
+    BROKEN target=benqitouzhangw <- all_inc (alias=null, role=value)
+    BROKEN target=benqitoukaohe <- all_inc (alias=null, role=value)
+  [b23] target=a_d_fin_mkt_prft_loss_dtl mappings=16 broken=9 aliasMap={T1=a_d_fin_mkt_prft_loss_dtl_11, T2=f_pt_crbs_teller_param} ddl=null
+    BROKEN target=expr_1 <- data_dt (alias=null, role=value)
+    BROKEN target=expr_2 <- bil_flow_big (alias=null, role=value)
+    BROKEN target=expr_3 <- bil_flow_sts (alias=null, role=value)
+    BROKEN target=expr_4 <- batch_no (alias=null, role=value)
+    BROKEN target=expr_5 <- cntrpty_name (alias=null, role=value)
+    BROKEN target=expr_6 <- gl_sub_name (alias=null, role=value)
+    BROKEN target=intst_revenu <- all_inc (alias=null, role=value)
+    BROKEN target=benqitouzhangw <- all_inc (alias=null, role=value)
+    BROKEN target=benqitoukaohe <- all_inc (alias=null, role=value)
+  [b25] target=a_d_fin_mkt_prft_loss_dtl mappings=16 broken=9 aliasMap={T1=a_d_fin_mkt_prft_loss_dtl_13, T2=f_pt_crbs_teller_param} ddl=null
+    BROKEN target=expr_1 <- data_dt (alias=null, role=value)
+    BROKEN target=expr_2 <- bil_flow_big (alias=null, role=value)
+    BROKEN target=expr_3 <- bil_flow_sts (alias=null, role=value)
+    BROKEN target=expr_4 <- batch_no (alias=null, role=value)
+    BROKEN target=expr_5 <- cntrpty_name (alias=null, role=value)
+    BROKEN target=expr_6 <- gl_sub_name (alias=null, role=value)
+    BROKEN target=intst_revenu <- all_inc (alias=null, role=value)
+    BROKEN target=benqitouzhangw <- all_inc (alias=null, role=value)
+    BROKEN target=benqitoukaohe <- all_inc (alias=null, role=value)
+  [b27] target=a_d_fin_mkt_prft_loss_dtl mappings=16 broken=10 aliasMap={T1=a_d_fin_mkt_prft_loss_dtl_12, T2=f_pt_crbs_teller_param} ddl=null
+    BROKEN target=expr_1 <- data_dt (alias=null, role=value)
+    BROKEN target=expr_2 <- bil_flow_big (alias=null, role=value)
+    BROKEN target=expr_3 <- bil_flow_sts (alias=null, role=value)
+    BROKEN target=expr_4 <- batch_no (alias=null, role=value)
+    BROKEN target=expr_5 <- cntrpty_name (alias=null, role=value)
+    BROKEN target=expr_6 <- gl_sub_name (alias=null, role=value)
+    BROKEN target=bill_amt <- bill_amt (alias=null, role=value)
+    BROKEN target=intst_revenu <- all_inc (alias=null, role=value)
+    BROKEN target=benqitouzhangw <- all_inc (alias=null, role=value)
+    BROKEN target=benqitoukaohe <- all_inc (alias=null, role=value)
+  [b30] target=a_d_fin_mkt_prft_loss_dtl mappings=16 broken=0 aliasMap={T1=null, T2=f_pt_crbs_teller_param} ddl=null
+  [b32] target=a_d_fin_mkt_prft_loss_dtl mappings=16 broken=11 aliasMap={T1=a_d_fin_mkt_prft_loss_dtl_15, T2=f_pt_crbs_teller_param} ddl=null
+    BROKEN target=expr_1 <- data_dt (alias=null, role=value)
+    BROKEN target=expr_2 <- bil_flow_big (alias=null, role=value)
+    BROKEN target=expr_3 <- bil_flow_sts (alias=null, role=value)
+    BROKEN target=expr_4 <- batch_no (alias=null, role=value)
+    BROKEN target=expr_5 <- cntrpty_name (alias=null, role=value)
+    BROKEN target=expr_6 <- gl_sub_name (alias=null, role=value)
+    BROKEN target=expr_7 <- fst_term_remai_term_repur_term (alias=null, role=value)
+    BROKEN target=bill_amt <- bill_amt (alias=null, role=value)
+    BROKEN target=price_diff_revenu <- all_inc (alias=null, role=value)
+    BROKEN target=benqitouzhangw <- all_inc (alias=null, role=value)
+    BROKEN target=benqitoukaohe <- all_inc (alias=null, role=value)
+=== PROC dwa_pid_a_d_ln_loan_xd_inf ===
+  [b4] target=a_d_ln_loan_xd_inf mappings=14 broken=1 aliasMap={CC=a_d_ln_bill_discnt_cash_prft, AA=a_d_ln_bill_discnt_cash_loan, DD=f_fi_figl_subj_lvl_rela} ddl=null
+    BROKEN target=fiveclass_class <- fiveclass_class (alias=null, role=value)
+  [b7] target=a_d_ln_loan_xd_inf mappings=12 broken=6 aliasMap={T=null} ddl=null
+    BROKEN target=data_dt <- data_dt (alias=null, role=value)
+    BROKEN target=currcy_cd <- currcy_cd (alias=null, role=value)
+    BROKEN target=rate_rmb <- rate_rmb (alias=null, role=value)
+    BROKEN target=whe_vld <- whe_vld (alias=null, role=value)
+    BROKEN target=whe_jsd <- whe_jsd (alias=null, role=value)
+    BROKEN target=whe_cdd <- whe_cdd (alias=null, role=value)
+=== PROC dwa_pid_a_d_pt_app_branch_cust_view ===
+  [b9] target=vt_a_d_pt_app_branch_cust_view_01 mappings=7 broken=0 aliasMap={T=null} ddl=null
+  [b10] target=vt_a_d_pt_app_branch_cust_view_01 mappings=7 broken=0 aliasMap={T=null} ddl=null
+  [b11] target=vt_a_d_pt_app_branch_cust_view_01 mappings=7 broken=0 aliasMap={T=null} ddl=null
+  [b12] target=vt_a_d_pt_app_branch_cust_view_01 mappings=7 broken=0 aliasMap={A=null} ddl=null
+  [b13] target=vt_a_d_pt_app_branch_cust_view_01 mappings=7 broken=0 aliasMap={A=null} ddl=null
+  [b14] target=vt_a_d_pt_app_branch_cust_view_01 mappings=7 broken=0 aliasMap={A=null} ddl=null
+  [b15] target=vt_a_d_pt_app_branch_cust_view_01 mappings=7 broken=0 aliasMap={A=null} ddl=null
+  [b16] target=vt_a_d_pt_app_branch_cust_view_01 mappings=7 broken=0 aliasMap={A=null} ddl=null
+=== PROC dwa_pid_a_g_dp_deposit_report ===
+  [b5] target=vt_a_g_dp_deposit_report_01_ mappings=26 broken=0 aliasMap={T=a_d_dp_deposit_org_dtl_query} ddl=null
+  [b8] target=vt_a_g_dp_deposit_report_02_ mappings=15 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_01_} ddl=null
+  [b9] target=vt_a_g_dp_deposit_report_02_ mappings=16 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_01_} ddl=null
+  [b11] target=vt_a_g_dp_deposit_report_02_ mappings=16 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_01_} ddl=null
+  [b13] target=vt_a_g_dp_deposit_report_02_ mappings=16 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_01_} ddl=null
+  [b15] target=vt_a_g_dp_deposit_report_02_ mappings=16 broken=0 aliasMap={T=vt_a_g_dp_deposit_report_01_} ddl=null
+=== PROC dwa_pid_A_G_LN_LOAN_DIM_SUM ===
+  [b4] target=a_g_ln_loan_dim_sum mappings=53 broken=0 aliasMap={T=null} ddl=null
+GRAND TOTAL BROKEN = 385

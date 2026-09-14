@@ -49,7 +49,7 @@
           <el-option :value="20" label="全部" />
         </el-select>
       </el-form-item>
-      <el-form-item label="分析报表影响">
+      <el-form-item label="报表影响">
         <el-switch v-model="form.analyzeReportImpact" />
       </el-form-item>
       <el-form-item>

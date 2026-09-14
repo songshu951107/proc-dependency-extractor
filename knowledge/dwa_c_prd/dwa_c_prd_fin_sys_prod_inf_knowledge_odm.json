@@ -1,0 +1,286 @@
+{
+  "scriptName": "dwa_c_prd_fin_sys_prod_inf.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T10:30:00",
+  "businessScenario": "理财系统产品信息共性层-整合理财产品基本信息、TA信息、费率信息，补充产品到期日信息",
+  "updateMethod": "每日全量",
+  "targetTable": "C_PRD_FIN_SYS_PROD_INF",
+  "totalBlocks": 2,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_PD_WMNS_PROD_INF",
+      "fdmScript": "dwa_f_pd_wmns_prod_inf.py",
+      "found": true,
+      "tdmTable": "T_WMNS_TBPRODUCT_{date}",
+      "odmTable": "O_WMNS_TBPRODUCT",
+      "transformLogic": "FDM字段名标准化：prd_code→prod_no, ta_code→ta_cd, prd_name→prod_name等，TDM全量→FDM拉链增量"
+    },
+    {
+      "fdmTable": "F_PD_WMNS_TA_PROD_INF",
+      "fdmScript": "dwa_f_pd_wmns_ta_prod_inf.py",
+      "found": true,
+      "tdmTable": "T_WMNS_TBTAINFO_{date}",
+      "odmTable": "O_WMNS_TBTAINFO",
+      "transformLogic": "FDM字段名标准化：ta_code→ta_cd, ta_shortname→ta_abre, comp_mode→recon_mode_cd等，TDM全量→FDM拉链增量"
+    },
+    {
+      "fdmTable": "F_PD_WMNS_PROD_INF_EXT_INF",
+      "fdmScript": "dwa_f_pd_wmns_prod_inf_ext_inf.py",
+      "found": true,
+      "tdmTable": "T_WMNS_TBPRDPARAMVALUE_{date}",
+      "odmTable": "O_WMNS_TBPRDPARAMVALUE",
+      "transformLogic": "FDM字段名标准化：table_name→table_name, prd_code→prod_no, field_code→field_cd, field_value→field_val"
+    },
+    {
+      "fdmTable": "F_SP_PFMA_PROD_FEE_RATE_ADDIT_RECOR",
+      "fdmScript": "dwa_f_sp_pfma_prod_fee_rate_addit_recor.py",
+      "found": true,
+      "tdmTable": "T_PFMA_RECORD_MONEY_MANAGE_{date}",
+      "odmTable": "O_PFMA_RECORD_MONEY_MANAGE",
+      "transformLogic": "FDM字段名标准化：id→id, company_nm→fin_compy_name, prd_code→prod_cd, rate→inter_reve_fee_rate等"
+    },
+    {
+      "fdmTable": "F_PD_WMNS_PROD_PROGM_INF",
+      "fdmScript": "dwa_f_pd_wmns_prod_progm_inf.py",
+      "found": true,
+      "tdmTable": "T_WMNS_TBCONSIGNCYCLE_{date}",
+      "odmTable": "O_WMNS_TBCONSIGNCYCLE",
+      "transformLogic": "F4带删除拉链，字段标准化：ta_code→ta_cd, prd_code→prod_no, start_date→begin_dt, end_date→term_dt等"
+    },
+    {
+      "fdmTable": "F_CO_WMNS_PROD_WORKD_SET",
+      "fdmScript": "dwa_f_co_wmns_prod_workd_set.py",
+      "found": true,
+      "tdmTable": "T_WMNS_TBTRANSDAY_{date}",
+      "odmTable": "O_WMNS_TBTRANSDAY",
+      "transformLogic": "FDM字段标准化：date_type→dt_type_cd, asso_code→prod_no, trans_date→workd_dt"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "Step1-理财产品基本信息插入临时表",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.VT_C_PRD_FIN_SYS_PROD_INF_01\nSELECT TPR.prod_no, COALESCE(TPR.prod_class_cd, TTA.prod_class_cd), TPR.ta_cd,\n       TTA.ta_abre, TTA.ta_name, TTA.recon_mode_cd,\n       TPR.prod_name, TPR.prod_alias, TPR.prod_net_val,\n       CASE WHEN TPR.net_val_dt = 0 THEN DATE 'MIN_DATE' ... END AS net_val_dt,\n       TPR.net_val_days, TPR.prod_face_val, TPR.inter_reve_fee_rate,\n       ... (日期处理字段) ...,\n       NVL(TPV.field_val, PFR.INTER_REVE_FEE_RATE) AS fee_rate,\n       TPR.ctrl_flag, TPR.evalu_lvl_cd, TPR.prod_cumul_net_val,\n       TPR.prod_mgmt_person, TPR.template_desc\n  FROM FDM.F_PD_WMNS_PROD_INF TPR\n  LEFT JOIN FDM.F_PD_WMNS_TA_PROD_INF TTA\n         ON TPR.ta_cd = TTA.ta_cd\n        AND TTA.end_dt > DATE'{ETL_TX_DT}' AND TTA.start_dt <= DATE'{ETL_TX_DT}'\n  LEFT JOIN FDM.F_PD_WMNS_PROD_INF_EXT_INF TPV\n         ON TPR.prod_no = TPV.prod_no\n        AND TPV.field_cd = 'prd_remark'\n        AND TPV.end_dt > DATE'{ETL_TX_DT}' AND TPV.start_dt <= DATE'{ETL_TX_DT}'\n  LEFT JOIN (子查询取F_SP_PFMA_PROD_FEE_RATE_ADDIT_RECOR中最新的费率) PFR\n         ON TPR.PROD_NO = PFR.PROD_CD\n WHERE TPR.end_dt > DATE'{ETL_TX_DT}' AND TPR.start_dt <= DATE'{ETL_TX_DT}'",
+      "tracedSqlCode": "INSERT INTO CDM.VT_C_PRD_FIN_SYS_PROD_INF_01\nSELECT TPR.prd_code AS prod_no, COALESCE(TPR.prd_type, TTA.prd_type) AS prod_class_cd,\n       TPR.ta_code AS ta_cd, TTA.ta_shortname AS ta_abre, TTA.ta_name,\n       TTA.comp_mode AS recon_mode_cd, TPR.prd_name, TPR.prd_name2 AS prod_alias,\n       TPR.nav AS prod_net_val, ... (净值日期处理) ...,\n       TPR.nav_days AS net_val_days, TPR.face_value AS prod_face_val,\n       TPR.iss_price AS inter_reve_fee_rate, ... (日期处理字段) ...,\n       NVL(TPV.field_value, PFR.rate) AS fee_rate,\n       TPR.control_flag AS ctrl_flag, TPR.grade AS evalu_lvl_cd,\n       TPR.tot_nav AS prod_cumul_net_val, TPR.prd_manager AS prod_mgmt_person,\n       TPR.model_comment AS template_desc\n  FROM ODM.O_WMNS_TBPRODUCT TPR\n  LEFT JOIN ODM.O_WMNS_TBTAINFO TTA ON TPR.ta_code = TTA.ta_code\n  LEFT JOIN ODM.O_WMNS_TBPRDPARAMVALUE TPV\n         ON TPR.prd_code = TPV.prd_code AND TPV.field_code = 'prd_remark'\n  LEFT JOIN (子查询取O_PFMA_RECORD_MONEY_MANAGE中最新的费率rate) PFR\n         ON TPR.prd_code = PFR.prd_code",
+      "businessScenario": "理财系统产品信息-关联TA信息和费率扩展信息构建完整理财产品画像",
+      "sqlFunction": "多表关联查询",
+      "involvedTables": ["O_WMNS_TBPRODUCT", "O_WMNS_TBTAINFO", "O_WMNS_TBPRDPARAMVALUE", "O_PFMA_RECORD_MONEY_MANAGE"],
+      "originalTables": ["F_PD_WMNS_PROD_INF", "F_PD_WMNS_TA_PROD_INF", "F_PD_WMNS_PROD_INF_EXT_INF", "F_SP_PFMA_PROD_FEE_RATE_ADDIT_RECOR"],
+      "tableJoinLogic": "以理财产品信息为主表，左关联TA产品信息（通过ta_cd），左关联产品扩展信息获取prd_remark费率，左关联绩效考核费率补录信息获取最新中收费率",
+      "queryDimensions": "产品编号、产品名称、TA代码、TA简称、产品净值、净值日期、产品面值、发行价格、募集日期、成立日期、起息/结束日期、产品属性、风险等级、产品状态、币种、周期天数、预期收益率、费率、控制标志、产品管理人、业绩比较基准",
+      "tags": ["理财产品", "TA信息", "费率", "产品净值", "理财系统"],
+      "traceChains": [
+        {
+          "originalTable": "F_PD_WMNS_PROD_INF",
+          "fdmScript": "dwa_f_pd_wmns_prod_inf.py",
+          "tdmTable": "T_WMNS_TBPRODUCT_{date}",
+          "odmTable": "O_WMNS_TBPRODUCT",
+          "fieldMappings": [
+            {"fdmField": "prod_no", "odmField": "prd_code", "description": "产品编号"},
+            {"fdmField": "prod_class_cd", "odmField": "prd_type", "description": "产品类别代码"},
+            {"fdmField": "ta_cd", "odmField": "ta_code", "description": "TA代码"},
+            {"fdmField": "prod_name", "odmField": "prd_name", "description": "产品名称"},
+            {"fdmField": "prod_alias", "odmField": "prd_name2", "description": "产品别名"},
+            {"fdmField": "prod_net_val", "odmField": "nav", "description": "产品净值"},
+            {"fdmField": "net_val_dt", "odmField": "nav_date", "description": "净值日期"},
+            {"fdmField": "net_val_days", "odmField": "nav_days", "description": "净值天数"},
+            {"fdmField": "prod_face_val", "odmField": "face_value", "description": "产品面值"},
+            {"fdmField": "inter_reve_fee_rate", "odmField": "iss_price", "description": "中收费率/发行价格"},
+            {"fdmField": "prod_cumul_net_val", "odmField": "tot_nav", "description": "产品累计净值"},
+            {"fdmField": "prod_mgmt_person", "odmField": "prd_manager", "description": "产品管理人"},
+            {"fdmField": "template_desc", "odmField": "model_comment", "description": "模板说明/业绩比较基准"},
+            {"fdmField": "ctrl_flag", "odmField": "control_flag", "description": "控制标志"},
+            {"fdmField": "evalu_lvl_cd", "odmField": "grade", "description": "评估等级代码"},
+            {"fdmField": "prod_prop_cd", "odmField": "prd_attr", "description": "产品属性代码"},
+            {"fdmField": "risk_lvl_cd", "odmField": "risk_level", "description": "风险等级代码"},
+            {"fdmField": "prod_sts_cd", "odmField": "status", "description": "产品状态代码"},
+            {"fdmField": "currcy_cd", "odmField": "curr_type", "description": "币种代码"},
+            {"fdmField": "cycle_days", "odmField": "cycle_days", "description": "周期天数"},
+            {"fdmField": "exp_revenu_rate", "odmField": "guest_rate", "description": "预期收益率"},
+            {"fdmField": "txn_mode_cd", "odmField": "trans_way", "description": "交易方式代码"},
+            {"fdmField": "coll_begin_dt", "odmField": "ipo_start_date", "description": "募集开始日期"},
+            {"fdmField": "coll_end_dt", "odmField": "ipo_end_date", "description": "募集结束日期"},
+            {"fdmField": "prod_set_up_dt", "odmField": "estab_date", "description": "产品成立日期"},
+            {"fdmField": "prod_val_dt", "odmField": "income_date", "description": "产品起息日期"},
+            {"fdmField": "prod_end_dt", "odmField": "end_date", "description": "产品结束日期"},
+            {"fdmField": "revenu_expir_dt", "odmField": "income_end_date", "description": "收益到期日"},
+            {"fdmField": "coll_after_sealg_expir_dt", "odmField": "alimit_end_date", "description": "募集后封闭到期日"}
+          ],
+          "filterConditions": "FDM拉链：start_dt<=ETL_TX_DT AND end_dt>ETL_TX_DT"
+        },
+        {
+          "originalTable": "F_PD_WMNS_TA_PROD_INF",
+          "fdmScript": "dwa_f_pd_wmns_ta_prod_inf.py",
+          "tdmTable": "T_WMNS_TBTAINFO_{date}",
+          "odmTable": "O_WMNS_TBTAINFO",
+          "fieldMappings": [
+            {"fdmField": "ta_cd", "odmField": "ta_code", "description": "TA代码"},
+            {"fdmField": "ta_abre", "odmField": "ta_shortname", "description": "TA简称"},
+            {"fdmField": "ta_name", "odmField": "ta_name", "description": "TA名称"},
+            {"fdmField": "recon_mode_cd", "odmField": "comp_mode", "description": "对账模式代码"},
+            {"fdmField": "prod_class_cd", "odmField": "prd_type", "description": "产品类别代码"}
+          ]
+        },
+        {
+          "originalTable": "F_PD_WMNS_PROD_INF_EXT_INF",
+          "fdmScript": "dwa_f_pd_wmns_prod_inf_ext_inf.py",
+          "tdmTable": "T_WMNS_TBPRDPARAMVALUE_{date}",
+          "odmTable": "O_WMNS_TBPRDPARAMVALUE",
+          "fieldMappings": [
+            {"fdmField": "prod_no", "odmField": "prd_code", "description": "产品编号"},
+            {"fdmField": "field_cd", "odmField": "field_code", "description": "字段代码"},
+            {"fdmField": "field_val", "odmField": "field_value", "description": "字段值"}
+          ]
+        },
+        {
+          "originalTable": "F_SP_PFMA_PROD_FEE_RATE_ADDIT_RECOR",
+          "fdmScript": "dwa_f_sp_pfma_prod_fee_rate_addit_recor.py",
+          "tdmTable": "T_PFMA_RECORD_MONEY_MANAGE_{date}",
+          "odmTable": "O_PFMA_RECORD_MONEY_MANAGE",
+          "fieldMappings": [
+            {"fdmField": "prod_cd", "odmField": "prd_code", "description": "产品代码"},
+            {"fdmField": "inter_reve_fee_rate", "odmField": "rate", "description": "中收费率"},
+            {"fdmField": "del_sign", "odmField": "delete_flag", "description": "删除标记"},
+            {"fdmField": "biz_class_cd", "odmField": "business_cate", "description": "业务类别代码"},
+            {"fdmField": "start_date", "odmField": "start_dt", "description": "开始日期"},
+            {"fdmField": "end_date", "odmField": "end_dt", "description": "结束日期"}
+          ],
+          "filterConditions": "DEL_SIGN='0' AND BIZ_CLASS_CD='00', 取每个产品最新一条记录(row_number按start_dt DESC)"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "理财产品基本信息",
+          "derivedSql": "SELECT prd_code AS prod_no, prd_name, prd_type AS prod_class_cd, ta_code AS ta_cd, nav AS prod_net_val, face_value AS prod_face_val FROM O_WMNS_TBPRODUCT",
+          "businessMeaning": "获取理财产品基本属性信息",
+          "sourceTable": "O_WMNS_TBPRODUCT",
+          "originalTable": "F_PD_WMNS_PROD_INF"
+        },
+        {
+          "knowledgeName": "理财产品TA关联信息",
+          "derivedSql": "SELECT ta_code AS ta_cd, ta_shortname AS ta_abre, ta_name, comp_mode AS recon_mode_cd, prd_type AS prod_class_cd FROM O_WMNS_TBTAINFO",
+          "businessMeaning": "关联TA产品信息获取TA简称、名称和产品类别",
+          "sourceTable": "O_WMNS_TBTAINFO",
+          "originalTable": "F_PD_WMNS_TA_PROD_INF"
+        },
+        {
+          "knowledgeName": "理财产品费率信息",
+          "derivedSql": "SELECT prd_code AS prod_cd, rate AS inter_reve_fee_rate FROM O_PFMA_RECORD_MONEY_MANAGE WHERE delete_flag = '0' AND business_cate = '00' ORDER BY start_dt DESC",
+          "businessMeaning": "获取理财产品最新的中收费率",
+          "sourceTable": "O_PFMA_RECORD_MONEY_MANAGE",
+          "originalTable": "F_SP_PFMA_PROD_FEE_RATE_ADDIT_RECOR"
+        },
+        {
+          "knowledgeName": "理财净值日期处理规则",
+          "derivedSql": "CASE WHEN nav_date = 0 THEN DATE '1900-01-01' WHEN DATE(CAST(nav_date AS VARCHAR)) IS NULL THEN DATE '2099-12-31' ELSE DATE(CAST(nav_date AS VARCHAR)) END",
+          "businessMeaning": "对理财产品的净值日期进行标准化处理，0值转为最小日期，NULL转为最大日期",
+          "sourceTable": "O_WMNS_TBPRODUCT",
+          "originalTable": "F_PD_WMNS_PROD_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "Step2-向主表插入数据并补充产品到期信息",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_PRD_FIN_SYS_PROD_INF\nSELECT DATE'{ETL_TX_DT}', T01.*,\n       CASE WHEN T01.prod_rmk = 'B102' THEN TTA.end_date\n            WHEN T01.prod_rmk = 'D309' AND T01.ta_cd <> 'Y70' THEN TTC.trans_date\n            WHEN T01.prod_rmk IN ('1300','1301','D309') AND T01.ta_cd = 'Y70' THEN TTD.trans_date\n            ELSE T01.prod_end_dt END AS prod_expir_dt\n  FROM CDM.VT_C_PRD_FIN_SYS_PROD_INF_01 T01\n  LEFT JOIN (子查询取F_PD_WMNS_PROD_PROGM_INF中cycle_type_cd='1'且alw_type_cd='1'最近到期日) TTA ON T01.prod_no=TTA.prod_no\n  LEFT JOIN (子查询取F_CO_WMNS_PROD_WORKD_SET中dt_type_cd='7'最近工作日) TTC ON T01.prod_no=TTC.prod_no\n  LEFT JOIN (子查询取F_CO_WMNS_PROD_WORKD_SET中dt_type_cd='5'最近工作日) TTD ON T01.prod_no=TTD.prod_no",
+      "tracedSqlCode": "INSERT INTO CDM.C_PRD_FIN_SYS_PROD_INF\nSELECT DATE'{ETL_TX_DT}', T01.*,\n       CASE WHEN T01.prod_rmk = 'B102' THEN TTA.end_date\n            WHEN T01.prod_rmk = 'D309' AND T01.ta_code <> 'Y70' THEN TTC.trans_date\n            WHEN T01.prod_rmk IN ('1300','1301','D309') AND T01.ta_code = 'Y70' THEN TTD.trans_date\n            ELSE T01.end_date END AS prod_expir_dt\n  FROM VT_C_PRD_FIN_SYS_PROD_INF_01 T01\n  LEFT JOIN (子查询取O_WMNS_TBCONSIGNCYCLE) TTA ON T01.prd_code=TTA.prd_code\n  LEFT JOIN (子查询取O_WMNS_TBTRANSDAY) TTC ON T01.prd_code=TTC.asso_code\n  LEFT JOIN (子查询取O_WMNS_TBTRANSDAY) TTD ON T01.prd_code=TTD.asso_code",
+      "businessScenario": "理财系统产品信息-根据产品方案信息和产品工作日设置补充三种口径的产品到期日期",
+      "sqlFunction": "多表关联查询+业务规则判断",
+      "involvedTables": ["O_WMNS_TBPRODUCT", "O_WMNS_TBCONSIGNCYCLE", "O_WMNS_TBTRANSDAY"],
+      "originalTables": ["F_PD_WMNS_PROD_INF", "F_PD_WMNS_PROD_PROGM_INF", "F_CO_WMNS_PROD_WORKD_SET"],
+      "tableJoinLogic": "以临时表为主表，根据产品备注(prod_rmk)字段分三种口径：B102→取产品方案到期日(cycle_type_cd='1'且允许赎回alw_type_cd='1')，D309代销→取产品工作日设置(dt_type_cd='7')，1300/1301/D309自营(ta_cd='Y70')→取产品工作日设置(dt_type_cd='5')",
+      "queryDimensions": "产品编号、产品类别代码、TA代码、TA简称、产品名称、产品净值、净值日期、产品面值、募集日期、成立日期、到期日、产品属性、风险等级、产品状态、费率、控制标志、评估等级、累计净值、产品管理人、业绩比较基准",
+      "tags": ["理财产品", "到期日", "产品方案", "工作日设置", "B102", "D309"],
+      "traceChains": [
+        {
+          "originalTable": "F_PD_WMNS_PROD_PROGM_INF",
+          "fdmScript": "dwa_f_pd_wmns_prod_progm_inf.py",
+          "tdmTable": "T_WMNS_TBCONSIGNCYCLE_{date}",
+          "odmTable": "O_WMNS_TBCONSIGNCYCLE",
+          "fieldMappings": [
+            {"fdmField": "prod_no", "odmField": "prd_code", "description": "产品编号"},
+            {"fdmField": "ta_cd", "odmField": "ta_code", "description": "TA代码"},
+            {"fdmField": "alw_type_cd", "odmField": "allow_type", "description": "允许类型代码（1=可赎回）"},
+            {"fdmField": "cycle_type_cd", "odmField": "cycle_type", "description": "周期类型代码（1=按周期）"},
+            {"fdmField": "begin_dt", "odmField": "start_date", "description": "起始日期"},
+            {"fdmField": "term_dt", "odmField": "end_date", "description": "终止日期"},
+            {"fdmField": "del_flag", "odmField": "del_flag", "description": "删除标志"}
+          ],
+          "filterConditions": "cycle_type_cd='1' AND alw_type_cd='1' AND del_flag<>'D' AND term_dt>=ETL_TX_DT，取到期日最小的一条(row_number按term_dt)"
+        },
+        {
+          "originalTable": "F_CO_WMNS_PROD_WORKD_SET",
+          "fdmScript": "dwa_f_co_wmns_prod_workd_set.py",
+          "tdmTable": "T_WMNS_TBTRANSDAY_{date}",
+          "odmTable": "O_WMNS_TBTRANSDAY",
+          "fieldMappings": [
+            {"fdmField": "dt_type_cd", "odmField": "date_type", "description": "日期类型代码（7=工作日, 5=自营）"},
+            {"fdmField": "prod_no", "odmField": "asso_code", "description": "产品编号"},
+            {"fdmField": "workd_dt", "odmField": "trans_date", "description": "工作日日期"}
+          ],
+          "filterConditions": "dt_type_cd='7'（代销）或dt_type_cd='5'（自营），取最近工作日(row_number按workd_dt)"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "B102型产品到期日（赎回口径）",
+          "derivedSql": "SELECT prd_code AS prod_no, end_date AS expir_dt FROM O_WMNS_TBCONSIGNCYCLE WHERE del_flag <> 'D' AND cycle_type = '1' AND allow_type = '1' AND end_date >= '20260101' ORDER BY end_date",
+          "businessMeaning": "B102类产品通过产品方案到期日确定，需满足cycle_type_cd='1'且alw_type_cd='1'（允许赎回）",
+          "sourceTable": "O_WMNS_TBCONSIGNCYCLE",
+          "originalTable": "F_PD_WMNS_PROD_PROGM_INF"
+        },
+        {
+          "knowledgeName": "D309代销产品到期日",
+          "derivedSql": "SELECT asso_code AS prod_no, trans_date AS expir_dt FROM O_WMNS_TBTRANSDAY WHERE date_type = '7' AND trans_date >= '20260101' ORDER BY trans_date",
+          "businessMeaning": "D309代销产品(ta_cd<>'Y70')取产品工作日设置中date_type='7'的最近工作日",
+          "sourceTable": "O_WMNS_TBTRANSDAY",
+          "originalTable": "F_CO_WMNS_PROD_WORKD_SET"
+        },
+        {
+          "knowledgeName": "1300/1301/D309自营产品到期日",
+          "derivedSql": "SELECT asso_code AS prod_no, trans_date AS expir_dt FROM O_WMNS_TBTRANSDAY WHERE date_type = '5' AND trans_date >= '20260101' ORDER BY trans_date",
+          "businessMeaning": "1300/1301/D309自营产品(ta_cd='Y70')取产品工作日设置中date_type='5'的最近工作日",
+          "sourceTable": "O_WMNS_TBTRANSDAY",
+          "originalTable": "F_CO_WMNS_PROD_WORKD_SET"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["O_WMNS_TBPRODUCT", "O_WMNS_TBTAINFO", "O_WMNS_TBPRDPARAMVALUE", "O_PFMA_RECORD_MONEY_MANAGE", "O_WMNS_TBCONSIGNCYCLE", "O_WMNS_TBTRANSDAY"],
+  "allOriginalTables": ["F_PD_WMNS_PROD_INF", "F_PD_WMNS_TA_PROD_INF", "F_PD_WMNS_PROD_INF_EXT_INF", "F_SP_PFMA_PROD_FEE_RATE_ADDIT_RECOR", "F_PD_WMNS_PROD_PROGM_INF", "F_CO_WMNS_PROD_WORKD_SET"],
+  "traceSummary": {
+    "totalFdmTables": 6,
+    "scriptsFound": 6,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "净值日期标准化",
+      "condition": "net_val_dt=0→MIN_DATE, NULL→LEG_DATE",
+      "description": "净值日期0值表示无日期用1900-01-01替代，NULL值用2099-12-31替代"
+    },
+    {
+      "ruleName": "产品到期日多口径判断",
+      "condition": "prod_rmk='B102'→产品方案到期日; prod_rmk='D309'且非Y70→代销工作日; prod_rmk IN('1300','1301','D309')且Y70→自营工作日",
+      "description": "根据产品备注和TA代码确定不同口径的到期日计算方式"
+    },
+    {
+      "ruleName": "产品费率取最新",
+      "condition": "DEL_SIGN='0' AND BIZ_CLASS_CD='00', ROW_NUMBER ORDER BY START_DT DESC",
+      "description": "费率取产品最新一条有效记录，确保费率唯一性"
+    },
+    {
+      "ruleName": "产品类别代码取优先级",
+      "condition": "COALESCE(TPR.prod_class_cd, TTA.prod_class_cd)",
+      "description": "产品类别代码优先取产品信息，若无则取TA产品信息中的类别代码"
+    }
+  ]
+}

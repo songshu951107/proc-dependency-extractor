@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hb.extractor.dto.BatchExtractResult;
 import com.hb.extractor.dto.ScriptVO;
 import com.hb.extractor.entity.ProcInfo;
+import com.hb.extractor.entity.ProcParseFail;
 import com.hb.extractor.entity.ProcTableDependency;
 import com.hb.extractor.entity.SqlBlockInfo;
 import com.hb.extractor.entity.TableBlockCondition;
@@ -17,6 +18,7 @@ import com.hb.extractor.entity.TableTransformInput;
 import com.hb.extractor.mapper.ProcInfoMapper;
 import com.hb.extractor.mapper.ProcTableDependencyMapper;
 import com.hb.extractor.mapper.SqlBlockInfoMapper;
+import com.hb.extractor.mapper.ProcParseFailMapper;
 import com.hb.extractor.mapper.TableBlockConditionMapper;
 import com.hb.extractor.mapper.TableFieldMappingMapper;
 import com.hb.extractor.mapper.TableLineageFilterMapper;
@@ -81,6 +83,9 @@ public class ProcExtractServiceImpl implements ProcExtractService {
 
     @Autowired
     private SqlBlockInfoMapper sqlBlockInfoMapper;
+
+    @Autowired
+    private ProcParseFailMapper procParseFailMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -322,6 +327,8 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                 .eq(TableBlockCondition::getProcName, procName));
         sqlBlockInfoMapper.delete(new LambdaQueryWrapper<SqlBlockInfo>()
                 .eq(SqlBlockInfo::getProcName, procName));
+        procParseFailMapper.delete(new LambdaQueryWrapper<ProcParseFail>()
+                .eq(ProcParseFail::getProcName, procName));
 
         procInfoMapper.deleteById(procInfo.getId());
         return true;
@@ -438,6 +445,8 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                     .eq(TableBlockCondition::getProcName, procName));
             sqlBlockInfoMapper.delete(new LambdaQueryWrapper<SqlBlockInfo>()
                     .eq(SqlBlockInfo::getProcName, procName));
+            procParseFailMapper.delete(new LambdaQueryWrapper<ProcParseFail>()
+                    .eq(ProcParseFail::getProcName, procName));
 
             // 插入 edges
             List<TableLineage> lineageRecords = new ArrayList<>();
@@ -541,12 +550,18 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                 String c = bi.getContent().trim().toUpperCase();
                 String blockType;
                 String targetTable = null;
-                if (c.startsWith("CREATE TEMP") || c.startsWith("CREATE TEMPORARY")) {
+                // P7: 正则判定兼容多空格（CREATE  TEMPORARY）；脚本内 CREATE TABLE 建的表一律视为临时表
+                java.util.regex.Matcher createTempM = java.util.regex.Pattern.compile(
+                        "^CREATE\\s+TEMP(?:ORARY)?\\s+TABLE\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)",
+                        java.util.regex.Pattern.CASE_INSENSITIVE).matcher(bi.getContent().trim());
+                java.util.regex.Matcher createTableM = java.util.regex.Pattern.compile(
+                        "^CREATE\\s+TABLE\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)",
+                        java.util.regex.Pattern.CASE_INSENSITIVE).matcher(bi.getContent().trim());
+                boolean isCreateTemp = createTempM.find();
+                boolean isCreateTable = createTableM.find();
+                if (c.startsWith("CREATE") && (isCreateTemp || isCreateTable)) {
                     blockType = "CREATE_TEMP";
-                    java.util.regex.Matcher m = java.util.regex.Pattern.compile(
-                            "CREATE\\s+(?:TEMP|TEMPORARY)\\s+TABLE\\s+(?:(?:\\{\\w+\\}|\\w+)\\.)?(\\w+)",
-                            java.util.regex.Pattern.CASE_INSENSITIVE).matcher(bi.getContent());
-                    if (m.find()) targetTable = m.group(1);
+                    targetTable = isCreateTemp ? createTempM.group(1) : createTableM.group(1);
                 } else if (c.startsWith("INSERT")) {
                     blockType = "INSERT_SELECT";
                     java.util.regex.Matcher m = java.util.regex.Pattern.compile(
@@ -568,6 +583,19 @@ public class ProcExtractServiceImpl implements ProcExtractService {
                 record.setSqlContent(bi.getContent());
                 record.setExtractTime(now);
                 sqlBlockInfoMapper.insert(record);
+            }
+
+            // 插入 SQL 块解析失败明细
+            for (com.hb.extractor.parser.dto.ParseFailure pf : lineageResult.getFailures()) {
+                ProcParseFail rec = new ProcParseFail();
+                rec.setProcName(procName);
+                rec.setBlockSeq(pf.getBlockSeq());
+                rec.setBlockType(pf.getBlockType());
+                rec.setFailReason(pf.getFailReason());
+                rec.setSqlPreview(pf.getSqlPreview());
+                rec.setResolved(0);
+                rec.setCreatedAt(now);
+                procParseFailMapper.insert(rec);
             }
         }
 
@@ -598,5 +626,50 @@ public class ProcExtractServiceImpl implements ProcExtractService {
         LambdaQueryWrapper<ProcInfo> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(ProcInfo::getProcName, procName);
         return procInfoMapper.selectOne(wrapper);
+    }
+
+    @Override
+    public IPage<ProcParseFail> listParseFails(int pageNum, int pageSize, String procName, Boolean onlyUnresolved) {
+        Page<ProcParseFail> page = new Page<>(pageNum, pageSize);
+        LambdaQueryWrapper<ProcParseFail> wrapper = new LambdaQueryWrapper<>();
+        if (procName != null && !procName.trim().isEmpty()) {
+            wrapper.like(ProcParseFail::getProcName, procName.trim());
+        }
+        if (Boolean.TRUE.equals(onlyUnresolved)) {
+            wrapper.eq(ProcParseFail::getResolved, 0);
+        }
+        wrapper.orderByDesc(ProcParseFail::getCreatedAt)
+               .orderByAsc(ProcParseFail::getBlockSeq);
+        return procParseFailMapper.selectPage(page, wrapper);
+    }
+
+    @Override
+    public boolean resolveParseFail(Long id) {
+        ProcParseFail rec = procParseFailMapper.selectById(id);
+        if (rec == null) {
+            return false;
+        }
+        rec.setResolved(1);
+        procParseFailMapper.updateById(rec);
+        return true;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public ProcInfo reparse(String procName) {
+        ProcInfo existing = getProcByName(procName);
+        if (existing == null) {
+            throw new IllegalArgumentException("存储过程不存在: " + procName);
+        }
+        Path path = Paths.get(existing.getFilePath());
+        if (!Files.exists(path)) {
+            throw new IllegalArgumentException("源文件不存在: " + existing.getFilePath());
+        }
+        try {
+            ProcMetadata metadata = parser.parse(path);
+            return saveMetadata(metadata);
+        } catch (IOException e) {
+            throw new RuntimeException("重新解析失败: " + e.getMessage(), e);
+        }
     }
 }

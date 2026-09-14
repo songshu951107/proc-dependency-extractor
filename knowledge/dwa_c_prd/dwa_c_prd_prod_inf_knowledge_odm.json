@@ -1,0 +1,375 @@
+{
+  "scriptName": "dwa_c_prd_prod_inf.py",
+  "scriptLayer": "CDM",
+  "targetLayer": "ODM",
+  "extractTime": "2026-05-12T10:30:00",
+  "businessScenario": "共性层产品信息-汇聚六大业务系统（理财、电子国债、信用卡、核心、核心结算、信贷）的产品信息到统一产品维度表",
+  "updateMethod": "每日全量（TRUNCATE后全量插入）",
+  "targetTable": "C_PRD_PROD_INF",
+  "totalBlocks": 7,
+  "fdmScriptsAnalyzed": [
+    {
+      "fdmTable": "F_PD_WMNS_PROD_INF",
+      "fdmScript": "dwa_f_pd_wmns_prod_inf.py",
+      "found": true,
+      "tdmTable": "T_WMNS_TBPRODUCT_{date}",
+      "odmTable": "O_WMNS_TBPRODUCT",
+      "transformLogic": "FDM字段标准化映射"
+    },
+    {
+      "fdmTable": "F_PD_CCRD_APPL_CARD_TYPE_PROD_INF",
+      "fdmScript": "dwa_f_pd_ccrd_appl_card_type_prod_inf.py",
+      "found": true,
+      "tdmTable": "T_CCRD_PRMCD_{date}",
+      "odmTable": "O_CCRD_PRMCD",
+      "transformLogic": "FDM字段标准化：product→prod_cd, prod_desc→prod_desc, prod_level→prod_level_cd等"
+    },
+    {
+      "fdmTable": "F_PD_CRBS_PROD_DEF_INF",
+      "fdmScript": "dwa_f_pd_crbs_prod_def_inf.py",
+      "found": true,
+      "tdmTable": "T_CRBS_PPROD_{date}",
+      "odmTable": "O_CRBS_PPROD",
+      "transformLogic": "FDM字段标准化：CHAPBH→prod_no, CHAPMX→prod_desc, MODULE→modl_cd等"
+    },
+    {
+      "fdmTable": "F_CO_CRBS_STL_BIZ_PROD_PARAM",
+      "fdmScript": "dwa_f_co_crbs_stl_biz_prod_param.py",
+      "found": true,
+      "tdmTable": "T_CRBS_PYWCP_{date}",
+      "odmTable": "O_CRBS_PYWCP",
+      "transformLogic": "FDM字段标准化：CHAPDM→biz_prod_cd, CHPNMC→biz_prod_name, YWGXJB→biz_prod_lvl_cd等"
+    },
+    {
+      "fdmTable": "F_CO_CRBS_SUP_SUBOR_CAP_INTAL_PARAM",
+      "fdmScript": "dwa_f_co_crbs_sup_subor_cap_intal_param.py",
+      "found": true,
+      "tdmTable": "T_CRBS_PZJC1_{date}",
+      "odmTable": "O_CRBS_PZJC1",
+      "transformLogic": "FDM字段标准化：CHAPBH→prod_cd, CHAPMX→prod_descn等"
+    },
+    {
+      "fdmTable": "F_PD_CRMS_LOAN_BIZ_PROD",
+      "fdmScript": "dwa_f_pd_crms_loan_biz_prod.py",
+      "found": true,
+      "tdmTable": "T_CRMS_BUSINESS_TYPE_{date}",
+      "odmTable": "O_CRMS_BUSINESS_TYPE",
+      "transformLogic": "FDM字段标准化：TYPENO→prod_no, TYPENAME→prod_name等"
+    }
+  ],
+  "knowledgeBlocks": [
+    {
+      "blockIndex": 1,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "理财系统产品信息",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT PROD_NO, PROD_NAME, PROD_ALIAS, ' ', '1', '', '', 'WMNS01'\n  FROM FDM.F_PD_WMNS_PROD_INF T\n WHERE start_dt <= DATE'{ETL_TX_DT}' AND end_dt > DATE'{ETL_TX_DT}'",
+      "tracedSqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT prd_code, prd_name, prd_name2, ' ', '1', '', '', 'WMNS01'\n  FROM ODM.O_WMNS_TBPRODUCT",
+      "businessScenario": "共性层产品信息-接入理财系统产品，来源系统WMNS01",
+      "sqlFunction": "单表数据汇聚",
+      "involvedTables": ["O_WMNS_TBPRODUCT"],
+      "originalTables": ["F_PD_WMNS_PROD_INF"],
+      "tableJoinLogic": "单表查询，理财产品信息映射到统一产品维度表",
+      "queryDimensions": "产品代码、产品名称、产品描述、业务模块分类代码、产品层级代码、父产品代码、表内外标志、来源系统",
+      "tags": ["理财系统", "产品信息", "WMNS01", "共性层"],
+      "traceChains": [
+        {
+          "originalTable": "F_PD_WMNS_PROD_INF",
+          "fdmScript": "dwa_f_pd_wmns_prod_inf.py",
+          "tdmTable": "T_WMNS_TBPRODUCT_{date}",
+          "odmTable": "O_WMNS_TBPRODUCT",
+          "fieldMappings": [
+            {"fdmField": "prod_no", "odmField": "prd_code", "description": "产品代码"},
+            {"fdmField": "prod_name", "odmField": "prd_name", "description": "产品名称"},
+            {"fdmField": "prod_alias", "odmField": "prd_name2", "description": "产品别名（用做产品描述）"}
+          ],
+          "filterConditions": "FDM拉链有效：start_dt<=ETL_TX_DT AND end_dt>ETL_TX_DT"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "理财系统产品列表",
+          "derivedSql": "SELECT prd_code AS prod_cd, prd_name AS prod_name, prd_name2 AS prod_descn FROM O_WMNS_TBPRODUCT",
+          "businessMeaning": "获取理财系统所有产品的基础信息，用于构建统一产品维度",
+          "sourceTable": "O_WMNS_TBPRODUCT",
+          "originalTable": "F_PD_WMNS_PROD_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 2,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "电子国债产品信息",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT zqdm, zqqm, zqjc, ' ', '1', '', '', 'EBOS01'\n  FROM ODM.O_SBIM_EBONDINFO\n WHERE start_dt <= DATE'{ETL_TX_DT}' AND end_dt > DATE'{ETL_TX_DT}' AND del_ind <> 'D'",
+      "businessScenario": "共性层产品信息-接入电子国债系统产品，来源系统EBOS01，已是ODM层表无需追溯",
+      "sqlFunction": "单表数据汇聚",
+      "involvedTables": ["O_SBIM_EBONDINFO"],
+      "originalTables": ["O_SBIM_EBONDINFO"],
+      "tableJoinLogic": "单表查询，电子国债信息直接映射到统一产品维度表（已是ODM层）",
+      "queryDimensions": "债券代码、债券全名、债券简称、来源系统",
+      "tags": ["电子国债", "产品信息", "EBOS01", "ODM层"],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "电子国债产品列表",
+          "derivedSql": "SELECT zqdm AS prod_cd, zqqm AS prod_name, zqjc AS prod_descn FROM O_SBIM_EBONDINFO WHERE del_ind <> 'D'",
+          "businessMeaning": "获取电子国债系统的债券产品信息（新国债系统EBOS01）",
+          "sourceTable": "O_SBIM_EBONDINFO",
+          "originalTable": "O_SBIM_EBONDINFO"
+        }
+      ]
+    },
+    {
+      "blockIndex": 3,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "信用卡产品信息",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT to_char(prod_cd), prod_desc, '', '', '1', '', '', 'CCRD01'\n  FROM FDM.F_PD_CCRD_APPL_CARD_TYPE_PROD_INF\n WHERE start_dt <= DATE'{ETL_TX_DT}' AND end_dt > DATE'{ETL_TX_DT}'",
+      "tracedSqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT to_char(product), prod_desc, '', '', '1', '', '', 'CCRD01'\n  FROM ODM.O_CCRD_PRMCD",
+      "businessScenario": "共性层产品信息-接入信用卡系统卡种产品信息，来源系统CCRD01",
+      "sqlFunction": "单表数据汇聚",
+      "involvedTables": ["O_CCRD_PRMCD"],
+      "originalTables": ["F_PD_CCRD_APPL_CARD_TYPE_PROD_INF"],
+      "tableJoinLogic": "单表查询，信用卡产品信息映射到统一产品维度表",
+      "queryDimensions": "产品代码、产品名称、来源系统",
+      "tags": ["信用卡", "产品信息", "CCRD01", "卡种"],
+      "traceChains": [
+        {
+          "originalTable": "F_PD_CCRD_APPL_CARD_TYPE_PROD_INF",
+          "fdmScript": "dwa_f_pd_ccrd_appl_card_type_prod_inf.py",
+          "tdmTable": "T_CCRD_PRMCD_{date}",
+          "odmTable": "O_CCRD_PRMCD",
+          "fieldMappings": [
+            {"fdmField": "prod_cd", "odmField": "product", "description": "产品代码"},
+            {"fdmField": "prod_desc", "odmField": "prod_desc", "description": "产品描述"}
+          ],
+          "filterConditions": "FDM拉链有效，TDM层取CA_SEQ最大值去重"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "信用卡卡种产品列表",
+          "derivedSql": "SELECT product AS prod_cd, prod_desc AS prod_name FROM O_CCRD_PRMCD",
+          "businessMeaning": "获取信用卡系统的卡种产品信息（取最大CA_SEQ记录去重）",
+          "sourceTable": "O_CCRD_PRMCD",
+          "originalTable": "F_PD_CCRD_APPL_CARD_TYPE_PROD_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 4,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "核心系统产品定义信息",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT prod_no, prod_desc, '', modl_cd, '1', '', '', 'CRBS01'\n  FROM FDM.F_PD_CRBS_PROD_DEF_INF\n WHERE start_dt <= DATE'{ETL_TX_DT}' AND end_dt > DATE'{ETL_TX_DT}'",
+      "tracedSqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT CHAPBH AS prod_no, CHAPMX AS prod_desc, '', MODULE AS modl_cd, '1', '', '', 'CRBS01'\n  FROM ODM.O_CRBS_PPROD",
+      "businessScenario": "共性层产品信息-接入核心系统产品定义信息，来源系统CRBS01",
+      "sqlFunction": "单表数据汇聚",
+      "involvedTables": ["O_CRBS_PPROD"],
+      "originalTables": ["F_PD_CRBS_PROD_DEF_INF"],
+      "tableJoinLogic": "单表查询，核心系统产品定义映射到统一产品维度表",
+      "queryDimensions": "产品代码、产品名称、模块代码（业务模块分类代码）、来源系统",
+      "tags": ["核心系统", "产品定义", "CRBS01"],
+      "traceChains": [
+        {
+          "originalTable": "F_PD_CRBS_PROD_DEF_INF",
+          "fdmScript": "dwa_f_pd_crbs_prod_def_inf.py",
+          "tdmTable": "T_CRBS_PPROD_{date}",
+          "odmTable": "O_CRBS_PPROD",
+          "fieldMappings": [
+            {"fdmField": "prod_no", "odmField": "CHAPBH", "description": "产品编号"},
+            {"fdmField": "prod_desc", "odmField": "CHAPMX", "description": "产品描述"},
+            {"fdmField": "modl_cd", "odmField": "MODULE", "description": "模块代码"}
+          ],
+          "filterConditions": "FDM拉链有效"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "核心系统产品定义列表",
+          "derivedSql": "SELECT CHAPBH AS prod_no, CHAPMX AS prod_desc, MODULE AS modl_cd FROM O_CRBS_PPROD",
+          "businessMeaning": "获取核心系统产品定义信息，其中MODULE即为业务模块分类代码",
+          "sourceTable": "O_CRBS_PPROD",
+          "originalTable": "F_PD_CRBS_PROD_DEF_INF"
+        }
+      ]
+    },
+    {
+      "blockIndex": 5,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "核心业务结算产品类型",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT biz_prod_cd, biz_prod_name, '', modl_cd, biz_prod_lvl_cd, belo_to_prod_cd, '', 'CRBS02'\n  FROM FDM.F_CO_CRBS_STL_BIZ_PROD_PARAM\n WHERE start_dt <= DATE'{ETL_TX_DT}' AND end_dt > DATE'{ETL_TX_DT}'",
+      "tracedSqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT CHAPDM AS biz_prod_cd, CHPNMC AS biz_prod_name, '', MODULE AS modl_cd, YWGXJB AS biz_prod_lvl_cd, GSCPDM AS belo_to_prod_cd, '', 'CRBS02'\n  FROM ODM.O_CRBS_PYWCP",
+      "businessScenario": "共性层产品信息-接入核心结算业务产品参数，来源系统CRBS02，该表带有产品层级关系和父产品信息",
+      "sqlFunction": "单表数据汇聚（含层级关系）",
+      "involvedTables": ["O_CRBS_PYWCP"],
+      "originalTables": ["F_CO_CRBS_STL_BIZ_PROD_PARAM"],
+      "tableJoinLogic": "单表查询，核心结算业务产品参数直接映射，含有产品层级和父子关系",
+      "queryDimensions": "产品代码、产品名称、模块代码、产品层级代码、父产品代码、来源系统",
+      "tags": ["核心系统", "结算产品", "CRBS02", "产品层级"],
+      "traceChains": [
+        {
+          "originalTable": "F_CO_CRBS_STL_BIZ_PROD_PARAM",
+          "fdmScript": "dwa_f_co_crbs_stl_biz_prod_param.py",
+          "tdmTable": "T_CRBS_PYWCP_{date}",
+          "odmTable": "O_CRBS_PYWCP",
+          "fieldMappings": [
+            {"fdmField": "biz_prod_cd", "odmField": "CHAPDM", "description": "业务产品代码"},
+            {"fdmField": "biz_prod_name", "odmField": "CHPNMC", "description": "业务产品名称"},
+            {"fdmField": "modl_cd", "odmField": "MODULE", "description": "模块代码"},
+            {"fdmField": "biz_prod_lvl_cd", "odmField": "YWGXJB", "description": "业务产品级别代码"},
+            {"fdmField": "belo_to_prod_cd", "odmField": "GSCPDM", "description": "归属产品代码"}
+          ],
+          "filterConditions": "FDM拉链有效"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "核心结算产品层级信息",
+          "derivedSql": "SELECT CHAPDM AS biz_prod_cd, CHPNMC AS biz_prod_name, YWGXJB AS biz_prod_lvl_cd, GSCPDM AS father_prod_cd FROM O_CRBS_PYWCP",
+          "businessMeaning": "获取核心结算业务产品的层级结构和父子产品关系，用于构建产品树",
+          "sourceTable": "O_CRBS_PYWCP",
+          "originalTable": "F_CO_CRBS_STL_BIZ_PROD_PARAM"
+        }
+      ]
+    },
+    {
+      "blockIndex": 6,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "核心上下级资金内部参数",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT prod_cd, prod_descn, '', '', '', '1', '', 'CRBS03'\n  FROM FDM.F_CO_CRBS_SUP_SUBOR_CAP_INTAL_PARAM\n WHERE start_dt <= DATE'{ETL_TX_DT}' AND end_dt > DATE'{ETL_TX_DT}'",
+      "tracedSqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT CHAPBH AS prod_cd, CHAPMX AS prod_descn, '', '', '', '1', '', 'CRBS03'\n  FROM ODM.O_CRBS_PZJC1",
+      "businessScenario": "共性层产品信息-接入核心上下级资金内部参数，来源系统CRBS03",
+      "sqlFunction": "单表数据汇聚",
+      "involvedTables": ["O_CRBS_PZJC1"],
+      "originalTables": ["F_CO_CRBS_SUP_SUBOR_CAP_INTAL_PARAM"],
+      "tableJoinLogic": "单表查询，核心上下级资金内部参数映射到统一产品维度表，父产品代码固定为'1'",
+      "queryDimensions": "产品代码、产品描述、来源系统",
+      "tags": ["核心系统", "资金内部参数", "CRBS03", "上下级"],
+      "traceChains": [
+        {
+          "originalTable": "F_CO_CRBS_SUP_SUBOR_CAP_INTAL_PARAM",
+          "fdmScript": "dwa_f_co_crbs_sup_subor_cap_intal_param.py",
+          "tdmTable": "T_CRBS_PZJC1_{date}",
+          "odmTable": "O_CRBS_PZJC1",
+          "fieldMappings": [
+            {"fdmField": "prod_cd", "odmField": "CHAPBH", "description": "产品代码"},
+            {"fdmField": "prod_descn", "odmField": "CHAPMX", "description": "产品描述"}
+          ],
+          "filterConditions": "FDM拉链有效"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "核心资金内部参数产品列表",
+          "derivedSql": "SELECT CHAPBH AS prod_cd, CHAPMX AS prod_descn FROM O_CRBS_PZJC1",
+          "businessMeaning": "获取核心系统上下级资金内部参数中的产品信息",
+          "sourceTable": "O_CRBS_PZJC1",
+          "originalTable": "F_CO_CRBS_SUP_SUBOR_CAP_INTAL_PARAM"
+        }
+      ]
+    },
+    {
+      "blockIndex": 7,
+      "parentBlockIndex": 0,
+      "blockType": "INSERT",
+      "blockName": "信贷系统产品信息",
+      "depth": 0,
+      "sqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT prod_no, prod_name, '', '',\n       TRIM(TO_CHAR(((LENGTH(A.prod_no)-1)/3+1),'9999999999')),\n       CASE WHEN LENGTH(A.prod_no)>3 THEN SUBSTR(A.prod_no,1,LENGTH(A.prod_no)-3) ELSE '0' END,\n       CASE SUBSTR(A.prod_no,1,1) WHEN '1' THEN '1' WHEN '2' THEN '0' ELSE '' END,\n       'CRMS01'\n  FROM FDM.F_PD_CRMS_LOAN_BIZ_PROD A\n WHERE START_DT <= '{ETL_TX_DT}' AND end_dt > '{ETL_TX_DT}'",
+      "tracedSqlCode": "INSERT INTO CDM.C_PRD_PROD_INF(prod_cd,prod_name,prod_descn,biz_modl_class_cD,prod_lvl_cd,father_prod_cd,on_off_bal_flag,sourc_sys)\nSELECT TYPENO AS prod_no, TYPENAME AS prod_name, '', '',\n       TRIM(TO_CHAR(((LENGTH(TYPENO)-1)/3+1),'9999999999')),\n       CASE WHEN LENGTH(TYPENO)>3 THEN SUBSTR(TYPENO,1,LENGTH(TYPENO)-3) ELSE '0' END,\n       CASE SUBSTR(TYPENO,1,1) WHEN '1' THEN '1' WHEN '2' THEN '0' ELSE '' END,\n       'CRMS01'\n  FROM ODM.O_CRMS_BUSINESS_TYPE",
+      "businessScenario": "共性层产品信息-接入信贷系统产品信息，来源系统CRMS01，通过产品编号编码规则自动推导产品层级、父产品和表内外标志",
+      "sqlFunction": "单表数据汇聚+编码规则推导",
+      "involvedTables": ["O_CRMS_BUSINESS_TYPE"],
+      "originalTables": ["F_PD_CRMS_LOAN_BIZ_PROD"],
+      "tableJoinLogic": "单表查询，通过信贷产品编号的编码规则（3位一层）自动计算产品层级、父产品关系和表内外标志",
+      "queryDimensions": "产品代码、产品名称、产品层级代码（自动计算）、父产品代码（自动计算）、表内外标志（按首字母推导）、来源系统",
+      "tags": ["信贷系统", "产品信息", "CRMS01", "编码规则", "产品层级"],
+      "traceChains": [
+        {
+          "originalTable": "F_PD_CRMS_LOAN_BIZ_PROD",
+          "fdmScript": "dwa_f_pd_crms_loan_biz_prod.py",
+          "tdmTable": "T_CRMS_BUSINESS_TYPE_{date}",
+          "odmTable": "O_CRMS_BUSINESS_TYPE",
+          "fieldMappings": [
+            {"fdmField": "prod_no", "odmField": "TYPENO", "description": "产品编号"},
+            {"fdmField": "prod_name", "odmField": "TYPENAME", "description": "产品名称"}
+          ],
+          "filterConditions": "FDM拉链有效"
+        }
+      ],
+      "derivedKnowledge": [
+        {
+          "knowledgeName": "信贷产品层级自动计算",
+          "derivedSql": "SELECT TYPENO, TRIM(TO_CHAR(((LENGTH(TYPENO)-1)/3+1),'9999999999')) AS prod_lvl FROM O_CRMS_BUSINESS_TYPE",
+          "businessMeaning": "信贷产品编号3位一层，根据编号长度自动计算产品层级，如3位为1层，6位为2层",
+          "sourceTable": "O_CRMS_BUSINESS_TYPE",
+          "originalTable": "F_PD_CRMS_LOAN_BIZ_PROD"
+        },
+        {
+          "knowledgeName": "信贷产品父产品推导",
+          "derivedSql": "SELECT TYPENO, CASE WHEN LENGTH(TYPENO)>3 THEN SUBSTR(TYPENO,1,LENGTH(TYPENO)-3) ELSE '0' END AS father_prod_cd FROM O_CRMS_BUSINESS_TYPE",
+          "businessMeaning": "通过去掉产品编号末3位得到父产品编号，3位以内默认为顶级'0'",
+          "sourceTable": "O_CRMS_BUSINESS_TYPE",
+          "originalTable": "F_PD_CRMS_LOAN_BIZ_PROD"
+        },
+        {
+          "knowledgeName": "信贷产品表内外标志推导",
+          "derivedSql": "SELECT TYPENO, CASE SUBSTR(TYPENO,1,1) WHEN '1' THEN '1' WHEN '2' THEN '0' ELSE '' END AS on_off_bal_flag FROM O_CRMS_BUSINESS_TYPE",
+          "businessMeaning": "按产品编号首字母判断表内外标志：'1'开头=表内(1), '2'开头=表外(0)",
+          "sourceTable": "O_CRMS_BUSINESS_TYPE",
+          "originalTable": "F_PD_CRMS_LOAN_BIZ_PROD"
+        },
+        {
+          "knowledgeName": "信贷系统产品列表",
+          "derivedSql": "SELECT TYPENO AS prod_no, TYPENAME AS prod_name FROM O_CRMS_BUSINESS_TYPE",
+          "businessMeaning": "获取信贷系统所有业务产品类型信息",
+          "sourceTable": "O_CRMS_BUSINESS_TYPE",
+          "originalTable": "F_PD_CRMS_LOAN_BIZ_PROD"
+        }
+      ]
+    }
+  ],
+  "allInvolvedTables": ["O_WMNS_TBPRODUCT", "O_SBIM_EBONDINFO", "O_CCRD_PRMCD", "O_CRBS_PPROD", "O_CRBS_PYWCP", "O_CRBS_PZJC1", "O_CRMS_BUSINESS_TYPE"],
+  "allOriginalTables": ["F_PD_WMNS_PROD_INF", "O_SBIM_EBONDINFO", "F_PD_CCRD_APPL_CARD_TYPE_PROD_INF", "F_PD_CRBS_PROD_DEF_INF", "F_CO_CRBS_STL_BIZ_PROD_PARAM", "F_CO_CRBS_SUP_SUBOR_CAP_INTAL_PARAM", "F_PD_CRMS_LOAN_BIZ_PROD"],
+  "traceSummary": {
+    "totalFdmTables": 6,
+    "scriptsFound": 6,
+    "scriptsNotFound": 0,
+    "notFoundTables": []
+  },
+  "keyBusinessRules": [
+    {
+      "ruleName": "多系统产品统一汇聚",
+      "condition": "七大来源系统：WMNS01(理财)、EBOS01(国债)、CCRD01(信用卡)、CRBS01(核心产品定义)、CRBS02(核心结算)、CRBS03(核心资金参数)、CRMS01(信贷)",
+      "description": "从六大系统七类数据源汇聚产品信息到统一的产品维度表C_PRD_PROD_INF"
+    },
+    {
+      "ruleName": "信贷产品编码层级规则",
+      "condition": "产品层级=(LENGTH(prod_no)-1)/3+1, 父产品=SUBSTR(prod_no,1,LENGTH(prod_no)-3)",
+      "description": "信贷产品编号每3位一级，如'1001'为2级产品，父产品为'1'"
+    },
+    {
+      "ruleName": "信贷产品表内外标志规则",
+      "condition": "首字母'1'→表内(1), '2'→表外(0)",
+      "description": "根据信贷产品编号首字母判断产品是在表内还是表外"
+    },
+    {
+      "ruleName": "每日全量覆盖",
+      "condition": "TRUNCATE TABLE C_PRD_PROD_INF后全量插入",
+      "description": "共性层产品信息表采用全量刷新模式，先清空再插入当天所有有效数据"
+    },
+    {
+      "ruleName": "新国债系统上线",
+      "condition": "国债来源从旧系统改为O_SBIM_EBONDINFO（EBOS01）",
+      "description": "2025年10月旧国债系统下线，切换为新国债系统数据源"
+    }
+  ]
+}

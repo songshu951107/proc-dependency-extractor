@@ -283,7 +283,8 @@ public class ReportParseServiceImpl implements ReportParseService {
     @Override
     public List<ReportInfo> parseBatch(String dirPath) {
         List<ReportInfo> results = new ArrayList<>();
-        try (Stream<Path> stream = Files.list(Paths.get(dirPath))) {
+        // Files.walk 递归遍历子目录，适配多层文件夹存放报表文件
+        try (Stream<Path> stream = Files.walk(Paths.get(dirPath))) {
             stream.filter(Files::isRegularFile)
                     .filter(p -> {
                         String name = p.getFileName().toString().toLowerCase();

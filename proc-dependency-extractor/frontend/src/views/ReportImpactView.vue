@@ -343,96 +343,19 @@ async function handleQuery(form) {
   }
 }
 
-// ---- 溯源图谱构建（复用 ImpactAnalysis 的 buildWithoutTemp 逻辑）----
+// ---- 溯源图谱构建：直接使用 trace 返回的字段级上游链路（DERIVED_FROM）----
+// 注意：不能用 buildWithoutTemp(impactedByDepth)——那是下游表级 BFS（从 sourceTable 出发沿
+// impactSource→target 取邻居）；字段级 UPSTREAM 的 impactedByDepth 方向相反（sourceTable 不是
+// 任何表节点，BFS 立即终止，只剩源表一个节点）。溯源应直接用字段级 nodes/edges 渲染上游链路。
 function buildLineageGraph(data) {
-  const sourceTable = data?.sourceTable
-  const sourceLayer = data?.sourceLayer
-  const impactedByDepth = data?.impactedByDepth || {}
-  const { nodes, edges } = buildWithoutTemp(sourceTable, sourceLayer, impactedByDepth)
+  const nodes = data?.nodes || []
+  const edges = data?.edges || []
   allNodesByDepth.value = nodes
   allEdgesList.value = edges
   // 默认展示 depth <= 3 的节点
-  const visibleIds = nodes.filter(n => n.depth <= DEFAULT_VISIBLE_DEPTH).map(n => n.id)
+  const visibleIds = nodes.filter(n => (n.depth ?? 0) <= DEFAULT_VISIBLE_DEPTH).map(n => n.id)
   graphInitialNodes.value = nodes.filter(n => visibleIds.includes(n.id))
   graphInitialEdges.value = edges.filter(e => visibleIds.includes(e.source) && visibleIds.includes(e.target))
-}
-
-// 构建不含临时表的节点和边（穿透临时表）
-function buildWithoutTemp(sourceTable, sourceLayer, impactedByDepth) {
-  const adjacency = {}
-  for (const tables of Object.values(impactedByDepth)) {
-    for (const t of tables) {
-      if (t.impactSource) {
-        if (!adjacency[t.impactSource]) adjacency[t.impactSource] = []
-        adjacency[t.impactSource].push({ name: t.name, temp: t.temp })
-      }
-    }
-  }
-  const tableInfoMap = {}
-  for (const tables of Object.values(impactedByDepth)) {
-    for (const t of tables) {
-      tableInfoMap[t.name] = {
-        layer: t.layer, temp: t.temp, scriptFile: t.scriptFile,
-        shortName: t.shortName, columns: t.columns, matchedColumns: t.matchedColumns
-      }
-    }
-  }
-  const depthMap = { [sourceTable]: 0 }
-  const impactSourceMap = {}
-  const queue = [sourceTable]
-  while (queue.length) {
-    const current = queue.shift()
-    const currentDepth = depthMap[current]
-    const neighbors = adjacency[current] || []
-    for (const neighbor of neighbors) {
-      if (!neighbor.temp && !(neighbor.name in depthMap)) {
-        depthMap[neighbor.name] = currentDepth + 1
-        impactSourceMap[neighbor.name] = current
-        queue.push(neighbor.name)
-      } else if (neighbor.temp) {
-        const tempQueue = [neighbor.name]
-        const visited = new Set([neighbor.name])
-        while (tempQueue.length) {
-          const tempNode = tempQueue.shift()
-          const tempNeighbors = adjacency[tempNode] || []
-          for (const tn of tempNeighbors) {
-            if (visited.has(tn.name)) continue
-            visited.add(tn.name)
-            if (!tn.temp && !(tn.name in depthMap)) {
-              depthMap[tn.name] = currentDepth + 1
-              impactSourceMap[tn.name] = current
-              queue.push(tn.name)
-            } else if (tn.temp) {
-              tempQueue.push(tn.name)
-            }
-          }
-        }
-      }
-    }
-  }
-  // 构建节点
-  const nodes = []
-  const sourceInfo = tableInfoMap[sourceTable] || {}
-  nodes.push({
-    id: sourceTable, label: sourceInfo.shortName || sourceTable.split('.')[1] || sourceTable,
-    layer: sourceLayer || sourceInfo.layer, depth: 0, isTemp: false,
-    scriptFile: sourceInfo.scriptFile, columns: sourceInfo.columns, matchedColumns: sourceInfo.matchedColumns
-  })
-  for (const name in depthMap) {
-    if (name === sourceTable) continue
-    const info = tableInfoMap[name] || {}
-    nodes.push({
-      id: name, label: info.shortName || name.split('.')[1] || name,
-      layer: info.layer, depth: depthMap[name], isTemp: info.temp,
-      scriptFile: info.scriptFile, columns: info.columns, matchedColumns: info.matchedColumns
-    })
-  }
-  // 构建边
-  const edges = []
-  for (const name in impactSourceMap) {
-    edges.push({ source: impactSourceMap[name], target: name })
-  }
-  return { nodes, edges }
 }
 
 // ---- 图谱交互 ----

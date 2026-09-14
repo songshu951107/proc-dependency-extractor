@@ -175,9 +175,11 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         ImpactAnalysisVO vo = new ImpactAnalysisVO();
         vo.setSourceTable(tableFullName);
 
-        // 查询源表 layer（用于前端着色）
+        // 查询源表 layer（用于前端着色）；同时探测表节点是否存在于血缘图，
+        // 不存在（任何已解析脚本都未引用过该表）时前端提示检查表名
         String sourceLayer = queryTableLayer(tableFullName);
         vo.setSourceLayer(sourceLayer);
+        vo.setSourceTableFound(tableExistsInGraph(tableFullName));
 
         List<ImpactAnalysisVO.NodeVO> nodes = new ArrayList<>();
         List<ImpactAnalysisVO.EdgeVO> edges = new ArrayList<>();
@@ -190,13 +192,19 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                 vo.setRowFilters(queryRowFilters(fieldFullName));
             }
         } else {
-            analyzeTableLevel(tableFullName, direction, depth, nodes, edges);
+            Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> impacted =
+                    analyzeTableLevel(tableFullName, direction, depth, nodes, edges);
+            // 复用 analyzeTableLevel 内部已查的 impactedByDepth，避免重复 *1..depth 查询
+            vo.setImpactedByDepth(impacted);
         }
 
         // 删除不与任何有 depth 节点连通的 depth=null 辅助节点（ensureFieldNode 补全的
         // 非路径 FieldMapping 条件字段等），在组装 VO 与统计前清理（表级分析节点均有
         // depth 或为 TABLE 级，此调用为 no-op）
         removeDanglingAuxNodes(nodes, edges);
+        // 补全字段节点（ensureFieldNode）不携带 temp 标记，会导致临时表字段被前端
+        // 当作物理表列出。这里按所属 TABLE 节点的权威 is_temp 统一回填 FIELD 节点。
+        propagateTempFlagToFieldNodes(nodes);
 
         vo.setNodes(nodes);
         vo.setEdges(edges);
@@ -205,11 +213,20 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
 
         if (!isFieldLevel) {
             Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> impactedByDepth =
-                    buildImpactedByDepthFromCypher(tableFullName, direction, depth);
-            vo.setImpactedByDepth(impactedByDepth);
+                    (Map<Integer, List<ImpactAnalysisVO.ImpactedTable>>) vo.getImpactedByDepth();
             vo.setPropagationChains(buildPropagationChains(impactedByDepth));
             // 最大深度不统计临时表：用 impactedByDepth 的 impactSource 关系 BFS 跳过临时表
             vo.getStats().setMaxDepthReached(calcNonTempMaxDepth(tableFullName, impactedByDepth));
+
+            // collectEdges 已移除：表级 edges 不再携带 procName（前端图由 impactedByDepth 重建，
+            // 后端节点/边无消费方）。affectedProcCount 从 impactedByDepth 的 scriptFile 去重补偿，
+            // 避免 buildStats 依据空 edges 统计为 0。
+            Set<String> procNames = impactedByDepth.values().stream()
+                    .flatMap(List::stream)
+                    .map(ImpactAnalysisVO.ImpactedTable::getScriptFile)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            vo.getStats().setAffectedProcCount(procNames.size());
 
             // 勾选"分析报表影响"时，沿 READS 链路追溯上下游表后查报表引用
             if (Boolean.TRUE.equals(request.getAnalyzeReportImpact())) {
@@ -327,7 +344,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             }
         }
 
-        // 3. 组装 ImpactedTable，批量查询元数据
+        // 3. 组装 ImpactedTable，批量查询元数据（一次 UNWIND 往返替代逐表 N+1）
+        List<ImpactAnalysisVO.ImpactedTable> built = new ArrayList<>();
         Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> result = new LinkedHashMap<>();
         for (Map.Entry<String, Integer> entry : tableDepthMap.entrySet()) {
             String tableFullName = entry.getKey();
@@ -337,26 +355,32 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             t.setDepth(depth);
             t.setImpactSource(tableImpactSourceMap.get(tableFullName));
             t.setMatchedColumns(tableFieldsMap.get(tableFullName));
-            fillTableMetadata(t);
+            built.add(t);
             result.computeIfAbsent(depth, k -> new ArrayList<>()).add(t);
         }
+        fillTableMetadataBatch(built);
         return result;
     }
 
-    /**
-     * 查询表元数据填充到 ImpactedTable（shortName/layer/temp/scriptFile/columns）
-     */
-    private void fillTableMetadata(ImpactAnalysisVO.ImpactedTable t) {
+    /** 批量查询表元数据填充 ImpactedTable（shortName/layer/temp/scriptFile/columns），一次往返替代逐表 fillTableMetadata */
+    private void fillTableMetadataBatch(List<ImpactAnalysisVO.ImpactedTable> tables) {
+        if (tables == null || tables.isEmpty()) return;
+        List<String> names = tables.stream()
+                .map(ImpactAnalysisVO.ImpactedTable::getName)
+                .collect(Collectors.toList());
+        Map<String, ImpactAnalysisVO.ImpactedTable> byName = new HashMap<>();
+        for (ImpactAnalysisVO.ImpactedTable t : tables) byName.put(t.getName(), t);
         try {
             Collection<Object[]> meta = neo4jClient.query(
-                    "MATCH (tbl:Table {name: $name}) " +
-                    "OPTIONAL MATCH (tbl)<-[:BELONGS_TO]-(c:Column) " +
-                    "RETURN tbl.short_name AS shortName, tbl.layer AS layer, " +
-                    "tbl.is_temp AS isTemp, tbl.script_file AS scriptFile, " +
-                    "collect(c.name) AS columns")
-                    .bind(t.getName()).to("name")
+                            "UNWIND $names AS nm MATCH (tbl:Table {name: nm}) " +
+                            "OPTIONAL MATCH (tbl)<-[:BELONGS_TO]-(c:Column) " +
+                            "RETURN tbl.name AS name, tbl.short_name AS shortName, tbl.layer AS layer, " +
+                            "tbl.is_temp AS isTemp, tbl.script_file AS scriptFile, " +
+                            "collect(c.name) AS columns")
+                    .bind(names).to("names")
                     .fetchAs(Object[].class)
                     .mappedBy((type, record) -> new Object[]{
+                            record.get("name").asString(),
                             record.get("shortName").isNull() ? null : record.get("shortName").asString(),
                             record.get("layer").isNull() ? null : record.get("layer").asString(),
                             record.get("isTemp").isNull() ? false : record.get("isTemp").asBoolean(),
@@ -365,18 +389,19 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                                     record.get("columns").asList(v -> v.asString())
                     })
                     .all();
-            if (!meta.isEmpty()) {
-                Object[] row = meta.iterator().next();
-                t.setShortName((String) row[0]);
-                t.setLayer((String) row[1]);
-                t.setTemp((Boolean) row[2]);
-                t.setScriptFile((String) row[3]);
+            for (Object[] row : meta) {
+                ImpactAnalysisVO.ImpactedTable t = byName.get(row[0]);
+                if (t == null) continue;
+                t.setShortName((String) row[1]);
+                t.setLayer((String) row[2]);
+                t.setTemp((Boolean) row[3]);
+                t.setScriptFile((String) row[4]);
                 @SuppressWarnings("unchecked")
-                List<String> cols = (List<String>) row[4];
+                List<String> cols = (List<String>) row[5];
                 t.setColumns(cols);
             }
         } catch (Exception e) {
-            log.warn("查询表元数据失败 {}: {}", t.getName(), e.getMessage());
+            log.warn("批量查询表元数据失败: {}", e.getMessage());
         }
     }
 
@@ -458,12 +483,16 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             }
         }
 
+        // 一次 UNWIND 批量查询所有表的报表引用（替代逐表 N+1）
+        Map<String, List<ImpactAnalysisVO.ReportRef>> refsByTable =
+                queryReportsForTables(tableToDepth.keySet());
+
         List<ImpactAnalysisVO.ReportImpact> result = new ArrayList<>();
         for (Map.Entry<String, Integer> entry : tableToDepth.entrySet()) {
             String table = entry.getKey();
             Integer d = entry.getValue();
-            List<ImpactAnalysisVO.ReportRef> refs = queryReportsForTable(table);
-            if (refs.isEmpty()) continue;
+            List<ImpactAnalysisVO.ReportRef> refs = refsByTable.get(table);
+            if (refs == null || refs.isEmpty()) continue;
             ImpactAnalysisVO.ReportImpact ri = new ImpactAnalysisVO.ReportImpact();
             ri.setTable(table);
             ri.setDepth(d);
@@ -473,28 +502,32 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         return result;
     }
 
-    /** 查询 Neo4j 中引用了指定表的报表（Table<-[:QUERIES]-Dataset<-[:CONTAINS]-Report） */
-    private List<ImpactAnalysisVO.ReportRef> queryReportsForTable(String tableName) {
-        String cypher = "MATCH (t:Table {name: $name})<-[:QUERIES]-(d:Dataset)<-[:CONTAINS]-(r:Report) " +
-                "RETURN r.file AS file, r.name AS name, d.name AS datasetName, d.connection AS connection";
+    /** 批量查询 Neo4j 中引用了指定表的报表（Table<-[:QUERIES]-Dataset<-[:CONTAINS]-Report），一次往返，替代逐表 N+1 */
+    private Map<String, List<ImpactAnalysisVO.ReportRef>> queryReportsForTables(Collection<String> tables) {
+        Map<String, List<ImpactAnalysisVO.ReportRef>> result = new HashMap<>();
+        if (tables == null || tables.isEmpty()) return result;
+        String cypher = "UNWIND $tables AS tn " +
+                "MATCH (t:Table {name: tn})<-[:QUERIES]-(d:Dataset)<-[:CONTAINS]-(r:Report) " +
+                "RETURN t.name AS tableName, r.file AS file, r.name AS name, " +
+                "  d.name AS datasetName, d.connection AS connection";
         try {
             Collection<Map<String, Object>> rows = neo4jClient.query(cypher)
-                    .bind(tableName).to("name")
+                    .bind(new ArrayList<>(tables)).to("tables")
                     .fetch().all();
-            List<ImpactAnalysisVO.ReportRef> refs = new ArrayList<>();
             for (Map<String, Object> row : rows) {
+                String table = (String) row.get("tableName");
+                if (table == null) continue;
                 ImpactAnalysisVO.ReportRef ref = new ImpactAnalysisVO.ReportRef();
                 ref.setFile((String) row.get("file"));
                 ref.setName((String) row.get("name"));
                 ref.setDatasetName((String) row.get("datasetName"));
                 ref.setConnection((String) row.get("connection"));
-                refs.add(ref);
+                result.computeIfAbsent(table, k -> new ArrayList<>()).add(ref);
             }
-            return refs;
         } catch (Exception e) {
-            log.warn("查询表 {} 的报表引用失败: {}", tableName, e.getMessage());
-            return Collections.emptyList();
+            log.warn("批量查询报表引用失败: {}", e.getMessage());
         }
+        return result;
     }
 
     private String queryTableLayer(String tableName) {
@@ -512,39 +545,34 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         }
     }
 
-    private void analyzeTableLevel(String tableFullName, String direction, int depth,
-                                    List<ImpactAnalysisVO.NodeVO> nodes,
-                                    List<ImpactAnalysisVO.EdgeVO> edges) {
-        String arrow = buildArrow(direction, "READS", depth);
-        // 深度计算与 buildImpactedByDepthFromCypher 保持一致：
-        // 优先选择"最后一跳经过临时表"的路径，反映真实数据流。
-        String cypher = "MATCH path = (src:Table {name: $name})" + arrow + "(downstream:Table) " +
-                "WHERE src <> downstream " +
-                "WITH downstream, path, length(path) AS pathLen, " +
-                "  nodes(path)[length(path)-1] AS predecessor " +
-                "WITH downstream, " +
-                "  CASE WHEN coalesce(predecessor.is_temp, false) THEN pathLen ELSE null END AS tempPredPathLen, " +
-                "  pathLen, downstream.short_name AS label, downstream.layer AS layer, " +
-                "  downstream.is_temp AS isTemp " +
-                "RETURN downstream.name AS id, label, layer, isTemp, " +
-                "  COALESCE(min(tempPredPathLen), min(pathLen)) AS depth " +
-                "ORDER BY depth, downstream.name";
-
+    /**
+     * 表节点是否存在于血缘图（即任何已解析脚本引用过该表，读或写）。
+     * Neo4j 异常时返回 null（未知），前端仅在明确 false 时提示检查表名。
+     */
+    private Boolean tableExistsInGraph(String tableName) {
         try {
-            Collection<ImpactAnalysisVO.NodeVO> result = neo4jClient.query(cypher)
-                    .bind(tableFullName).to("name")
-                    .fetchAs(ImpactAnalysisVO.NodeVO.class)
-                    .mappedBy((type, record) -> {
-                        ImpactAnalysisVO.NodeVO node = new ImpactAnalysisVO.NodeVO();
-                        node.setId(record.get("id").asString());
-                        node.setLabel(record.get("label").isNull() ? record.get("id").asString() : record.get("label").asString());
-                        node.setNodeLevel("TABLE");
-                        node.setLayer(record.get("layer").isNull() ? extractLayerFromId(node.getId()) : record.get("layer").asString());
-                        node.setDepth((int) record.get("depth").asLong());
-                        node.setIsTemp(record.get("isTemp").isNull() ? false : record.get("isTemp").asBoolean());
-                        return node;
-                    })
-                    .all();
+            Long count = neo4jClient.query(
+                    "MATCH (t:Table {name: $name}) RETURN count(t) AS c")
+                    .bind(tableName).to("name")
+                    .fetchAs(Long.class)
+                    .mappedBy((type, record) -> record.get("c").asLong())
+                    .one().orElse(0L);
+            return count > 0;
+        } catch (Exception e) {
+            log.warn("查询表节点存在性失败 table={}: {}", tableName, e.getMessage());
+            return null;
+        }
+    }
+
+    private Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> analyzeTableLevel(
+            String tableFullName, String direction, int depth,
+            List<ImpactAnalysisVO.NodeVO> nodes,
+            List<ImpactAnalysisVO.EdgeVO> edges) {
+        // 复用 buildImpactedByDepthFromCypher 的查询结果构建 nodes，
+        // 消除原先独立的 *1..depth 变长路径枚举。前端表级图由 impactedByDepth 重建。
+        Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> impacted = new LinkedHashMap<>();
+        try {
+            impacted = buildImpactedByDepthFromCypher(tableFullName, direction, depth);
 
             // 添加起点节点
             ImpactAnalysisVO.NodeVO startNode = new ImpactAnalysisVO.NodeVO();
@@ -554,10 +582,24 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             startNode.setLayer(extractLayerFromId(tableFullName));
             startNode.setDepth(0);
             nodes.add(startNode);
-            nodes.addAll(result);
 
-            // 查询边
-            collectEdges(tableFullName, direction, depth, "READS", "Table", edges, nodes);
+            // 从 impacted 结果构建下游 Table 节点
+            for (List<ImpactAnalysisVO.ImpactedTable> tables : impacted.values()) {
+                for (ImpactAnalysisVO.ImpactedTable t : tables) {
+                    ImpactAnalysisVO.NodeVO node = new ImpactAnalysisVO.NodeVO();
+                    node.setId(t.getName());
+                    node.setLabel(t.getShortName() != null ? t.getShortName() : t.getName());
+                    node.setNodeLevel("TABLE");
+                    node.setLayer(t.getLayer() != null ? t.getLayer() : extractLayerFromId(t.getName()));
+                    node.setDepth(t.getDepth());
+                    node.setIsTemp(t.isTemp());
+                    nodes.add(node);
+                }
+            }
+
+            // 已移除 collectEdges（补边/补入兄弟节点在中端无消费路径，且会引入 depth=null 节点）。
+            // 前端表级图由 impactedByDepth 重建，edges 无需后端回传；
+            // affectedProcCount 已由 analyze() 内从 impactedByDepth.scriptFile 去重补偿。
         } catch (Exception e) {
             log.error("表级影响查询失败: {}", e.getMessage());
             // 降级：仅返回起点节点
@@ -569,6 +611,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             startNode.setDepth(0);
             nodes.add(startNode);
         }
+        return impacted;
     }
 
     private String buildArrow(String direction, String relType, int depth) {
@@ -579,15 +622,71 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
     }
 
     /**
-     * 构建字段级查询的箭头
-     * 字段跳数 depth 对应关系跳数 depth*2
-     * 注意: cypherMaxHops 通过字符串拼接注入 Cypher（Neo4j 不支持关系跳数参数化）
+     * 字段级 drill-down（expand）：从起点列出发的 frontier 逐层 BFS，返回可达 Column 节点。
+     * 层号 = 字段跳数（1 层 = 经过 1 个非 LITERAL Transform），与原 min(length(path)+1)/2 语义一致。
+     * 下游取 Transform 输出列，上游取输入列；BOTH = 先下游后上游、visited 跨方向共享，与 analyzeFieldLevel 一致。
+     * LITERAL 常量转换剪枝，消除假阳性下游（与 analyzeFieldLevel 对齐）。
      */
-    private String buildFieldArrow(String direction, int cypherMaxHops) {
-        String rel = "[:INPUT_TO|OUTPUT_TO*1.." + cypherMaxHops + "]";
-        if ("UPSTREAM".equals(direction)) return "<-" + rel + "-";
-        if ("BOTH".equals(direction)) return "-" + rel + "-";
-        return "-" + rel + "->";
+    private void expandFieldLevelBfs(String startColKey, String direction, int depth,
+                                     List<ImpactAnalysisVO.NodeVO> nodes) {
+        Set<String> nodeIds = new LinkedHashSet<>();
+        nodeIds.add(startColKey);
+
+        // 下游：frontier 列 -INPUT_TO-> Transform -OUTPUT_TO-> 输出列
+        String expandDown = "UNWIND $frontier AS ck " +
+                "MATCH (c:Column {col_key: ck})-[:INPUT_TO]->(t:Transform) " +
+                "OPTIONAL MATCH (t)-[:OUTPUT_TO]->(out:Column) " +
+                "WHERE t.logic_type IS NULL OR t.logic_type <> 'LITERAL' " +
+                "RETURN DISTINCT out.col_key AS colKey, out.name AS name";
+        // 上游：frontier 列 <-OUTPUT_TO- Transform <-INPUT_TO- 输入列
+        String expandUp = "UNWIND $frontier AS ck " +
+                "MATCH (c:Column {col_key: ck})<-[:OUTPUT_TO]-(t:Transform) " +
+                "OPTIONAL MATCH (in:Column)-[:INPUT_TO]->(t) " +
+                "WHERE t.logic_type IS NULL OR t.logic_type <> 'LITERAL' " +
+                "RETURN DISTINCT in.col_key AS colKey, in.name AS name";
+
+        List<String> dirs;
+        if ("UPSTREAM".equals(direction)) dirs = List.of("UPSTREAM");
+        else if ("BOTH".equals(direction)) dirs = List.of("DOWNSTREAM", "UPSTREAM");
+        else dirs = List.of("DOWNSTREAM");
+
+        for (String dir : dirs) {
+            String cypher = "DOWNSTREAM".equals(dir) ? expandDown : expandUp;
+            Set<String> frontier = new LinkedHashSet<>();
+            frontier.add(startColKey);
+            for (int layer = 1; layer <= depth; layer++) {
+                if (frontier.isEmpty()) break;
+                if (nodes.size() > MAX_FIELD_GRAPH_NODES) {
+                    log.warn("字段展开节点数超过安全上限 {}，提前终止 field={}", MAX_FIELD_GRAPH_NODES, startColKey);
+                    break;
+                }
+                Collection<Map<String, Object>> rows;
+                try {
+                    rows = neo4jClient.query(cypher)
+                            .bind(new ArrayList<>(frontier)).to("frontier")
+                            .fetch().all();
+                } catch (Exception e) {
+                    log.warn("字段展开 BFS 查询失败 field={} dir={}: {}", startColKey, dir, e.getMessage());
+                    break;
+                }
+                Set<String> nextFrontier = new LinkedHashSet<>();
+                for (Map<String, Object> row : rows) {
+                    String colKey = (String) row.get("colKey");
+                    if (colKey == null || !nodeIds.add(colKey)) continue;
+                    ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
+                    n.setId(colKey);
+                    String name = (String) row.get("name");
+                    n.setLabel(name != null ? name
+                            : (colKey.contains(".") ? colKey.substring(colKey.lastIndexOf('.') + 1) : colKey));
+                    n.setNodeLevel("FIELD");
+                    n.setLayer(extractLayerFromId(colKey));
+                    n.setDepth(layer);
+                    nodes.add(n);
+                    nextFrontier.add(colKey);
+                }
+                frontier = nextFrontier;
+            }
+        }
     }
 
     /**
@@ -654,6 +753,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         String[] parts = fieldFullName.split("\\.");
         String label = parts.length >= 3 ? parts[2] : fieldFullName;
         startNode.setLabel(label);
+        // 起点字段同样补齐所属表，前端才能在节点上展示表名（与 buildFieldNode 一致）
+        startNode.setTableFullName(parts.length >= 2 ? (parts[0] + "." + parts[1]).toLowerCase() : null);
         startNode.setNodeLevel("FIELD");
         startNode.setLayer(extractLayerFromId(fieldFullName));
         startNode.setDepth(0);
@@ -707,6 +808,9 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                     ? expandRowImpactChannel(fieldFullName, depth, nodeIds, nodes, edges)
                     : Collections.emptyMap();
 
+            // 值通道到达列（col_key → 发现层号）：BFS 期间收集，供中间行影响通道（第二轮）展开
+            Map<String, Integer> valueReachedCols = new LinkedHashMap<>();
+
             for (String dir : dirs) {
                 boolean downstream = "DOWNSTREAM".equals(dir);
                 String cypher = downstream ? expandDownstream : expandUpstream;
@@ -716,44 +820,70 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                     Set<String> seedCols = downstream ? rowSeeds.get(layer) : null;
                     if (seedCols != null && !seedCols.isEmpty()) frontier.addAll(seedCols);
                     if (frontier.isEmpty()) break;
-                    // 安全阀：防真闭包爆炸把 API 打死
-                    if (nodes.size() > MAX_FIELD_GRAPH_NODES) {
-                        log.warn("字段级分析节点数超过安全上限 {}，提前终止扩展 field={} direction={}",
-                                MAX_FIELD_GRAPH_NODES, fieldFullName, dir);
-                        break;
-                    }
-                    Collection<Map<String, Object>> rows = neo4jClient.query(cypher)
-                            .bind(new ArrayList<>(frontier)).to("frontier")
-                            .fetch().all();
+                    // 临时列穿透（折叠口径）：临时表列是中转而非交付物，不占深度预算——
+                    // 每轮只对物理列消耗预算（depth=layer），临时列（depth=layer-1）同轮继续扩展，
+                    // 与前端 computeLongestDepth 口径一致（物理 +1、临时/Transform +0）。
+                    // depth 参数语义 = 最大物理表跳数（临时表/Transform 无限穿透，受安全阀限制）
                     Set<String> nextFrontier = new LinkedHashSet<>();
-                    for (Map<String, Object> row : rows) {
-                        String transformId = (String) row.get("transformId");
-                        if (transformId == null) continue;
-                        // 字面量转换剪枝：表达式为常量（如 NVL(x,0) 的 0 / INSERT 常量列），
-                        // 其输出列值恒定、不受任何上游影响，且会引入 __literal__ 虚拟列噪音节点，
-                        // 不入 transformRows、其输出列不入 frontier（行通道的 ROW_IMPACT 不受影响）
-                        if ("LITERAL".equals(row.get("logicType"))) continue;
-                        @SuppressWarnings("unchecked")
-                        List<Map<String, Object>> rowInputs = (List<Map<String, Object>>) row.get("inputs");
-                        @SuppressWarnings("unchecked")
-                        List<Map<String, Object>> rowOutputs = (List<Map<String, Object>>) row.get("outputs");
-                        // 路径枚举语义：Transform 既有输入又有输出才会出现在任何路径上
-                        if (rowInputs == null || rowInputs.isEmpty()
-                                || rowOutputs == null || rowOutputs.isEmpty()) {
-                            continue;
+                    Set<String> pending = frontier;
+                    while (!pending.isEmpty()) {
+                        // 安全阀：防真闭包爆炸把 API 打死（穿透链同受控）
+                        if (nodes.size() > MAX_FIELD_GRAPH_NODES) {
+                            log.warn("字段级分析节点数超过安全上限 {}，提前终止扩展 field={} direction={}",
+                                    MAX_FIELD_GRAPH_NODES, fieldFullName, dir);
+                            break;
                         }
-                        if (seenTransforms.add(transformId)) {
-                            transformRows.add(row);
+                        // 消费时记录到达深度（中间行影响通道用）：行影响种子列不在 BFS 中"发现"，
+                        // 在此按消费轮补记（临时表种子 layer=1 消费深度 0、物理表种子 layer=2 消费深度 1，
+                        // 与 expandRowImpactChannel 的节点深度一致）
+                        if (downstream) {
+                            for (String ck : pending) valueReachedCols.putIfAbsent(ck, layer - 1);
                         }
-                        // 下一层 frontier：DOWNSTREAM 取输出字段，UPSTREAM 取输入字段（上游字段）
-                        List<Map<String, Object>> nextCols = downstream ? rowOutputs : rowInputs;
-                        for (Map<String, Object> col : nextCols) {
-                            String colKey = (String) col.get("colKey");
-                            if (colKey == null || !nodeIds.add(colKey)) continue;
-                            nodes.add(buildFieldNode(col, colKey, layer));
-                            nextFrontier.add(colKey);
+                        Collection<Map<String, Object>> rows = neo4jClient.query(cypher)
+                                .bind(new ArrayList<>(pending)).to("frontier")
+                                .fetch().all();
+                        Set<String> tempNext = new LinkedHashSet<>();
+                        for (Map<String, Object> row : rows) {
+                            String transformId = (String) row.get("transformId");
+                            if (transformId == null) continue;
+                            // 字面量转换剪枝：表达式为常量（如 NVL(x,0) 的 0 / INSERT 常量列），
+                            // 其输出列值恒定、不受任何上游影响，且会引入 __literal__ 虚拟列噪音节点，
+                            // 不入 transformRows、其输出列不入 frontier（行通道的 ROW_IMPACT 不受影响）
+                            if ("LITERAL".equals(row.get("logicType"))) continue;
+                            @SuppressWarnings("unchecked")
+                            List<Map<String, Object>> rowInputs = (List<Map<String, Object>>) row.get("inputs");
+                            @SuppressWarnings("unchecked")
+                            List<Map<String, Object>> rowOutputs = (List<Map<String, Object>>) row.get("outputs");
+                            // 路径枚举语义：Transform 既有输入又有输出才会出现在任何路径上
+                            if (rowInputs == null || rowInputs.isEmpty()
+                                    || rowOutputs == null || rowOutputs.isEmpty()) {
+                                continue;
+                            }
+                            if (seenTransforms.add(transformId)) {
+                                transformRows.add(row);
+                            }
+                            // 下一层候选：DOWNSTREAM 取输出字段，UPSTREAM 取输入字段（上游字段）
+                            List<Map<String, Object>> nextCols = downstream ? rowOutputs : rowInputs;
+                            for (Map<String, Object> col : nextCols) {
+                                String colKey = (String) col.get("colKey");
+                                if (colKey == null || !nodeIds.add(colKey)) continue;
+                                boolean temp = Boolean.TRUE.equals(col.get("temp"));
+                                if (temp) {
+                                    // 临时列穿透：保持进入深度（layer-1），同轮继续扩展、不占预算
+                                    nodes.add(buildFieldNode(col, colKey, layer - 1));
+                                    if (downstream) valueReachedCols.put(colKey, layer - 1);
+                                    tempNext.add(colKey);
+                                } else {
+                                    // 物理列：消耗本轮 1 次物理跳预算
+                                    nodes.add(buildFieldNode(col, colKey, layer));
+                                    if (downstream) valueReachedCols.put(colKey, layer);
+                                    nextFrontier.add(colKey);
+                                }
+                            }
                         }
+                        pending = tempNext;
                     }
+                    if (nodes.size() > MAX_FIELD_GRAPH_NODES) break;
                     frontier = nextFrontier;
                 }
             }
@@ -776,7 +906,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                         for (Map<String, Object> output : directOutputs) {
                             String outputColKey = (String) output.get("colKey");
                             if (outputColKey == null) continue;
-                            ensureFieldNode(outputColKey, nodeIds, nodes);
+                            ensureFieldNode(outputColKey, nodeIds, nodes, asBool(output.get("temp")));
                             for (Map<String, Object> input : directInputs) {
                                 String colKey = (String) input.get("colKey");
                                 if (colKey == null) continue;
@@ -824,7 +954,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                     for (Map<String, Object> input : inputs) {
                         String colKey = (String) input.get("colKey");
                         if (colKey == null) continue;
-                        ensureFieldNode(colKey, nodeIds, nodes);
+                        ensureFieldNode(colKey, nodeIds, nodes, asBool(input.get("temp")));
                         ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
                         edge.setSource(colKey);
                         edge.setTarget(transformId);
@@ -844,7 +974,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                     for (Map<String, Object> output : outputs) {
                         String outputColKey = (String) output.get("colKey");
                         if (outputColKey == null) continue;
-                        ensureFieldNode(outputColKey, nodeIds, nodes);
+                        ensureFieldNode(outputColKey, nodeIds, nodes, asBool(output.get("temp")));
                         ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
                         edge.setSource(transformId);
                         edge.setTarget(outputColKey);
@@ -856,22 +986,31 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                     }
                 }
             }
+
+            // 中间行影响通道（第二轮，全链仅此一次）：值通道到达的列补全其 FILTERS → 表 → ROW_IMPACT
+            // 图结构，链路不再终止于"仅经 JOIN/WHERE 影响下游表"的中间列（如临时/分区表）。
+            // 展开列为终端节点：不回流值通道 BFS、不触发下一轮行展开（防 value→row 交替级联、图规模失控）
+            if (dirs.contains("DOWNSTREAM") && !valueReachedCols.isEmpty()) {
+                expandMiddleRowImpactChannel(fieldFullName, depth, valueReachedCols, nodeIds, nodes, edges);
+            }
         } catch (Exception e) {
             log.error("字段级影响查询失败: {}", e.getMessage());
         }
     }
 
     /**
-     * 行影响通道（下游）：起点列 --FILTERS--> 受影响表(1跳) → 表内所有列打行影响标签(2跳, 查询期展开)
-     * 展开列作为 layer=2 种子返回，由值通道 BFS 继续向下游传播（标签保持行影响，前端聚合）。
-     * 不二次经过 FILTERS：仅展开起点列的直接 FILTERS 边；起点自身所在表不重复展开。
+     * 行影响通道（下游·第一轮·起点列）：起点列 --FILTERS--> 受影响表 → 表内所有列打行影响标签(查询期展开)。
+     * 折叠口径（与值通道 BFS / 前端 computeLongestDepth 一致）：
+     * - 物理表消耗 1 跳（表 depth=1），ROW_IMPACT 展开列 depth=表深度=1，作为 layer=2 种子回流值通道；
+     * - 临时表穿透不占预算（表 depth=0），展开列 depth=0，作为 layer=1 种子并入（与起点同轮扩展）。
+     * 起点自身所在表不重复展开；值通道中间列的行影响由第二轮 {@link #expandMiddleRowImpactChannel} 补全。
      */
     private Map<Integer, Set<String>> expandRowImpactChannel(String startColKey, int maxDepth,
                                                              Set<String> nodeIds,
                                                              List<ImpactAnalysisVO.NodeVO> nodes,
                                                              List<ImpactAnalysisVO.EdgeVO> edges) {
         Map<Integer, Set<String>> seeds = new HashMap<>();
-        if (maxDepth < 2) return seeds;
+        if (maxDepth < 1) return seeds;
         String startTable = extractTableFromId(startColKey);
         Collection<Map<String, Object>> filterRows;
         try {
@@ -886,7 +1025,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             log.error("行影响通道 FILTERS 查询失败: {}", e.getMessage());
             return seeds;
         }
-        Set<String> nextLayerCols = new LinkedHashSet<>();
+        Set<String> tempSeeds = new LinkedHashSet<>();     // 临时表展开列 → layer=1 种子（穿透）
+        Set<String> physicalSeeds = new LinkedHashSet<>(); // 物理表展开列 → layer=2 种子（占 1 跳）
         // 按表分组：同表多条 FILTERS 边（多 proc/多块 INSERT 过滤同一表）只查一次列
         Map<String, List<Map<String, Object>>> filtersByTable = new LinkedHashMap<>();
         for (Map<String, Object> fr : filterRows) {
@@ -897,7 +1037,10 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         for (Map.Entry<String, List<Map<String, Object>>> tableEntry : filtersByTable.entrySet()) {
             String tableName = tableEntry.getKey();
             List<Map<String, Object>> tableFilters = tableEntry.getValue();
-            // 表节点（depth=1）
+            boolean tableTemp = Boolean.TRUE.equals(tableFilters.get(0).get("tableTemp"));
+            // 折叠口径：物理表占 1 跳（depth=1），临时表穿透（depth=0，与起点同层）
+            int tableDepth = tableTemp ? 0 : 1;
+            // 表节点
             if (nodeIds.add(tableName)) {
                 ImpactAnalysisVO.NodeVO tNode = new ImpactAnalysisVO.NodeVO();
                 tNode.setId(tableName);
@@ -906,8 +1049,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                 tNode.setNodeLevel("TABLE");
                 tNode.setLayer(extractLayerFromId(tableName));
                 tNode.setTableFullName(tableName);
-                tNode.setIsTemp(Boolean.TRUE.equals(tableFilters.get(0).get("tableTemp")));
-                tNode.setDepth(1);
+                tNode.setIsTemp(tableTemp);
+                tNode.setDepth(tableDepth);
                 nodes.add(tNode);
             }
             // FILTERS 边（起点列 → 表）：每条各保留（携带各自 proc/block 信息）
@@ -923,7 +1066,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                 fEdge.setImpactKind("ROW");
                 edges.add(fEdge);
             }
-            // 表内所有列：行影响展开（depth=2），列查询每表一次
+            // 表内所有列：行影响展开（ROW_IMPACT +0，列 depth=表深度），列查询每表一次
             Collection<Map<String, Object>> cols;
             try {
                 cols = neo4jClient.query(
@@ -947,7 +1090,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                     String colKey = (String) col.get("colKey");
                     if (colKey == null || colKey.equals(startColKey)) continue;
                     if (nodeIds.add(colKey)) {
-                        nodes.add(buildFieldNode(col, colKey, 2));
+                        nodes.add(buildFieldNode(col, colKey, tableDepth));
                     }
                     ImpactAnalysisVO.EdgeVO rEdge = new ImpactAnalysisVO.EdgeVO();
                     rEdge.setSource(tableName);
@@ -957,12 +1100,163 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                     rEdge.setProcName(procName);
                     rEdge.setImpactKind("ROW");
                     edges.add(rEdge);
-                    nextLayerCols.add(colKey);
+                    if (tableTemp) tempSeeds.add(colKey); else physicalSeeds.add(colKey);
                 }
             }
         }
-        if (!nextLayerCols.isEmpty()) seeds.put(2, nextLayerCols);
+        // 种子回流轮次：临时表列并入 layer=1（与起点同轮扩展，不占预算）；
+        // 物理表列并入 layer=2（其深度 1 = layer=2 轮 frontier 深度，与值通道预算口径对齐）
+        if (!tempSeeds.isEmpty()) seeds.put(1, tempSeeds);
+        if (!physicalSeeds.isEmpty()) seeds.put(2, physicalSeeds);
         return seeds;
+    }
+
+    /**
+     * 中间行影响通道（下游·第二轮·全链仅一次）：值通道 BFS 到达的列 --FILTERS--> 受影响表 → 表内列行影响展开。
+     *
+     * 与第一轮（起点列）的区别：本轮展开的行影响列为终端节点——不回流值通道 BFS、不触发下一轮行展开，
+     * 否则 value→row→value→row 交替级联导致图规模失控（安全上限 2 轮：起点 1 次 + 链路中间 1 次）。
+     *
+     * 场景：源字段值影响中间表（临时/分区表）某列，该列仅经 JOIN/WHERE 条件影响目标表，
+     * 原链路终止于中间表；本轮补全 FILTERS 边 + 目标表节点 + ROW_IMPACT 列，链路穿透到目标表。
+     *
+     * 折叠口径（与值通道 BFS / 第一轮行影响一致）：目标表为临时表时穿透不占预算
+     * （表/列 depth=源列发现层，预算 d≤maxDepth）；物理表消耗 1 跳（表/列 depth=源列发现层+1，预算 d+1≤maxDepth）。
+     * 跳过：起点列（第一轮已展开）、目标表=源列自身表（自连接）、目标表=起点表（不回打起点表）、
+     * 超出上述 depth 预算。
+     * ROW_IMPACT 边按 (表, proc, role) 全局去重（含第一轮已发组），与既有约定一致。
+     */
+    private void expandMiddleRowImpactChannel(String startColKey, int maxDepth,
+                                              Map<String, Integer> valueReached,
+                                              Set<String> nodeIds,
+                                              List<ImpactAnalysisVO.NodeVO> nodes,
+                                              List<ImpactAnalysisVO.EdgeVO> edges) {
+        String startTable = extractTableFromId(startColKey);
+
+        // 值通道到达列中，行展开后仍在 depth 预算内的候选（折叠口径）：
+        // 此处先按宽松界（临时表穿透 d≤maxDepth）筛出候选，
+        // 物理表消耗 1 跳（d+1≤maxDepth）的精确预算在分组处理时按目标表 temp 标记判断
+        List<String> expandable = new ArrayList<>();
+        for (Map.Entry<String, Integer> vr : valueReached.entrySet()) {
+            if (vr.getValue() <= maxDepth) expandable.add(vr.getKey());
+        }
+        if (expandable.isEmpty()) return;
+
+        // 批量查值通道到达列的 FILTERS 边（一次 IN 查询，避免逐列 N 次往返）
+        Collection<Map<String, Object>> filterRows;
+        try {
+            filterRows = neo4jClient.query(
+                            "UNWIND $cols AS ck MATCH (c:Column {col_key: ck})-[f:FILTERS]->(t:Table) " +
+                            "RETURN c.col_key AS srcCol, t.name AS tableName, t.short_name AS shortName, " +
+                            "  t.is_temp AS tableTemp, f.role AS role, f.clause AS clause, " +
+                            "  f.proc_name AS procName, f.sql_block_seq AS seq")
+                    .bind(expandable).to("cols").fetch().all();
+        } catch (Exception e) {
+            log.error("中间行影响通道 FILTERS 查询失败: {}", e.getMessage());
+            return;
+        }
+
+        // 按 (源列, 目标表) 分组：同组多条 FILTERS 边（多 proc/多块）各保留一条边信息
+        Map<String, List<Map<String, Object>>> filtersByPair = new LinkedHashMap<>();
+        for (Map<String, Object> fr : filterRows) {
+            String srcCol = (String) fr.get("srcCol");
+            String tableName = (String) fr.get("tableName");
+            if (srcCol == null || tableName == null) continue;
+            if (srcCol.equals(startColKey)) continue;
+            if (tableName.equals(extractTableFromId(srcCol))) continue;
+            if (tableName.equals(startTable)) continue;
+            filtersByPair.computeIfAbsent(srcCol + "|" + tableName, k -> new ArrayList<>()).add(fr);
+        }
+        if (filtersByPair.isEmpty()) return;
+
+        // ROW_IMPACT 已发 (表, proc, role) 组（含第一轮），跨轮全局去重避免重复发边
+        Set<String> emittedGroups = new HashSet<>();
+        for (ImpactAnalysisVO.EdgeVO e : edges) {
+            if ("ROW_IMPACT".equals(e.getEdgeType())) {
+                emittedGroups.add(e.getSource() + "|" + e.getProcName() + "|" + e.getRole());
+            }
+        }
+        // 表内列查询缓存：多个源列打同一表只查一次
+        Map<String, Collection<Map<String, Object>>> tableColumns = new HashMap<>();
+
+        for (List<Map<String, Object>> pairFilters : filtersByPair.values()) {
+            if (nodes.size() > MAX_FIELD_GRAPH_NODES) {
+                log.warn("中间行影响展开节点数超过安全上限 {}，提前终止", MAX_FIELD_GRAPH_NODES);
+                return;
+            }
+            Map<String, Object> first = pairFilters.get(0);
+            String srcCol = (String) first.get("srcCol");
+            String tableName = (String) first.get("tableName");
+            int srcLayer = valueReached.getOrDefault(srcCol, 1);
+            boolean tableTemp = Boolean.TRUE.equals(first.get("tableTemp"));
+            // 折叠口径：临时表穿透不占预算（depth=源列发现层，d≤maxDepth）；
+            // 物理表消耗 1 跳（depth=源列发现层+1，d+1≤maxDepth）
+            int tableDepth = tableTemp ? srcLayer : srcLayer + 1;
+            if (tableDepth > maxDepth) continue;
+
+            // 表节点（depth=tableDepth；第一轮或 BFS 已建则复用）
+            if (nodeIds.add(tableName)) {
+                ImpactAnalysisVO.NodeVO tNode = new ImpactAnalysisVO.NodeVO();
+                tNode.setId(tableName);
+                Object shortName = first.get("shortName");
+                tNode.setLabel(shortName != null ? shortName.toString() : tableName);
+                tNode.setNodeLevel("TABLE");
+                tNode.setLayer(extractLayerFromId(tableName));
+                tNode.setTableFullName(tableName);
+                tNode.setIsTemp(tableTemp);
+                tNode.setDepth(tableDepth);
+                nodes.add(tNode);
+            }
+            // FILTERS 边（源列 → 表）：每条各保留（携带各自 proc/block 信息）
+            for (Map<String, Object> fr : pairFilters) {
+                ImpactAnalysisVO.EdgeVO fEdge = new ImpactAnalysisVO.EdgeVO();
+                fEdge.setSource(srcCol);
+                fEdge.setTarget(tableName);
+                fEdge.setEdgeType("FILTERS");
+                fEdge.setRole((String) fr.get("role"));
+                fEdge.setClause((String) fr.get("clause"));
+                fEdge.setProcName((String) fr.get("procName"));
+                fEdge.setSqlBlockSeq(fr.get("seq") != null ? ((Number) fr.get("seq")).intValue() : null);
+                fEdge.setImpactKind("ROW");
+                edges.add(fEdge);
+            }
+            // 表内列 + ROW_IMPACT 边（depth=tableDepth，终端节点），按 (proc, role) 组去重（跨源共享）
+            Collection<Map<String, Object>> cols = tableColumns.computeIfAbsent(tableName, tn -> {
+                try {
+                    return neo4jClient.query(
+                                    "MATCH (col:Column)-[:BELONGS_TO]->(t:Table {name: $tn}) " +
+                                    "RETURN col.col_key AS colKey, col.name AS name, " +
+                                    "  col.table_full_name AS tableFullName, t.is_temp AS temp")
+                            .bind(tn).to("tn").fetch().all();
+                } catch (Exception e) {
+                    log.warn("中间行影响列展开失败 table={}: {}", tn, e.getMessage());
+                    return Collections.emptyList();
+                }
+            });
+            Set<String> pairGroups = new HashSet<>();
+            for (Map<String, Object> fr : pairFilters) {
+                String groupKey = fr.get("procName") + "|" + fr.get("role");
+                if (!pairGroups.add(groupKey)) continue;
+                if (!emittedGroups.add(tableName + "|" + groupKey)) continue;
+                String role = (String) fr.get("role");
+                String procName = (String) fr.get("procName");
+                for (Map<String, Object> col : cols) {
+                    String colKey = (String) col.get("colKey");
+                    if (colKey == null || colKey.equals(startColKey)) continue;
+                    if (nodeIds.add(colKey)) {
+                        nodes.add(buildFieldNode(col, colKey, tableDepth));
+                    }
+                    ImpactAnalysisVO.EdgeVO rEdge = new ImpactAnalysisVO.EdgeVO();
+                    rEdge.setSource(tableName);
+                    rEdge.setTarget(colKey);
+                    rEdge.setEdgeType("ROW_IMPACT");
+                    rEdge.setRole(role);
+                    rEdge.setProcName(procName);
+                    rEdge.setImpactKind("ROW");
+                    edges.add(rEdge);
+                }
+            }
+        }
     }
 
     /** 上游条件分区：目标列所在表的全部反向 FILTERS 边 */
@@ -1017,9 +1311,10 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
      * 补全字段节点：Transform 的输入/输出字段可能不在主路径上（辅助输入），
      * 若尚未存在于 nodeIds 则创建一个 FIELD 节点加入 nodes，确保前端按可见节点过滤边时不丢失输入边。
      * col_key 格式: schema.table.field（小写）
+     * isTemp 取映射行携带的所属表 t.is_temp（Neo4j 权威），缺失时按名兜底，避免临时表字段被当作物理表。
      */
     private void ensureFieldNode(String colKey, Set<String> nodeIds,
-                                  List<ImpactAnalysisVO.NodeVO> nodes) {
+                                  List<ImpactAnalysisVO.NodeVO> nodes, Boolean isTemp) {
         if (colKey == null || !nodeIds.add(colKey)) return;
         ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
         n.setId(colKey);
@@ -1029,6 +1324,7 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         n.setNodeLevel("FIELD");
         n.setLayer(extractLayerFromId(colKey));
         n.setTableFullName(p.length >= 2 ? (p[0] + "." + p[1]).toLowerCase() : null);
+        n.setIsTemp(Boolean.TRUE.equals(isTemp));
         n.setDepth(null);
         nodes.add(n);
     }
@@ -1036,119 +1332,77 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
     /**
      * 清理悬空辅助节点：删除 depth=null 且不与任何有 depth 节点连通的 FIELD/TRANSFORM 节点。
      * 这些节点来自非路径 FieldMapping 的条件字段补全（ensureFieldNode），不在影响范围内。
-     * 迭代保留直至不动点：与保留节点有边相连的 depth=null 节点必须保留
-     * （如 CASE Transform 的输入字段、路径上条件字段的解释性输入），其邻居也可能因此保留。
+     * 邻接表 BFS 替代原 while×for×stream.anyMatch：O(V+E) 复杂度，避免万级节点抖动。
      * 注意：TABLE 级节点即使 depth=null 也直接保留（表级视图依赖表节点）。
      */
     private void removeDanglingAuxNodes(List<ImpactAnalysisVO.NodeVO> nodes,
                                         List<ImpactAnalysisVO.EdgeVO> edges) {
-        // 1. 初始保留集：有 depth 的节点 + 非 FIELD/TRANSFORM 层级节点
-        Set<String> keep = nodes.stream()
-                .filter(n -> n.getDepth() != null
-                        || (!"FIELD".equals(n.getNodeLevel()) && !"TRANSFORM".equals(n.getNodeLevel())))
-                .map(ImpactAnalysisVO.NodeVO::getId)
-                .collect(Collectors.toSet());
-        // 2. 迭代：depth=null 的 FIELD/TRANSFORM 节点若有一条边连到保留集则入保留集
-        boolean changed = true;
-        while (changed) {
-            changed = false;
-            for (ImpactAnalysisVO.NodeVO n : nodes) {
-                if (keep.contains(n.getId())) continue;
-                boolean touchesKept = edges.stream().anyMatch(e ->
-                        (n.getId().equals(e.getSource()) && keep.contains(e.getTarget()))
-                        || (n.getId().equals(e.getTarget()) && keep.contains(e.getSource())));
-                if (touchesKept) {
-                    keep.add(n.getId());
-                    changed = true;
+        // 1. 初始队列：有 depth 的节点 + 非 FIELD/TRANSFORM 层级节点（必保留）
+        Map<String, List<String>> adj = new HashMap<>(); // id → 邻居 id
+        Queue<String> queue = new LinkedList<>();
+        Set<String> visited = new HashSet<>(); // visited = 保留
+
+        // 建邻接表 + 初始入队
+        for (ImpactAnalysisVO.NodeVO n : nodes) {
+            String id = n.getId();
+            boolean initialKeep = n.getDepth() != null
+                    || (!"FIELD".equals(n.getNodeLevel()) && !"TRANSFORM".equals(n.getNodeLevel()));
+            if (initialKeep) {
+                queue.add(id);
+                visited.add(id);
+            }
+            adj.put(id, new ArrayList<>());
+        }
+        // 每条边双向连通（任意一端保留→另一端只要连通也保留）
+        for (ImpactAnalysisVO.EdgeVO e : edges) {
+            String s = e.getSource(), t = e.getTarget();
+            if (adj.containsKey(s)) adj.get(s).add(t);
+            if (adj.containsKey(t)) adj.get(t).add(s);
+        }
+        // 2. BFS：所有与初始保留集连通的节点全部保留
+        while (!queue.isEmpty()) {
+            String current = queue.poll();
+            for (String neighbor : adj.getOrDefault(current, Collections.emptyList())) {
+                if (!visited.contains(neighbor)) {
+                    visited.add(neighbor);
+                    queue.add(neighbor);
                 }
             }
         }
-        // 3. 删除未保留的节点 + 任一端未保留的边
-        nodes.removeIf(n -> !keep.contains(n.getId()));
-        edges.removeIf(e -> !keep.contains(e.getSource()) || !keep.contains(e.getTarget()));
+        // 3. 删除未保留节点 + 任一端未保留的边
+        nodes.removeIf(n -> !visited.contains(n.getId()));
+        edges.removeIf(e -> !visited.contains(e.getSource()) || !visited.contains(e.getTarget()));
     }
 
-    private void collectEdges(String startId, String direction, int depth, String relType,
-                               String nodeLabel, List<ImpactAnalysisVO.EdgeVO> edges,
-                               List<ImpactAnalysisVO.NodeVO> nodes) {
-        List<String> dirs = new ArrayList<>();
-        if ("BOTH".equals(direction)) {
-            dirs.add("DOWNSTREAM");
-            dirs.add("UPSTREAM");
-        } else {
-            dirs.add(direction);
-        }
-
-        Set<String> nodeIds = new HashSet<>();
-        for (ImpactAnalysisVO.NodeVO n : nodes) nodeIds.add(n.getId());
-
-        for (String dir : dirs) {
-            String edgeCypher;
-            if ("DOWNSTREAM".equals(dir)) {
-                edgeCypher = String.format(
-                        "MATCH (src:%s {name: $startId})-[:%s*1..%d]->(downstream:%s) " +
-                        "WITH DISTINCT downstream " +
-                        "MATCH (src2)-[r:%s]->(downstream) " +
-                        "RETURN src2.name AS source, src2.is_temp AS srcTemp, " +
-                        "downstream.name AS target, downstream.is_temp AS dstTemp, " +
-                        "r.operation AS operation, r.proc_name AS procName, " +
-                        "r.join_conditions AS joins, r.where_conditions AS wheres",
-                        nodeLabel, relType, depth, nodeLabel, relType);
-            } else {
-                edgeCypher = String.format(
-                        "MATCH (src:%s {name: $startId})<-[:%s*1..%d]-(upstream:%s) " +
-                        "WITH DISTINCT upstream " +
-                        "MATCH (upstream)-[r:%s]->(dst) " +
-                        "RETURN upstream.name AS source, upstream.is_temp AS srcTemp, " +
-                        "dst.name AS target, dst.is_temp AS dstTemp, " +
-                        "r.operation AS operation, r.proc_name AS procName, " +
-                        "r.join_conditions AS joins, r.where_conditions AS wheres",
-                        nodeLabel, relType, depth, nodeLabel, relType);
-            }
-
-            try {
-                neo4jClient.query(edgeCypher)
-                        .bind(startId).to("startId")
-                        .fetchAs(org.neo4j.driver.Record.class)
-                        .mappedBy((type, record) -> record)
-                        .all()
-                        .forEach(record -> {
-                            String sourceId = record.get("source").asString();
-                            String targetId = record.get("target").asString();
-
-                            // 确保边引用的节点都存在
-                            if (!nodeIds.contains(sourceId)) {
-                                nodeIds.add(sourceId);
-                                ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
-                                n.setId(sourceId);
-                                n.setLabel(extractShortName(sourceId));
-                                n.setNodeLevel("TABLE");
-                                n.setLayer(extractLayerFromId(sourceId));
-                                n.setIsTemp(record.get("srcTemp").isNull() ? false : record.get("srcTemp").asBoolean());
-                                nodes.add(n);
-                            }
-                            if (!nodeIds.contains(targetId)) {
-                                nodeIds.add(targetId);
-                                ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
-                                n.setId(targetId);
-                                n.setLabel(extractShortName(targetId));
-                                n.setNodeLevel("TABLE");
-                                n.setLayer(extractLayerFromId(targetId));
-                                n.setIsTemp(record.get("dstTemp").isNull() ? false : record.get("dstTemp").asBoolean());
-                                nodes.add(n);
-                            }
-
-                            ImpactAnalysisVO.EdgeVO edge = new ImpactAnalysisVO.EdgeVO();
-                            edge.setSource(sourceId);
-                            edge.setTarget(targetId);
-                            edge.setOperation(record.get("operation").isNull() ? null : record.get("operation").asString());
-                            edge.setProcName(record.get("procName").isNull() ? null : record.get("procName").asString());
-                            edges.add(edge);
-                        });
-            } catch (Exception e) {
-                log.error("查询边失败: {}", e.getMessage());
+    /**
+     * 按所属 TABLE 节点回填 FIELD 节点的 isTemp 标记。
+     * ensureFieldNode 补全的字段节点（辅助输入/条件字段）不带 temp，若其所属表为临时表，
+     * 前端会因 isTemp=null 且表名不含 vt_ 前缀而误判为物理表，出现在受影响表清单里。
+     * TABLE 节点标记来源为 Neo4j 的 t.is_temp（权威），此处仅做字段级下推。
+     */
+    private void propagateTempFlagToFieldNodes(List<ImpactAnalysisVO.NodeVO> nodes) {
+        Set<String> tempTables = new HashSet<>();
+        for (ImpactAnalysisVO.NodeVO n : nodes) {
+            if ("TABLE".equals(n.getNodeLevel()) && Boolean.TRUE.equals(n.getIsTemp())) {
+                tempTables.add(n.getId());
             }
         }
+        if (tempTables.isEmpty()) return;
+        for (ImpactAnalysisVO.NodeVO n : nodes) {
+            if (!"FIELD".equals(n.getNodeLevel()) || Boolean.TRUE.equals(n.getIsTemp())) continue;
+            String id = n.getId();
+            int idx = id.lastIndexOf('.');
+            if (idx > 0 && tempTables.contains(id.substring(0, idx))) {
+                n.setIsTemp(true);
+            }
+        }
+    }
+
+    /** Neo4j 布尔值安全转换（驱动可能返回 Boolean 或 String，null 视为 false）。 */
+    private static Boolean asBool(Object v) {
+        if (v == null) return false;
+        if (v instanceof Boolean) return (Boolean) v;
+        return Boolean.parseBoolean(v.toString());
     }
 
     private Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> buildImpactedByDepthFromCypher(
@@ -1158,21 +1412,32 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
         // 深度计算：优先选择"最后一跳经过临时表"的路径（反映真实数据流：
         // 非临时表通常经临时表 JOIN 后才 INSERT 到目标表）。
         // 若存在前驱为临时表的路径，取该类路径中最短的；否则取最短路径。
-        // scriptFile 从路径最后一条 READS 边的 proc_name 获取（生成该表的存储过程），
-        // 而非节点属性 downstream.script_file（会被多次写入覆盖）。
+        // impactSource（直接前驱）一并在此按(临时前驱优先, 最短路径)确定，
+        // 替代原 findImpactSource 逐表 *1..10 独立查询（N+1 ~ 数十次路径往返）：
+        //  - 与 findImpactSource 选择规则一致（前驱为临时表优先 + 路径最短）
+        //  - 不受固定 *1..10 上限约束，maxDepth>10 深处表的 impactSource 也能补全（原为 null）
+        //  - scriptFile 从路径最后一条 READS 边的 proc_name（生成该表的存储过程）获取，
+        //    而非节点属性 downstream.script_file（会被多次写入覆盖）
         String cypher = "MATCH path = (src:Table {name: $name})" + arrow + "(downstream:Table) " +
                 "WHERE src <> downstream " +
-                "WITH downstream, path, length(path) AS pathLen, " +
+                "WITH downstream, length(path) AS pathLen, " +
                 "  nodes(path)[length(path)-1] AS predecessor, " +
                 "  relationships(path)[length(path)-1] AS lastRel " +
-                "WITH downstream, " +
-                "  CASE WHEN coalesce(predecessor.is_temp, false) THEN pathLen ELSE null END AS tempPredPathLen, " +
-                "  pathLen, lastRel.proc_name AS procName " +
+                // 拆分 WITH：predecessor 在同一条 WITH 内被 coalesce 引用会报 "Variable not defined"，
+                // 需先在单独 WITH 中落定 predecessor/lastRel，再计算 predIsTemp
+                "WITH downstream, pathLen, predecessor, lastRel, " +
+                "  coalesce(predecessor.is_temp, false) AS predIsTemp " +
+                "WITH downstream, predecessor.name AS impactSource, lastRel.proc_name AS procName, " +
+                "  CASE WHEN predIsTemp THEN pathLen ELSE null END AS tempPredPathLen, " +
+                "  CASE WHEN predIsTemp THEN 0 ELSE 1 END AS predTempRank, pathLen " +
+                "ORDER BY predTempRank, pathLen, impactSource " +
+                "WITH downstream, impactSource, procName, tempPredPathLen, pathLen " +
                 "RETURN downstream.name AS name, downstream.short_name AS shortName, " +
                 "downstream.layer AS layer, downstream.is_temp AS isTemp, " +
-                "head(collect(DISTINCT procName)) AS scriptFile, " +
-                "COALESCE(min(tempPredPathLen), min(pathLen)) AS depth " +
-                "ORDER BY depth, downstream.name";
+                "COALESCE(min(tempPredPathLen), min(pathLen)) AS depth, " +
+                "head(collect(DISTINCT impactSource)) AS impactSource, " +
+                "head(collect(DISTINCT procName)) AS scriptFile " +
+                "ORDER BY depth, name";
 
         Map<Integer, List<ImpactAnalysisVO.ImpactedTable>> result = new LinkedHashMap<>();
         try {
@@ -1187,12 +1452,12 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                         t.setTemp(record.get("isTemp").isNull() ? false : record.get("isTemp").asBoolean());
                         t.setDepth((int) record.get("depth").asLong());
                         t.setScriptFile(record.get("scriptFile").isNull() ? null : record.get("scriptFile").asString());
+                        t.setImpactSource(record.get("impactSource").isNull() ? null : record.get("impactSource").asString());
                         return t;
                     })
                     .all()
                     .forEach(t -> {
-                        // 查询 impactSource（单跳）
-                        t.setImpactSource(findImpactSource(sourceTable, t.getName(), direction));
+                        // impactSource 已由主查询按(临时前驱优先,最短路径)确定，无需再逐表 findImpactSource（已消除 N+1）
                         // 查询表的字段
                         t.setColumns(getFields(t.getName()));
                         result.computeIfAbsent(t.getDepth(), k -> new ArrayList<>()).add(t);
@@ -1201,33 +1466,6 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
             log.error("构建 impactedByDepth 失败: {}", e.getMessage());
         }
         return result;
-    }
-
-    private String findImpactSource(String sourceTable, String tableName, String direction) {
-        try {
-            // 从源表出发，找到路径上该表的直接前驱。
-            // 优先选择前驱为临时表的路径（与深度计算逻辑一致），
-            // 再按路径长度升序取最短的一条。
-            String arrow = buildArrow(direction, "READS", 10);
-            String cypher = "MATCH path = (src:Table {name: $sourceTable})" + arrow + "(tgt:Table {name: $targetName}) " +
-                    "WITH path, nodes(path) AS ns, length(path) AS pathLen " +
-                    "WITH ns, pathLen, ns[size(ns)-2] AS predecessor " +
-                    "ORDER BY " +
-                    "  CASE WHEN coalesce(predecessor.is_temp, false) THEN 0 ELSE 1 END, " +
-                    "  pathLen " +
-                    "LIMIT 1 " +
-                    "RETURN predecessor.name AS source";
-            Collection<String> sources = neo4jClient.query(cypher)
-                    .bind(sourceTable).to("sourceTable")
-                    .bind(tableName).to("targetName")
-                    .fetchAs(String.class)
-                    .mappedBy((type, record) -> record.get("source").asString())
-                    .all();
-            return sources.isEmpty() ? null : sources.iterator().next();
-        } catch (Exception e) {
-            log.warn("查询 impactSource 失败 table={}: {}", tableName, e.getMessage());
-            return null;
-        }
     }
 
     private List<String> buildPropagationChains(
@@ -1245,7 +1483,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
 
     @Override
     public ImpactAnalysisVO expand(ExpandRequest request) {
-        int depth = request.getDepth() == null ? 1 : request.getDepth();
+        // 深度上限保护：与 analyze 一致 clamp 到 maxAllowedDepth，防止裸露 API 传超大 depth 触发路径枚举组合爆炸（实测 hops≥20 时挂死）
+        int depth = request.getDepth() == null ? 1 : Math.min(request.getDepth(), maxAllowedDepth);
         String direction = request.getDirection() == null ? "DOWNSTREAM" : request.getDirection().toUpperCase();
 
         ImpactAnalysisVO vo = new ImpactAnalysisVO();
@@ -1256,27 +1495,11 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                 || isTransformId(request.getNodeId());
 
         if (isFieldLevel) {
-            int cypherMaxHops = depth * 2;
-            String arrow = buildFieldArrow(direction, cypherMaxHops);
-            String cypher = "MATCH path = (src:Column {col_key: $key})" + arrow + "(tgt:Column) " +
-                    "WHERE src <> tgt " +
-                    "RETURN DISTINCT tgt.col_key AS id, tgt.name AS label, " +
-                    "       (min(length(path)) + 1) / 2 AS depth ORDER BY depth, tgt.col_key";
+            // 字段级 drill-down 改为 frontier 逐层 BFS（与 analyzeFieldLevel 同款），替代原 *1..hops 变长路径枚举。
+            // 原写法校验深度无上限（依赖外部 clamp）且实测 hops≥20 时排列组合爆炸挂死；
+            // BFS 逐层扩展只走节点可达集，规模可控，并对齐 analyze 的 LITERAL 剪枝（消除常量转换假阳性下游）。
             try {
-                Collection<ImpactAnalysisVO.NodeVO> result = neo4jClient.query(cypher)
-                        .bind(request.getNodeId()).to("key")
-                        .fetchAs(ImpactAnalysisVO.NodeVO.class)
-                        .mappedBy((type, record) -> {
-                            ImpactAnalysisVO.NodeVO n = new ImpactAnalysisVO.NodeVO();
-                            n.setId(record.get("id").asString());
-                            n.setLabel(record.get("label").asString());
-                            n.setNodeLevel("FIELD");
-                            n.setLayer(extractLayerFromId(n.getId()));
-                            n.setDepth((int) record.get("depth").asLong());
-                            return n;
-                        })
-                        .all();
-                nodes.addAll(result);
+                expandFieldLevelBfs(request.getNodeId(), direction, depth, nodes);
             } catch (Exception e) {
                 log.error("字段展开失败: {}", e.getMessage());
             }
@@ -1303,8 +1526,8 @@ public class ImpactAnalysisServiceImpl implements ImpactAnalysisService {
                         .all();
                 nodes.addAll(result);
 
-                // 同时查询边
-                collectEdges(request.getNodeId(), direction, depth, "READS", "Table", edges, nodes);
+                // 已移除 collectEdges 调用：expand 表级分支为死路径（ImpactFlowGraph.expandNode
+                // 无任何前端触发者），不再补路径外共上游边与兄弟节点。
             } catch (Exception e) {
                 log.error("表展开失败: {}", e.getMessage());
             }

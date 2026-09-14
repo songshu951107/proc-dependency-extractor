@@ -83,25 +83,42 @@ REM ============================================
 echo Starting frontend dev server on port 5173...
 start "PDE-Frontend" cmd /c "cd /d %~dp0frontend && npm run dev"
 
-REM 等待前端就绪
-echo Waiting for frontend to be ready...
-timeout /t 5 /nobreak >nul
+REM ============================================
+REM 启动后端 (8080, 后台窗口 PDE-Backend)
+REM ============================================
+echo Starting backend on port 8080 (background window)...
+start "PDE-Backend" cmd /c "cd /d %~dp0 && call %MVN_CMD% spring-boot:run"
+
+REM ============================================
+REM 等待后端真正就绪 (轮询 /api/impact/schemas, 最多 120s)
+REM 就绪前不打开浏览器, 避免 Vite 代理 500 (时序问题根治)
+REM ============================================
+echo Waiting for backend to be ready (up to 120s)...
+powershell -NoProfile -Command "$ok = $false; for ($i = 0; $i -lt 60; $i++) { try { $null = Invoke-WebRequest -Uri 'http://localhost:8080/api/impact/schemas' -TimeoutSec 2 -UseBasicParsing; $ok = $true; break } catch { Start-Sleep -Seconds 2 } }; if ($ok) { Write-Host '[OK] Backend is ready.' } else { Write-Host '[ERROR] Backend not ready after 120s.'; exit 1 }"
+if errorlevel 1 (
+    echo [ERROR] Backend failed to start. Check the "PDE-Backend" window for details.
+    goto :end
+)
 
 echo.
-echo --------------------------------------------
-echo  Backend is starting, press Ctrl+C to stop
-echo --------------------------------------------
-echo.
 echo  ============================================
+echo   All services are UP. Opening browser...
+echo.
 echo   Access URL: http://localhost:5173
-echo   (Frontend with hot-reload, proxies /api to 8080)
+echo   Frontend window: PDE-Frontend  (hot-reload)
+echo   Backend  window: PDE-Backend
+echo.
+echo   Press any key HERE to STOP all services.
 echo  ============================================
 echo.
 
-REM ============================================
-REM 启动后端 (前台, spring-boot:run)
-REM ============================================
-call "%MVN_CMD%" spring-boot:run
+start "" http://localhost:5173
+
+REM 主窗口作为控制台: 按任意键停止全部服务 (杀 8080/5173 的 java/node)
+pause >nul
+echo Stopping services...
+powershell -NoProfile -Command "foreach ($port in 8080,5173) { $c = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue; if ($c) { $p = Get-Process -Id $c[0].OwningProcess -ErrorAction SilentlyContinue; if ($p -and ($p.ProcessName -in 'java','node')) { Write-Host ('[STOP] Killing ' + $p.ProcessName + ' PID=' + $p.Id + ' on port ' + $port); Stop-Process -Id $p.Id -Force } } }"
+echo [OK] Services stopped.
 
 :end
 echo.

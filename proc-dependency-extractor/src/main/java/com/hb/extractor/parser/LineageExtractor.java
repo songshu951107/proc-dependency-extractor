@@ -55,6 +55,9 @@ public class LineageExtractor {
     @Autowired
     private FieldMappingExtractor fieldMappingExtractor;
 
+    @Autowired
+    private com.hb.extractor.mapper.TableColumnMetaMapper tableColumnMetaMapper;
+
     /**
      * 解析血缘派生关系
      *
@@ -78,12 +81,15 @@ public class LineageExtractor {
         // 临时表列定义缓存：CREATE TEMP 块存入列定义，供同 proc 后续 INSERT SELECT 块按位置匹配。
         // 临时表无 DDL 文件，若不补全则裸列会退化为 expr_N 占位名，导致字段级血缘在临时表处断裂。
         Map<String, List<String>> tempColumnCache = new HashMap<>();
+        // P12: 裸表名→全名（schema 补全）缓存，proc 级复用避免重复查库；value 可为 null（不可补全）
+        Map<String, String> schemaResolveCache = new HashMap<>();
         int blockSeq = 1;
         for (String block : sqlBlocks) {
             try {
-                parseBlock(block, blockSeq, schemaVarMap, updateTargetShort, result, tempColumnCache);
+                parseBlock(block, blockSeq, schemaVarMap, updateTargetShort, result, tempColumnCache, schemaResolveCache);
             } catch (Exception e) {
                 log.warn("SQL 块 {} 解析失败, 跳过: {}", blockSeq, e.getMessage());
+                result.recordFailure(blockSeq, null, e.getMessage(), block);
             }
             blockSeq++;
         }
@@ -92,18 +98,55 @@ public class LineageExtractor {
     }
 
     /**
+     * P4: 解开 SELECT 的括号形式。AS (SELECT ...) / INSERT (SELECT ...) 时
+     * getSelectBody() 返回 ParenthesedSelect 而非 PlainSelect, 逐层解开后返回内层
+     * PlainSelect; UNION/SetOperationList 等非 PlainSelect 形式返回 null（保持原行为）。
+     */
+    private PlainSelect unwrapPlainSelect(Select sel) {
+        if (sel == null) return null;
+        for (int i = 0; i < 5 && sel != null; i++) {
+            Object body = sel.getSelectBody();
+            if (body instanceof PlainSelect) return (PlainSelect) body;
+            if (body instanceof ParenthesedSelect) {
+                sel = ((ParenthesedSelect) body).getSelect();
+                continue;
+            }
+            return null;
+        }
+        return null;
+    }
+
+    /**
+     * 剥离列名两侧引号（GBase 内联 DDL 常用双引号包裹列名，如 "DATA_DT"）
+     */
+    private String stripQuotes(String s) {
+        if (s == null) return null;
+        if ((s.startsWith("\"") && s.endsWith("\"") || s.startsWith("'") && s.endsWith("'"))
+                && s.length() >= 2) {
+            return s.substring(1, s.length() - 1);
+        }
+        return s;
+    }
+
+    /**
      * 解析单个 SQL 块：识别操作类型 + 目标表 + 源表 + filter + 字段映射
      *
      * @param tempColumnCache 临时表列定义缓存（key=表短名小写, value=CREATE TEMP 块内联列定义）。
      *                        CREATE TEMP 块写入；INSERT SELECT 块在 ddlParser 取不到列定义时回退读取。
+     * @param schemaResolveCache P12: 裸表名→全名缓存（proc 级），避免同 proc 多块重复查元数据。
      */
     private void parseBlock(String sqlBlock, int blockSeq, Map<String, String> schemaVarMap,
                              String updateTargetShort, LineageParseResult result,
-                             Map<String, List<String>> tempColumnCache) {
+                             Map<String, List<String>> tempColumnCache,
+                             Map<String, String> schemaResolveCache) {
         if (sqlBlock == null || sqlBlock.trim().isEmpty()) return;
 
-        Statement stmt = analyzer.parse(sqlBlock);
-        if (stmt == null) return;
+        JsqlSqlAnalyzer.ParseOutcome outcome = analyzer.parseVerbose(sqlBlock);
+        Statement stmt = outcome.statement;
+        if (stmt == null) {
+            result.recordFailure(blockSeq, null, outcome.failureReason, sqlBlock);
+            return;
+        }
 
         // 识别操作类型和目标表
         String operation = null;
@@ -121,17 +164,15 @@ public class LineageExtractor {
                 operation = "CREATE TEMP";
                 targetIsTemp = true;
                 // CREATE TEMP TABLE 的内联字段定义
+                // GBase 方言列名常带双引号（"DATA_DT"），剥离引号与物理表元数据列名形态对齐
                 if (ct.getColumnDefinitions() != null) {
                     inlineDdlFields = new ArrayList<>();
                     for (net.sf.jsqlparser.statement.create.table.ColumnDefinition cd : ct.getColumnDefinitions()) {
-                        inlineDdlFields.add(cd.getColumnName().toLowerCase());
+                        inlineDdlFields.add(stripQuotes(cd.getColumnName()).toLowerCase());
                     }
                 }
-                // CTAS：CREATE TABLE AS SELECT
-                Select sel = ct.getSelect();
-                if (sel != null && sel.getSelectBody() instanceof PlainSelect) {
-                    sourceSelect = (PlainSelect) sel.getSelectBody();
-                }
+                // CTAS：CREATE TABLE AS SELECT（含 AS (SELECT ...) 括号形式, P4）
+                sourceSelect = unwrapPlainSelect(ct.getSelect());
             }
         } else if (stmt instanceof Insert) {
             Insert ins = (Insert) stmt;
@@ -144,8 +185,9 @@ public class LineageExtractor {
                 targetIsTemp = JsqlSqlAnalyzer.isTempTableName(targetTable)
                         || tempColumnCache.containsKey(targetTable.toLowerCase());
                 Select sel = ins.getSelect();
-                if (sel != null && sel.getSelectBody() instanceof PlainSelect) {
-                    sourceSelect = (PlainSelect) sel.getSelectBody();
+                if (sel != null) {
+                    // INSERT ... (SELECT ...) 括号形式同样解开（P4 与 CTAS 同型）
+                    sourceSelect = unwrapPlainSelect(sel);
                 }
             }
         } else if (stmt instanceof Merge) {
@@ -181,6 +223,14 @@ public class LineageExtractor {
 
         String targetTableLower = targetTable.toLowerCase();
         String targetFull = buildFullName(targetSchema, targetTable, schemaVarMap);
+        // P12: 目标表裸名（无 schema 前缀）且非临时表 → 从元数据补全 schema，
+        // 避免 Neo4j 中与带前缀版本分裂为两个 Table 节点（影响分析"未被引用"）
+        if (targetSchema == null && !targetIsTemp) {
+            String metaFull = resolveFullFromMeta(targetTableLower, schemaResolveCache);
+            if (metaFull != null) {
+                targetFull = metaFull;
+            }
+        }
 
         // CREATE TEMP 块：将内联列定义写入缓存，供同 proc 后续 INSERT SELECT 块按位置匹配
         if ("CREATE TEMP".equals(operation) && inlineDdlFields != null && !inlineDdlFields.isEmpty()) {
@@ -201,11 +251,10 @@ public class LineageExtractor {
             log.debug("parseBlock aliasMap: blockSeq={}, target={}, aliasMap={}", blockSeq, targetTableLower, aliasMap);
         }
 
-        // 提取 JOIN ON 和 WHERE filter
+        // 提取 JOIN ON 和 WHERE filter（递归下钻派生表子查询，覆盖子查询内条件）
         List<JsqlSqlAnalyzer.FilterInfo> filters = new ArrayList<>();
         if (sourceSelect != null) {
-            filters.addAll(analyzer.extractJoinFilters(sourceSelect));
-            filters.addAll(analyzer.extractWhereFilters(sourceSelect));
+            filters.addAll(analyzer.extractFiltersRecursively(sourceSelect));
         }
 
         // 构造 LineageEdge（每个源表一条边，过滤掉等于 targetTable 和 updateTargetShort 的表）
@@ -222,7 +271,14 @@ public class LineageExtractor {
             if (updateTargetShort != null && updateTargetShort.equalsIgnoreCase(srcTableLower)) continue;
 
             LineageEdge edge = new LineageEdge();
-            edge.setSourceTable(src.fullTableName != null ? src.fullTableName : srcTableLower);
+            // P12: 源表裸名（无 schema 前缀，fullTableName=裸名小写）且非临时表 → 从元数据补全 schema，
+            // 保证跨 proc 链路（下游读上游裸名写入的物理表）节点归并到同一 Table 节点
+            String srcFull = src.fullTableName;
+            if (src.schemaName == null && !JsqlSqlAnalyzer.isTempTableName(srcTableLower)) {
+                String metaFull = resolveFullFromMeta(srcTableLower, schemaResolveCache);
+                if (metaFull != null) srcFull = metaFull;
+            }
+            edge.setSourceTable(srcFull != null ? srcFull : srcTableLower);
             edge.setSourceTableShort(srcTableLower);
             edge.setTargetTable(targetFull);
             edge.setTargetTableShort(targetTableLower);
@@ -265,11 +321,23 @@ public class LineageExtractor {
                 ddlFields = tempColumnCache.get(targetTableLower);
             }
             List<FieldMapping> mappings = fieldMappingExtractor.extract(
-                    sqlBlock, targetTableLower, aliasMap, ddlFields);
+                    sqlBlock, targetTableLower, aliasMap, ddlFields, tempColumnCache);
             int edgeIdx = edgeIndexBase;
             for (FieldMapping fm : mappings) {
                 fm.setEdgeIndex(edgeIdx);
                 result.getFieldMappings().add(fm);
+            }
+            // CTAS 形式 CREATE TEMP（AS SELECT, 无内联列定义）: 派生列（SELECT 项别名/列名）也写入缓存,
+            // 供同 proc 后续块多表 JOIN 裸列唯一匹配归属（否则临时表列不进候选缓存, 裸列无法归属）
+            if ("CREATE TEMP".equals(operation) && targetIsTemp
+                    && !tempColumnCache.containsKey(targetTableLower)) {
+                List<String> derivedCols = new ArrayList<>();
+                for (FieldMapping fm : mappings) {
+                    if (fm.getTargetField() != null) derivedCols.add(fm.getTargetField());
+                }
+                if (!derivedCols.isEmpty()) {
+                    tempColumnCache.put(targetTableLower, derivedCols);
+                }
             }
         }
 
@@ -318,6 +386,47 @@ public class LineageExtractor {
     private String buildFullName(String schema, String table, Map<String, String> schemaVarMap) {
         if (schema == null) return table != null ? table.toLowerCase() : null;
         return schema + "." + (table != null ? table.toLowerCase() : null);
+    }
+
+    /**
+     * P12: 裸表名（无 schema 前缀）从元数据补全 schema。
+     * 脚本中 INSERT INTO / FROM 引用物理表不带 schema 前缀时（如 new_pord_sum block 9），
+     * 全名与带前缀版本分裂为两个 Table 节点，导致影响分析按 schema 查询"未被引用"且跨 proc 链路断裂。
+     * 查 table_column_meta 中该短名的唯一 full_table_name（如 pid.a_g_ln_new_pord_sum）补全；
+     * 临时表（VT_/TMP_/_TMP）或元数据无/多义记录时不补全，保持原行为。
+     *
+     * @param schemaCache 本次 extract 内的短名→全名缓存（避免重复查库）
+     * @return 补全后的全名（SCHEMA.short，schema 大写与既有边风格一致）；无法补全返回 null
+     */
+    private String resolveFullFromMeta(String tableShortLower, Map<String, String> schemaCache) {
+        if (tableShortLower == null || tableShortLower.isEmpty()) return null;
+        if (JsqlSqlAnalyzer.isTempTableName(tableShortLower)) return null;
+        if (schemaCache.containsKey(tableShortLower)) return schemaCache.get(tableShortLower);
+        String resolved = null;
+        try {
+            java.util.List<com.hb.extractor.entity.TableColumnMeta> records =
+                    tableColumnMetaMapper.selectList(
+                            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.hb.extractor.entity.TableColumnMeta>()
+                                    .eq(com.hb.extractor.entity.TableColumnMeta::getTableName, tableShortLower));
+            // 元数据每列一行，按 full_table_name 去重后判唯一：
+            // 唯一 → 补全；无记录或多 schema 同名（多义）→ 不补全，保持裸名
+            java.util.Set<String> distinctFulls = new java.util.HashSet<>();
+            if (records != null) {
+                for (com.hb.extractor.entity.TableColumnMeta r : records) {
+                    if (r.getFullTableName() != null) distinctFulls.add(r.getFullTableName().toLowerCase());
+                }
+            }
+            if (distinctFulls.size() == 1) {
+                String full = distinctFulls.iterator().next();
+                if (full.contains(".")) {
+                    resolved = full.substring(0, full.lastIndexOf('.')).toUpperCase() + "." + tableShortLower;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("裸表名 schema 补全查询失败 table={}: {}", tableShortLower, e.getMessage());
+        }
+        schemaCache.put(tableShortLower, resolved);
+        return resolved;
     }
 
     /** 从 "CDM.C_AGT_DEPOSIT_ACCT_INF" 提取短名 "C_AGT_DEPOSIT_ACCT_INF" */

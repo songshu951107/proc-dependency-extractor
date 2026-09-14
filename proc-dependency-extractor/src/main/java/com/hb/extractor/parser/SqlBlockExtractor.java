@@ -24,6 +24,14 @@ public class SqlBlockExtractor {
     );
 
     /**
+     * 连续空行折叠为单个换行（与 SqlPlaceholderReplacer 一致）。
+     * JsqlParser 4.9 在 ≥2 连续空行处会误判语句结束（如 UNION 前多空行报 "UNION"），
+     * 折叠后可直接解析；也避免落库块内容因空行过度分页。
+     */
+    private static final Pattern MULTI_NEWLINE_PATTERN =
+            Pattern.compile("(?:\\r?\\n[ \\t]*){2,}");
+
+    /**
      * 抽取所有 bsql* 三引号字符串内容并拼接
      */
     public String extract(String content) {
@@ -59,25 +67,18 @@ public class SqlBlockExtractor {
             return blocks;
         }
 
-        // 按 /*StepN:...*\/ 注释切分（Step 标记作为分隔符被消费）
-        Pattern stepPattern = Pattern.compile("/\\*Step\\d+[^*]*\\*/");
-        String[] segments = stepPattern.split(sqlContent);
-
-        for (String seg : segments) {
-            if (seg == null) continue;
-            // 先移除 /* ... */ 块注释（Step 标记已被 split 消费，剩余块注释可能含分号）
-            String noBlock = seg.replaceAll("(?s)/\\*.*?\\*/", " ");
-            // 再移除 -- 行注释（防止注释内的分号被误当作语句分隔符）
-            String noComments = noBlock.replaceAll("(?m)--.*$", "");
-            String trimmed = noComments.trim();
-            if (!trimmed.isEmpty()) {
-                // 进一步按分号切分（处理一个 Step 内多条语句）
-                String[] stmts = trimmed.split(";");
-                for (String stmt : stmts) {
-                    String s = stmt.trim();
-                    if (!s.isEmpty()) {
-                        blocks.add(s);
-                    }
+        // 移除所有块注释（含 /*StepN*/ 标记）与 -- 行注释。
+        // 注意：/*StepN*/ 【不再】作为语句分隔符——它们常出现在单条语句中间
+        // （INSERT 列清单与 SELECT 之间、UNION 前后），按它切分会拦腰切碎完整语句。
+        String noBlock = sqlContent.replaceAll("(?s)/\\*.*?\\*/", " ");
+        String noComments = noBlock.replaceAll("(?m)--.*$", "");
+        String trimmed = noComments.trim();
+        if (!trimmed.isEmpty()) {
+            // 仅按分号切分（分号位于单引号字符串内时不作为分隔符）
+            for (String s : splitStatements(trimmed)) {
+                String st = MULTI_NEWLINE_PATTERN.matcher(s.trim()).replaceAll("\n");
+                if (!st.isEmpty()) {
+                    blocks.add(st);
                 }
             }
         }
@@ -104,7 +105,6 @@ public class SqlBlockExtractor {
             return result;
         }
 
-        Pattern stepPattern = Pattern.compile("/\\*Step\\d+[^*]*\\*/");
         Matcher blockMatcher = SQL_BLOCK_PATTERN.matcher(content);
         int blockSeq = 0;
 
@@ -117,32 +117,28 @@ public class SqlBlockExtractor {
                 continue;
             }
 
-            // 按 /*StepN:...*/ 注释切分（与 extractBlocks 一致）
-            String[] segments = stepPattern.split(sqlText);
-            for (String seg : segments) {
-                if (seg == null) continue;
-                String noBlock = seg.replaceAll("(?s)/\\*.*?\\*/", " ");
-                String noComments = noBlock.replaceAll("(?m)--.*$", "");
-                String trimmed = noComments.trim();
-                if (!trimmed.isEmpty()) {
-                    String[] stmts = trimmed.split(";");
-                    for (String stmt : stmts) {
-                        String s = stmt.trim();
-                        if (!s.isEmpty()) {
-                            blockSeq++;
-                            SqlBlockInfoDTO dto = new SqlBlockInfoDTO();
-                            dto.setBlockSeq(blockSeq);
-                            dto.setContent(s);
-                            // 在 seg 中定位该语句，推算原文偏移
-                            int segOffset = seg.indexOf(s);
-                            if (segOffset < 0) segOffset = 0;
-                            int originalOffset = sqlTextStart + segOffset;
-                            int endOffset = Math.min(originalOffset + Math.max(1, s.length()) - 1, content.length());
-                            dto.setStartLine(countLinesToOffset(content, originalOffset));
-                            dto.setEndLine(countLinesToOffset(content, endOffset));
-                            result.add(dto);
-                        }
-                    }
+            // 移除所有块注释（含 /*StepN*/ 标记）与 -- 行注释；不按 Step 标记切分
+            String noBlock = sqlText.replaceAll("(?s)/\\*.*?\\*/", " ");
+            String noComments = noBlock.replaceAll("(?m)--.*$", "");
+            String trimmed = noComments.trim();
+            if (!trimmed.isEmpty()) {
+                int searchFrom = 0;
+                for (String s : splitStatements(trimmed)) {
+                    s = MULTI_NEWLINE_PATTERN.matcher(s.trim()).replaceAll("\n");
+                    if (s.isEmpty()) continue;
+                    blockSeq++;
+                    SqlBlockInfoDTO dto = new SqlBlockInfoDTO();
+                    dto.setBlockSeq(blockSeq);
+                    dto.setContent(s);
+                    // 在去注释文本中定位该语句，推算原文偏移（行号仅用于查看器高亮，近似即可）
+                    int segOffset = noComments.indexOf(s, searchFrom);
+                    if (segOffset < 0) segOffset = searchFrom;
+                    searchFrom = segOffset + s.length();
+                    int originalOffset = sqlTextStart + segOffset;
+                    int endOffset = Math.min(originalOffset + Math.max(1, s.length()) - 1, content.length());
+                    dto.setStartLine(countLinesToOffset(content, originalOffset));
+                    dto.setEndLine(countLinesToOffset(content, endOffset));
+                    result.add(dto);
                 }
             }
         }
@@ -177,5 +173,51 @@ public class SqlBlockExtractor {
             }
         }
         return lines;
+    }
+
+    /**
+     * 按分号切分语句，但跳过位于单引号字符串字面量内的分号
+     * （如 GBase 列 COMMENT '数据类型:1;2;3' 里的分号，不能当作语句分隔符，
+     *   否则 CREATE TEMPORARY TABLE 会被切碎成以注释文本开头的残块）。
+     * 支持 SQL 标准 '' 转义引号 与反斜杠 \' 转义。
+     */
+    private List<String> splitStatements(String sql) {
+        List<String> result = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        boolean inSingle = false;
+        int len = sql.length();
+        for (int i = 0; i < len; i++) {
+            char c = sql.charAt(i);
+            if (inSingle) {
+                cur.append(c);
+                if (c == '\'') {
+                    // 连续两个单引号 '' 或前面是反斜杠 \' 属于转义，不闭合字符串
+                    if (i + 1 < len && sql.charAt(i + 1) == '\'') {
+                        cur.append('\'');
+                        i++;
+                    } else {
+                        inSingle = false;
+                    }
+                }
+            } else {
+                if (c == '\'') {
+                    inSingle = true;
+                    cur.append(c);
+                } else if (c == ';') {
+                    String s = cur.toString().trim();
+                    if (!s.isEmpty()) {
+                        result.add(s);
+                    }
+                    cur.setLength(0);
+                } else {
+                    cur.append(c);
+                }
+            }
+        }
+        String last = cur.toString().trim();
+        if (!last.isEmpty()) {
+            result.add(last);
+        }
+        return result;
     }
 }

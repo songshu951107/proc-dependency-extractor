@@ -2,8 +2,9 @@
 
 - **作者**：AI 助手 + 用户协作
 - **创建日期**：2026-07-28
-- **状态**：待实现
+- **状态**：已实现（2026-08 完成；字段级血缘重构为 Transform 中转模型，新增报表影响分析）
 - **关联项目**：proc-dependency-extractor
+- **文档说明**：第 1-10 章为原始设计稿（保留历史价值）；第 11 章起为实际实现补充，反映生产代码真实结构。两者差异见第 17 章。
 
 ## 1. 背景与目标
 
@@ -891,3 +892,402 @@ startup.bat
 5. **P2**：`/api/impact/paths` + 路径列表展示
 6. **P2**：同步状态查询 + 自动重试定时任务
 7. **P2**：边详情侧边栏 + 字段映射查看
+
+---
+
+## 11. 实现状态与图模型演进
+
+### 11.1 实现状态
+
+- **状态**：已实现（2026-08 完成）
+- **关键演进**：字段级血缘从设计稿的 `MAPS_TO`（Column→Column 直连）重构为 **Transform 中转模型**（Column→Transform→Column），以表达 CASE WHEN、函数运算等复杂转换逻辑
+- **新增能力**：报表影响分析（第 13 章）、字段级上下游双向分析、转换节点输入字段溯源
+
+### 11.2 生产图模型（替代 3.1/3.2）
+
+原设计稿的 `Table/Field/DERIVES/MAPS_TO` 已演变为以下生产模型：
+
+**节点**：
+
+| 节点 | 标签 | 关键属性 | 唯一约束 |
+|------|------|---------|---------|
+| Table | `Table` | `name`(=full_name 全小写), `schema_prefix`, `short_name`, `is_temp`, `layer`(大写), `script_file`(仅目标表), `is_source` | `name` |
+| Column | `Column` | `col_key`(=schema.table.field 全小写), `name`(字段名), `table_full_name` | `col_key` |
+| Transform | `Transform` | `id`(=md5(procName+│target_col_key)), `expression`, `logic_type`, `proc_name`, `target_col_key`, `script_file`, `sql_hint` | `id` |
+| Script | `Script` | `file`, `target_table`, `description` | `file` |
+| Proc | `Proc` | `name`, `update_target` | `name` |
+| SqlBlock | `SqlBlock` | `proc_name`, `seq`, `operation`, `target_table`, `main_table` | `(proc_name, seq)` |
+| Report | `Report` | `file`, `name`, `type`, `description` | `file` |
+| Dataset | `Dataset` | `key`(=report_file#dataset_name), `name`, `connection`, `sql` | `key` |
+
+**关系**：
+
+| 关系 | 方向 | 属性 | 用途 |
+|------|------|------|------|
+| `READS` | Table→Table | `operation, proc_name, main_table, via_temp, join_conditions(JSON), where_conditions(JSON)` | 表级血缘（替代 DERIVES） |
+| `BELONGS_TO` | Column→Table | 无 | 字段归属表（DDL 补全阶段为涉及表所有字段建该关系） |
+| `INPUT_TO` | Column→Transform | `role(condition/value), source_alias` | 转换输入字段（source_alias 非空时才设置） |
+| `OUTPUT_TO` | Transform→Column | 无 | 转换输出字段 |
+| `DERIVED_FROM` | Column→Column | `expression, proc_name` | DIRECT 类型合并边（合并 INPUT_TO+OUTPUT_TO，不建 Transform 节点） |
+| `PRODUCES` | Script→Table | 无 | 脚本产出表（目标表） |
+| `CONSUMES` | Script→Table | 无 | 脚本消费表（依赖表） |
+| `PARSED_BY` | Table→Proc | `proc_name, operation` | 表被 proc 解析（跨 proc 关联） |
+| `CONTAINS_BLOCK` | Proc→SqlBlock | 无 | proc 包含 SQL 块 |
+| `CONTAINS` | Report→Dataset | 无 | 报表包含数据集 |
+| `QUERIES` | Dataset→Table | `alias` | 数据集查询表 |
+| `REFERENCES` | Dataset→Column | `select_alias, source_expr, cell_refs(JSON)` | 数据集引用字段 |
+
+> 注：设计稿的 `MAPS_TO / DERIVES` 在生产代码中已废弃（仅 `Neo4jSyncServiceImpl.deleteProcData` 拦留删除语句）。表级血缘已迁移至 `READS`，字段级血缘迁移至 `INPUT_TO`+`OUTPUT_TO`+`DERIVED_FROM`，并新增 `Script` 节点 + `PRODUCES`/`CONSUMES` 关系表达脚本产出消费关系。
+
+### 11.3 Transform 节点设计
+
+- **logic_type 分类**：`DIRECT / CASE / SUBTRACTION / ADDITION / MULTIPLICATION / DIVISION / FUNCTION / LITERAL / COALESCE ...`
+- **DIRECT 特殊处理**：不创建 Transform 节点，直接建 `DERIVED_FROM` 边（源 Column→目标 Column），减少图复杂度
+- **其他 logic_type**：建 Transform 节点，`label` 截断 expression（>30 字符显示省略号），为每个 input 建 `INPUT_TO` 边，为 output 建 `OUTPUT_TO` 边
+- **Transform id**：`md5(procName + "|" + target_col_key)` 32 位 hex，前端用正则 `^[a-f0-9]{32}$` 识别
+- **字面量场景**：虚拟节点 `__literal__.<transformId>`（无 BELONGS_TO 归属）
+
+### 11.4 sql_hint 生成逻辑（via_temp 链路反查）
+
+对应代码：`Neo4jSyncServiceImpl.generateSqlHint`（行 560-572）+ `findTempUpstreamChain`（行 578-600）
+
+- **目的**：在 Transform 节点上记录该转换所属的 SQL 块编号及中间经过的临时表链路，便于前端展示与溯源
+- **生成格式**：`block_seq={n}; via_temp={temp_chain}`
+- **via_temp 链路反查**：从目标表出发，逆向遍历 `READS` 关系（过滤 `via_temp` 非空），收集所有中间临时表名，拼接为 `VT_A -> VT_B -> ...` 字符串
+- **使用场景**：前端 `ImpactNodeDetail.vue` 在 TRANSFORM 节点详情中展示 sqlHint，帮助用户理解该字段转换经历的临时表路径
+
+### 11.5 虚拟字面量 Column 节点
+
+对应代码：`Neo4jSyncServiceImpl.mergeLiteralColumn`（行 545-554）
+
+- **触发条件**：字段映射的 source_expr 为字面量（如 `'20260101'`、数字常量）且无法解析出源字段
+- **col_key 格式**：`__literal__.<transformId>`（前缀 `__literal__.`
+- **特殊处理**：
+  - 不创建 `BELONGS_TO` 关系（无归属表）
+  - `ImpactAnalysisServiceImpl.extractTableFromId` 对 `__literal__` 前缀返回 null（行 595）
+  - 前端在字段级图谱中作为虚拟输入节点显示
+
+## 12. 字段级影响分析实际实现
+
+对应代码：`ImpactAnalysisServiceImpl.analyzeFieldLevel`（行 614-765）
+
+### 12.1 查询流程
+
+1. **起点**：Column 节点 `col_key = fieldFullName`（schema.table.field 全小写）
+2. **跳数换算**：`cypherMaxHops = depth * 2`（API 字段跳数 → Cypher 关系跳数；一对 INPUT_TO+OUTPUT_TO 算 1 个字段跳）
+3. **方向箭头**（`buildFieldArrow`，行 572-577）生成 `[:INPUT_TO|OUTPUT_TO*1..cypherMaxHops]`：
+   - DOWNSTREAM: `-[:...]->`
+   - UPSTREAM: `<-[:...]-`
+   - BOTH: `-[:...]-`（无方向）
+   - 注：关系跳数通过**字符串拼接**注入 Cypher（Neo4j 不支持关系跳数参数化）
+4. **步骤1 查 Column 节点**（行 636-662）：`depth = (minRelLen + 1) / 2`，nodeLevel=FIELD，layer 从 col_key 解析 schema 大写
+5. **步骤2 查 Transform 节点 + 边**（行 665-761）：`OPTIONAL MATCH (in:Column)-[rIn:INPUT_TO]->(n)` + `(n)-[rOut:OUTPUT_TO]->(out:Column)`
+6. **节点/边构建**：DIRECT → DERIVED_FROM 边；其他 → Transform 节点 + INPUT_TO/OUTPUT_TO 边
+7. **ensureFieldNode 补全**（见 12.3）
+
+### 12.2 role（condition/value）
+
+- 取自 Neo4j `INPUT_TO` 关系 `role` 属性
+- 写入侧由 `Neo4jSyncServiceImpl.createInputToRelationship` 设置，值来自 `TableTransformInput.role`（由 `FieldMappingExtractor.classifyLogicType` 推导）
+- 当前只覆盖 SELECT 列表达式，role 实际值以 `value` 为主；CASE WHEN 的 condition 分支字段 role=condition
+- **ON/WHERE 字段未建 INPUT_TO**（已知限制，见 18.2）
+
+### 12.3 ensureFieldNode 字段节点补全（2026-08-19 修复）
+
+- **问题**：CASE 多分支等辅助输入字段不在从源字段出发的主路径上，前端 `updateVisibleGraph` 按"两端节点可见"过滤边时会丢弃这些字段的 INPUT_TO 边，导致转换节点详情只显示部分输入
+- **修复**（[ImpactAnalysisServiceImpl.java#L772](file:///d:/HB/work_zuoye/proc-dependency-extractor/src/main/java/com/hb/extractor/service/impl/ImpactAnalysisServiceImpl.java#L772)）：对每条 INPUT_TO/OUTPUT_TO 引用的 col_key 调用 `ensureFieldNode`，若 nodeIds 中不存在则创建 FIELD 节点（label=field 大写，depth=null）
+- **效果**：转换节点详情显示全部输入字段及其来源表
+
+### 12.4 字段级→表级聚合
+
+`buildImpactedByDepthFromFieldNodes`（行 248-330）：字段节点 col_key split 出 `schema.table` → 聚合为 `ImpactedTable`；表级 `impactSource` 通过 INPUT_TO+OUTPUT_TO 配对推导（源表A.field → Transform → 表B.field ⇒ A→B），DERIVED_FROM 边直接推导 A→B。
+
+### 12.5 验证实例
+
+- 下游：`FDM.f_ac_ctds_ldr_acct.acct_no` → 14 节点 17 边（含 CASE Transform，4 个输入字段全部补全）
+- 上游：`PID.a_d_dp_deposit_acct_inf.agr_retn_amt` → 13 节点 13 边（CASE Transform 4 输入：acct_no/ldr_frozen_principal/acct_bal，role condition/value 齐全）
+
+## 13. 报表影响分析
+
+### 13.1 数据模型
+
+```
+Report -[:CONTAINS]-> Dataset -[:QUERIES]-> Table
+                              └-[:REFERENCES]-> Column
+```
+
+报表节点不直接连 Table/Column，全部通过 Dataset 中转。
+
+### 13.2 四种查询场景
+
+对应代码：`ReportImpactServiceImpl`
+
+| 场景 | 方法 | 数据源 | 返回 |
+|------|------|--------|------|
+| 按表 | `findReportsByTable` | Neo4j: `Table<-[:QUERIES]-Dataset<-[:CONTAINS]-Report` | 报表清单（file/name/datasetName/connection） |
+| 按字段 | `findReportsByField` | Neo4j: `Column<-[REFERENCES]-Dataset<-[:CONTAINS]-Report` | 报表清单 + select_alias/source_expr/cell_refs |
+| 按表头汉字（口径） | `findReportsByHeaderText` | MySQL `report_cell_binding` LIKE | reports + bindings |
+| 报表+表头列溯源 | `traceReportLineage` | MySQL 取 source_table+source_field → `ImpactAnalysisRequest(UPSTREAM)` → `ImpactAnalysisService.analyze` | ImpactAnalysisVO（图谱复用 buildWithoutTemp 渲染） |
+
+### 13.3 API 端点（`/api/report-impact`，6 个）
+
+| 方法 | 路径 | 参数 | 返回 |
+|------|------|------|------|
+| GET | `/fields` | `schema, table` | `List<String>`（表被报表引用的字段） |
+| GET | `/by-table` | `schema, table` | `ReportImpactVO` |
+| GET | `/by-field` | `schema, table, field` | `ReportImpactVO` |
+| GET | `/by-header` | `headerText` | `ReportImpactVO`（口径查询） |
+| GET | `/report-headers` | `reportFile` | `List<String>`（报表所有表头汉字） |
+| GET | `/trace-lineage` | `reportFile, headerText` | `ImpactAnalysisVO`（上游溯源图谱） |
+
+### 13.4 前端 ReportImpactView
+
+- 4 种查询类型筛选（table/field/caliber/trace）
+- 报表解析弹窗（全部重解析/单文件拖拽/批量目录），调用 `/api/report/parse/all`、`/api/report/parse/upload`、`/api/report/parse/batch` 端点
+- **溯源模式**：全屏图谱布局，复用 `ImpactFlowGraph`（direction=UPSTREAM），右侧 el-descriptions 显示字段/深度/所属表/来源字段/目标字段/存储过程/来源表达式
+- **非溯源模式**：左侧 ReportList 报表清单 + 右侧 FieldMappingTable 字段映射详情
+
+### 13.5 报表影响集成进 analyze（跨链分析）
+
+对应代码：`ImpactAnalysisServiceImpl.analyze`（行 200-234）+ `buildReportImpacts`（行 433-460）
+
+- **触发条件**：`ImpactAnalysisRequest.analyzeReportImpact == true`
+- **表级分支**（行 201-213）：调 `buildReportImpacts(tableFullName, impactedByDepth)`
+- **字段级分支**（行 222-234）：将字段级 `impactedByDepth` 转换为表级后调 `buildReportImpacts`
+- **buildReportImpacts 逻辑**：源表 depth=0 + 受影响表逐个调 `queryReportsForTable`（Neo4j `Table<-[:QUERIES]-Dataset<-[:CONTAINS]-Report`），按报表文件去重
+- **统计输出**：`ImpactStats.affectedReportCount`（按报表文件去重计数）
+- **前端展示**：
+  - `ImpactFilter.vue` 暴露"分析报表影响"开关（行 52-54）
+  - `ImpactStats.vue` 显示"影响报表数量"卡片（行 16-18）
+  - `ImpactAnalysis.vue` 渲染"报表影响（跨链分析）"表格（行 95-108）
+
+### 13.6 两个 ReportRef 类的差异
+
+- `ImpactAnalysisVO.ReportRef`（ImpactAnalysisVO.java 行 36-46）：仅 `file/name/datasetName/connection`（跨链分析用）
+- `ReportImpactVO.ReportRef`（ReportImpactVO.java 行 25-34）：`file/name/datasetName/connection + selectAlias/sourceExpr/cellRefs`（报表影响查询用）
+- 两者字段不同，不可互换使用
+
+## 14. 实际 API 端点清单
+
+### 14.1 `/api/impact`（10 个端点）
+
+| # | 方法 | 路径 | 参数 | 返回 |
+|---|------|------|------|------|
+| 1 | GET | `/schemas` | 无 | `List<String>` |
+| 2 | GET | `/tables` | `schema` | `List<TableOption>` |
+| 3 | GET | `/fields` | `tableFullName` | `List<String>` |
+| 4 | POST | `/analyze` | `ImpactAnalysisRequest` | `ImpactAnalysisVO` |
+| 5 | POST | `/expand` | `ExpandRequest` | `ImpactAnalysisVO` |
+| 6 | GET | `/paths` | `source, target, maxDepth=10` | `List<PathVO>`（预留，返回空） |
+| 7 | POST | `/resync` | `procName` | `SyncResult` |
+| 8 | POST | `/resync/all` | 无 | `SyncResult` |
+| 9 | POST | `/clear-neo4j` | 无 | `Void`（清空 Neo4j 全部数据） |
+| 10 | GET | `/sync-status` | 无 | `List<Neo4jSyncLogVO>`（仅 FAILED） |
+
+### 14.2 `/api/report-impact`（6 个端点）
+
+见 13.3。
+
+## 15. 请求/响应 VO 实际字段
+
+### 15.1 ImpactAnalysisRequest（实际）
+
+| 字段 | 类型 | 默认 | 说明 | 实现状态 |
+|------|------|------|------|---------|
+| `schema` | String | - | schema 名，可选 | ✓ |
+| `tableShortName` | String | - | 表短名，必填 | ✓ |
+| `fieldName` | String | - | 填则字段级分析 | ✓ |
+| `direction` | String | `DOWNSTREAM` | UPSTREAM/DOWNSTREAM/BOTH | ✓ |
+| `maxDepth` | Integer | 5 | 上限 20 | ✓ |
+| `operations` | List<String> | - | 操作类型筛选 | ⚠ 未实际使用 |
+| `analyzeReportImpact` | Boolean | false | 是否分析报表影响 | ✓（新增） |
+| `includeConditions` | Boolean | true | 返回 JOIN/WHERE | ⚠ 未实际使用 |
+| `includeFieldMapping` | Boolean | false | 返回字段级映射 | ⚠ 未实际使用 |
+
+### 15.2 ImpactAnalysisVO（实际新增字段）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `sourceTable` | String | 源表全名 |
+| `sourceLayer` | String | 源表数据层级 |
+| `impactedByDepth` | `Map<Integer, List<ImpactedTable>>` | 按深度分组的受影响表 |
+| `propagationChains` | `List<String>` | 传播链路描述（如 "A -> B"） |
+| `reportImpacts` | `List<ReportImpact>` | 报表影响（勾选 analyzeReportImpact 时） |
+
+**NodeVO 实际字段**：`id, label, type, nodeLevel(TABLE/FIELD/TRANSFORM), layer, tableFullName, depth, isTemp, expression, logicType, sqlHint, procName, scriptFile`
+
+**EdgeVO 实际字段**：`source, target, operation, sqlBlockSeq, mainTable, joinConditions, whereConditions, sourceExpr, sourceAlias, procName, edgeType, role, expression`
+
+**ImpactStats 实际字段**：`affectedProcCount, affectedTableCount, affectedFieldCount, maxDepthReached, affectedProcNames(⚠未填充), affectedReportCount(新增)`
+
+**ImpactedTable 实际字段**：`name, shortName, layer, temp, depth, impactSource, scriptFile, columns, matchedColumns`（注意：设计稿字段名为 `table`，实际为 `name`）
+
+### 15.3 死字段清单（DTO 声明但未实际使用）
+
+| 字段 | 所属类 | 状态 | 说明 |
+|------|--------|------|------|
+| `includeConditions` | ImpactAnalysisRequest | ⚠ 未读取 | `analyze` 方法完全未引用 |
+| `includeFieldMapping` | ImpactAnalysisRequest | ⚠ 未读取 | `analyze` 方法完全未引用 |
+| `operations` | ImpactAnalysisRequest | ⚠ 未读取 | 字段级/表级分支均未做操作类型筛选 |
+| `truncated` | ImpactAnalysisVO | ⚠ 恒 false | 行 190 硬编码 `vo.setTruncated(false)` |
+| `paths` | ImpactAnalysisVO | ⚠ 未填充 | `analyze` 未设置，仅 `getPaths` 方法返回（而该方法为桩） |
+| `affectedProcNames` | ImpactStats | ⚠ 未填充 | `buildStats` 未设置该字段 |
+| `fieldSources` | ReportImpactVO | ⚠ 未填充 | 四个查询方法均未设置 |
+
+## 16. 前端实际实现
+
+### 16.1 图谱引擎切换
+
+设计稿 AntV G6 → 实际 **VueFlow + dagre**（`ImpactFlowGraph.vue`，rankdir=LR, nodesep=30, ranksep=80）。
+
+### 16.2 图谱筛选工具栏（新增）
+
+- `filterSchemas`（多选 Schema）
+- `filterTableKw`（表名关键字，可输入筛选）
+- `hideUnmatched`（隐藏未匹配节点）
+- `preservedNodeIds`（BFS 从命中节点回溯祖先，保留路径上所有节点）
+
+**筛选规则**（`ImpactAnalysis.vue` 行 200-279）：
+- 第一遍匹配非 TRANSFORM 节点（源表始终保留）
+- 第二遍 TRANSFORM 节点：其任一 INPUT_TO 源字段或 OUTPUT_TO 目标字段命中则保留
+- hideUnmatched 时 BFS 回溯祖先路径，避免命中节点变成孤岛
+
+### 16.3 转换节点详情
+
+`ImpactNodeDetail.vue`：
+- TRANSFORM 节点显示：logic_type 徽章（带颜色）、expression、sqlHint、procName、目标字段
+- **输入字段列表**：从 edges 过滤 `target===node.id && edgeType==='INPUT_TO'`，映射为 `{colKey, role, alias}`
+- 每条输入显示：role 标签（condition=warning 橙 / value=success 绿）+ colKey + alias
+- 底部 `展开下游` / `收起下游` 按钮
+
+### 16.4 边详情与样式
+
+`ImpactEdgeDetail.vue` 显示 edgeType/role/operation/sourceExpr/expression/sourceAlias + JOIN/WHERE 条件列表。
+
+边样式（`ImpactFlowGraph.vue` 行 138-143）：
+- INPUT_TO: 灰色虚线 `#94a3b8` + strokeDasharray 5,5
+- OUTPUT_TO: 蓝色 `#3b82f6`
+- DERIVED_FROM: 绿色 `#10b981`
+- 其他: 灰色 `#64748b`
+- 筛选时命中边高亮蓝色+加粗+animate，未命中变淡 opacity=0.15
+
+### 16.5 临时表穿透
+
+`buildWithoutTemp`（`ImpactAnalysis.vue` 行 361-447）：构建 impactSource→name 邻接表，BFS 跳过临时表（临时表被穿透，不增加层级），重建表级节点/边。表级分析默认展示 depth<=3 节点（`DEFAULT_VISIBLE_DEPTH=3`）。
+
+### 16.6 默认渲染策略
+
+- 字段级：直接用后端 nodes/edges，所有节点默认可见（跳过 buildWithoutTemp）
+- 表级：调 buildWithoutTemp 穿透临时表重建
+- 节点 >50 时 ElMessage 提示
+
+### 16.7 前端组件清单（components/impact 目录）
+
+| 组件 | 文件 | 行数 | 职责 |
+|------|------|------|------|
+| `ImpactFlowGraph` | ImpactFlowGraph.vue | 274 | VueFlow 图谱主组件，含 `expandNode` 异步展开方法（通过 defineExpose 暴露，但主视图实际走本地缓存） |
+| `ImpactNodeDetail` | ImpactNodeDetail.vue | 123 | 节点详情侧边栏，TRANSFORM/TABLE/FIELD 三分支渲染 |
+| `ImpactEdgeDetail` | ImpactEdgeDetail.vue | 76 | 边详情，支持 INPUT_TO/OUTPUT_TO/DERIVED_FROM/READS 标签 |
+| `ImpactFilter` | ImpactFilter.vue | 140 | 查询表单，含"分析报表影响"开关（行 52-54） |
+| `ImpactStats` | ImpactStats.vue | 41 | 统计卡片，含 affectedReportCount |
+| `ImpactPropagationTree` | ImpactPropagationTree.vue | 249 | 传播树视图，含 `rebuildWithoutTemp` 临时表折叠 |
+| `ImpactNode` | ImpactNode.vue | - | 节点渲染组件 |
+| `ScriptSnippetModal` | ScriptSnippetModal.vue | - | 代码片段弹窗 |
+
+**报表影响组件**（components/report 目录）：`ReportImpactFilter.vue`、`ReportList.vue`、`FieldMappingTable.vue`
+
+**前端 API 层**：
+- `frontend/src/api/impact.js`：导出 getSchemas/getTables/getFields/analyze/expand/getPaths/resync/resyncAll/getSyncStatus（**注意：未导出 clearNeo4j 函数，后端 `/clear-neo4j` 端点无前端 UI 入口**）
+- `frontend/src/api/report.js`：导出 findReportsByTable/findReportsByField/findByHeaderText/getReportFields/getReportHeaders/traceReportLineage 等
+
+### 16.8 buildWithoutTemp 重复实现（已知技术债）
+
+临时表穿透逻辑在多处重复实现，存在维护风险：
+
+| 位置 | 方法 | 行号 |
+|------|------|------|
+| `ImpactAnalysis.vue` | `buildWithoutTemp` | 361-447 |
+| `ReportImpactView.vue` | `buildWithoutTemp` | 361-436 |
+| `ImpactPropagationTree.vue` | `rebuildWithoutTemp` | 103-174 |
+| `ImpactAnalysisServiceImpl.java` | `calcNonTempMaxDepth` | 373-427 |
+
+建议后续抽取为公共 composable 或后端统一计算。
+
+### 16.9 expand API 接线状态
+
+- `expand` 函数在 `api/impact.js` 已导出
+- `ImpactFlowGraph.vue` 内部 `expandNode` 方法（行 154-205）调用该 API，并通过 `defineExpose`（行 252）暴露
+- **但主视图 `ImpactAnalysis.vue` 的 `handleExpand`（行 481-507）使用本地 `allNodesByDepth` 数据过滤，未调用 `graphRef.value.expandNode()`**
+- 结论：expand API 与组件方法已接线，但主视图的展开流程走本地缓存；`expandNode` 暴露方法实际上是未使用的预留接口，仅在 `analyze` 截断时才可能被触发
+
+## 17. 与原设计稿差异对照表
+
+| 维度 | 原设计稿（1-10 章） | 实际实现（11-16 章） |
+|------|-------------------|--------------------|
+| 字段级血缘关系 | `MAPS_TO`（Column→Column 直连） | `INPUT_TO`+`OUTPUT_TO`（Column→Transform→Column） |
+| 字段级分析遍历 | 沿 `MAPS_TO` 递归 | 沿 `INPUT_TO│OUTPUT_TO` 递归（跳数×2） |
+| 表级血缘关系 | `DERIVES` | `READS`（含 join_conditions/where_conditions 属性） |
+| 字段节点标签 | `Field` | `Column`（标识符 col_key） |
+| DIRECT 转换 | 未定义 | 不建 Transform，直接 `DERIVED_FROM` 边 |
+| 报表影响分析 | 未设计 | 新增 Report/Dataset 节点 + 6 个 API（第 13 章） |
+| 前端图谱引擎 | AntV G6 | VueFlow + dagre |
+| 图谱筛选工具栏 | 未设计 | filterSchemas + filterTableKw + hideUnmatched + preservedNodeIds |
+| 转换节点详情 | 未设计 | ImpactNodeDetail 显示输入字段+role |
+| 下拉数据源 | Neo4j 主源 | MySQL `table_ddl_info`/`table_column_meta` 主源 + Neo4j fallback（2026-08-19 修复） |
+| 临时表过滤规则 | 未定义 | `VT_.*│TMP_.*│.*_TMP\d*` 前缀过滤 |
+| ImpactedTable.name | 设计为 `table` | 实际为 `name`，新增 columns/matchedColumns/scriptFile |
+| analyzeReportImpact | 未设计 | 新增请求字段，返回 reportImpacts + affectedReportCount |
+| affectedProcNames | 设计填充 | 实际未填充 |
+| /paths 路径查询 | 设计实现 | 预留，返回空列表（`getPaths` 行 1029-1033 桩方法） |
+| operations 筛选 | 设计实现 | 字段保留但未实际使用 |
+| Script 节点 + PRODUCES/CONSUMES | 未设计 | 新增脚本产出消费关系建模 |
+| sql_hint 生成 | 未设计 | Transform 节点记录 block_seq + via_temp 链路 |
+| 虚拟字面量 Column | 未设计 | `__literal__.<transformId>` 表达式常量输入 |
+| /clear-neo4j 端点 | 未设计 | 后端存在但前端无 UI 入口（管理端点） |
+| expand API 接线 | 设计为增量加载主路径 | 实际主视图走本地缓存，expand 为预留 |
+| 多个 DTO 字段 | 设计填充 | 死字段：includeConditions/includeFieldMapping/truncated/paths/fieldSources（见 15.3） |
+| buildWithoutTemp | 未设计 | 前后端 4 处重复实现（见 16.8） |
+
+## 18. 已知限制（更新）
+
+1. **Neo4j 不可用降级**（同原）：应用仍可启动，影响分析页显示"服务不可用"，其他功能不受影响
+2. **ON/WHERE 字段不进字段级链路**：字段级影响分析只覆盖 SELECT 列表达式中的字段；ON/WHERE 条件字段被提取到 `table_lineage_filter.fields_involved`，同步时仅作为 `READS` 关系的 `join_conditions`/`where_conditions` 属性存储，**不建** `INPUT_TO` 关系到 Transform。若字段同时出现在 SELECT 表达式则可分析到。增强方案（未实现）：为 ON/WHERE 字段建 INPUT_TO 关系到相关 Transform，role 标记 `join_condition`/`where_condition`
+3. **跨 proc 匹配依赖 full_name**（同原）：不同 proc 对同一表使用不同 schema 变量需解析器统一为完整名
+4. **gbk 编码脚本**：批量解析时需编码自动检测（`PyProcParser.readContentWithEncodingDetection`，UTF-8 失败回退 GBK，2026-08-19 修复）
+5. **fields_involved 列长度**：需 LONGTEXT（已 ALTER，2026-08-19 修复，避免 Data truncation）
+6. **批量解析备份文件污染**：`extractAndSaveBatch` 已加 `isBackupOrTestFile` 过滤（排除 `_bak/_bakN/_temp/_tempN/_sjpttest/_test/_old` 结尾文件）
+7. **字段级 role 单一**：当前 SELECT 列表达式提取的 role 以 value 为主，CASE WHEN condition 分支为 condition；ON/WHERE 的 condition 角色未建模（见限制 2）
+8. **buildWithoutTemp 重复实现**：临时表穿透逻辑在 4 处重复（前端 ImpactAnalysis.vue/ReportImpactView.vue/ImpactPropagationTree.vue + 后端 calcNonTempMaxDepth），存在维护风险（见 16.8）
+9. **多个 DTO 死字段**：includeConditions/includeFieldMapping/operations/truncated/paths/affectedProcNames/fieldSources 已声明但未实际使用（见 15.3）
+10. **/clear-neo4j 无前端入口**：后端端点存在（ImpactAnalysisController.java 行 66-70），但前端 `api/impact.js` 未导出 clearNeo4j 函数，无 UI 入口，仅作管理端点
+11. **expand API 未实际使用**：`ImpactFlowGraph.expandNode` 已暴露但主视图走本地缓存，仅在 analyze 截断时才可能触发（见 16.9）
+
+## 19. 实现状态速查
+
+| 能力 | 状态 | 关键代码 |
+|------|------|---------|
+| Neo4j 配置 + 约束初始化 | ✅ | `Neo4jConfig`, `Neo4jConstraintInitializer` |
+| Neo4jSyncService 双写 | ✅ | `Neo4jSyncServiceImpl.syncProc` |
+| Script 节点 + PRODUCES/CONSUMES | ✅ | `Neo4jSyncServiceImpl.mergeScriptNode/mergeProducesRelationship/mergeConsumesRelationship` |
+| Transform sql_hint 生成 | ✅ | `Neo4jSyncServiceImpl.generateSqlHint` + `findTempUpstreamChain` |
+| 虚拟字面量 Column 节点 | ✅ | `Neo4jSyncServiceImpl.mergeLiteralColumn` |
+| 表级影响分析 | ✅ | `ImpactAnalysisServiceImpl.analyzeTableLevel`（READS BFS） |
+| 字段级影响分析 | ✅ | `ImpactAnalysisServiceImpl.analyzeFieldLevel`（Transform 模型） |
+| 字段级上下游双向 | ✅ | `buildFieldArrow`（UPSTREAM/DOWNSTREAM/BOTH） |
+| 转换节点输入字段补全 | ✅ | `ensureFieldNode`（2026-08-19） |
+| 报表影响分析（4 场景） | ✅ | `ReportImpactServiceImpl` |
+| 报表影响集成进 analyze（跨链） | ✅ | `ImpactAnalysisServiceImpl.buildReportImpacts`（analyzeReportImpact 标志） |
+| 报表溯源复用影响分析图谱 | ✅ | `traceReportLineage` → `ImpactAnalysisService.analyze` |
+| 下拉 MySQL 主源 + Neo4j fallback | ✅ | `getSchemas/getTables/getFields`（2026-08-19） |
+| 前端 VueFlow 图谱 | ✅ | `ImpactFlowGraph.vue` |
+| 前端传播树视图 | ✅ | `ImpactPropagationTree.vue` |
+| 图谱筛选 + preservedNodeIds | ✅ | `ImpactAnalysis.vue` |
+| 转换节点详情 | ✅ | `ImpactNodeDetail.vue` |
+| 临时表穿透 | ✅ | `buildWithoutTemp`（⚠ 4 处重复，见 16.8） |
+| 同步失败重试（定时） | ✅ | `@Scheduled` retryFailedSyncs |
+| 手动重同步 + 清空 | ✅ | `/resync`, `/resync/all`, `/clear-neo4j`（⚠ /clear-neo4j 无前端 UI） |
+| 两点间路径查询 | ⏳ 预留 | `/paths` 返回空（`getPaths` 行 1029-1033 桩方法） |
+| operations 操作类型筛选 | ⏳ 未实现 | 字段保留未使用 |
+| expand API 增量加载 | ⏳ 预留 | 主视图走本地缓存，`expandNode` 已暴露但未调用 |
+| DTO 死字段清理 | ⏳ 待清理 | includeConditions/includeFieldMapping/truncated/paths/affectedProcNames/fieldSources（见 15.3） |
+| ON/WHERE 字段级链路 | ❌ 未实现 | 见 18.2 增强方案 |

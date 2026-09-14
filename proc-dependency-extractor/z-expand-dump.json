@@ -1,0 +1,189 @@
+{
+  "all_buttons": [
+    {
+      "i": 0,
+      "tag": "BUTTON",
+      "cls": "el-button el-button--primary",
+      "id": null,
+      "tx": "分析",
+      "title": "",
+      "cursor": "pointer",
+      "rect": {
+        "top": 111,
+        "left": 1723,
+        "w": 60,
+        "h": 32
+      }
+    },
+    {
+      "i": 1,
+      "tag": "BUTTON",
+      "cls": "el-button",
+      "id": null,
+      "tx": "重置",
+      "title": "",
+      "cursor": "pointer",
+      "rect": {
+        "top": 111,
+        "left": 1795,
+        "w": 60,
+        "h": 32
+      }
+    },
+    {
+      "i": 2,
+      "tag": "BUTTON",
+      "cls": "el-button el-button--small",
+      "id": null,
+      "tx": "清空",
+      "title": "",
+      "cursor": "pointer",
+      "rect": {
+        "top": 303,
+        "left": 831,
+        "w": 48,
+        "h": 24
+      }
+    }
+  ],
+  "expand_keyword_texts": [
+    "深度",
+    "最大深度",
+    "全部"
+  ],
+  "canvas_elements": [
+    {
+      "i": 0,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "path"
+      ]
+    },
+    {
+      "i": 1,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "path"
+      ]
+    },
+    {
+      "i": 2,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "path"
+      ]
+    },
+    {
+      "i": 3,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "path"
+      ]
+    },
+    {
+      "i": 4,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "path"
+      ]
+    },
+    {
+      "i": 5,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "path"
+      ]
+    },
+    {
+      "i": 6,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "path"
+      ]
+    },
+    {
+      "i": 7,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "path"
+      ]
+    },
+    {
+      "i": 8,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "path"
+      ]
+    },
+    {
+      "i": 9,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "path"
+      ]
+    },
+    {
+      "i": 10,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "path"
+      ]
+    },
+    {
+      "i": 11,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "path"
+      ]
+    },
+    {
+      "i": 12,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "defs"
+      ]
+    },
+    {
+      "i": 13,
+      "tag": "svg",
+      "cls": "[object SVGAnimatedString]",
+      "id": null,
+      "childTypes": [
+        "defs",
+        "linearGradient",
+        "stop",
+        "rect",
+        "g",
+        "path",
+        "polygon",
+        "use"
+      ]
+    }
+  ]
+}

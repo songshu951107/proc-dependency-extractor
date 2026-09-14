@@ -15,6 +15,8 @@ import net.sf.jsqlparser.expression.operators.arithmetic.Subtraction;
 import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
 import net.sf.jsqlparser.expression.operators.conditional.OrExpression;
 import net.sf.jsqlparser.expression.operators.relational.ComparisonOperator;
+import net.sf.jsqlparser.expression.operators.relational.InExpression;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.schema.Column;
 import net.sf.jsqlparser.schema.Table;
@@ -92,6 +94,12 @@ public class JsqlSqlAnalyzer {
         public String filterType;      // JOIN / WHERE
         public String clause;          // 子句原文
         public List<ColumnRef> fields; // 子句中的字段引用
+        /**
+         * 条件所在作用域的局部别名映射（alias→tableShort，子查询别名为 null 占位）。
+         * 内层子查询条件用内层映射解析、外层条件用外层映射——作用域封闭，防止跨层错误归属。
+         * 顶层条件经 extractJoinFilters/extractWhereFilters 生成时为 null（调用方用全局 aliasMap 兜底）。
+         */
+        public Map<String, String> scopeAliasMap;
     }
 
     /** 字段引用 */
@@ -116,6 +124,35 @@ public class JsqlSqlAnalyzer {
             log.warn("JsqlParser 解析失败（块将跳过）: {} | preprocess 后 SQL 预览(前200字符): {}", e.getMessage(),
                     processed.length() > 200 ? processed.substring(0, 200) + "..." : processed);
             return null;
+        }
+    }
+
+    /**
+     * 解析判定结果：statement 与 failureReason 二选一非空（成功时 failureReason 为 null）。
+     */
+    public static class ParseOutcome {
+        public final Statement statement;
+        public final String failureReason;
+        public ParseOutcome(Statement statement, String failureReason) {
+            this.statement = statement;
+            this.failureReason = failureReason;
+        }
+    }
+
+    /**
+     * 预处理 + 解析，失败时携带具体原因，供失败清单落库。
+     */
+    public ParseOutcome parseVerbose(String sql) {
+        if (sql == null || sql.trim().isEmpty()) {
+            return new ParseOutcome(null, "SQL 块为空");
+        }
+        String processed = placeholderReplacer.preprocess(sql);
+        try {
+            return new ParseOutcome(CCJSqlParserUtil.parse(processed), null);
+        } catch (Exception e) {
+            log.warn("JsqlParser 解析失败（块将跳过）: {} | preprocess 后 SQL 预览(前200字符): {}", e.getMessage(),
+                    processed.length() > 200 ? processed.substring(0, 200) + "..." : processed);
+            return new ParseOutcome(null, e.getMessage());
         }
     }
 
@@ -291,7 +328,69 @@ public class JsqlSqlAnalyzer {
     /** ==================== JOIN/WHERE 条件提取 ==================== **/
 
     /**
-     * 提取 JOIN ON 条件列表
+     * 单一递归入口：提取顶层及所有派生表子查询内部的 JOIN/WHERE 条件。
+     * 每个作用域各自绑定局部别名映射（scopeAliasMap），深度 ≤5（与 extractTablesRecursively 一致）。
+     * <p>注意：不能复用 extractJoinFilters/extractWhereFilters 各自递归——两者被调用方成对调用，
+     * 各自递归会让子查询条件被收集两次。故统一走本入口一次遍历。</p>
+     */
+    public List<FilterInfo> extractFiltersRecursively(PlainSelect select) {
+        List<FilterInfo> result = new ArrayList<>();
+        collectScopeFilters(select, result, 0);
+        return result;
+    }
+
+    /** 收集单个 PlainSelect 作用域的条件，并下钻其 FROM/JOIN 中的子查询（深度 ≤5） */
+    private void collectScopeFilters(PlainSelect select, List<FilterInfo> result, int depth) {
+        if (select == null || depth > 5) return;
+        // 本作用域局部别名映射（非递归，复用 extractAliasMap；子查询别名映射为 null 占位）
+        Map<String, String> localAlias = extractAliasMap(select);
+        if (select.getJoins() != null) {
+            for (Join join : select.getJoins()) {
+                if (join.getOnExpressions() != null) {
+                    for (Expression on : join.getOnExpressions()) {
+                        collectFilterClauses(on, "JOIN", result, localAlias);
+                    }
+                } else if (join.getOnExpression() != null) {
+                    // JsqlParser 4.6 兼容旧 API
+                    collectFilterClauses(join.getOnExpression(), "JOIN", result, localAlias);
+                }
+            }
+        }
+        if (select.getWhere() != null) {
+            collectFilterClauses(select.getWhere(), "WHERE", result, localAlias);
+        }
+        // 下钻：FROM 主项 + 每个 JOIN 右侧的子查询
+        collectSubqueryScopeFilters(select.getFromItem(), result, depth);
+        if (select.getJoins() != null) {
+            for (Join join : select.getJoins()) {
+                collectSubqueryScopeFilters(join.getRightItem(), result, depth);
+            }
+        }
+    }
+
+    /** FROM item 为派生表子查询时递归 */
+    private void collectSubqueryScopeFilters(FromItem item, List<FilterInfo> result, int depth) {
+        if (!(item instanceof ParenthesedSelect)) return;
+        Select inner = ((ParenthesedSelect) item).getSelect();
+        collectSelectScopeFilters(inner, result, depth + 1);
+    }
+
+    /** 递归收集 Select（PlainSelect / SetOperationList(UNION) / 嵌套括号）内部各作用域条件，深度 ≤5 */
+    private void collectSelectScopeFilters(Select sel, List<FilterInfo> result, int depth) {
+        if (sel == null || depth > 5) return;
+        if (sel instanceof PlainSelect) {
+            collectScopeFilters((PlainSelect) sel, result, depth);
+        } else if (sel instanceof SetOperationList) {
+            for (Select s : ((SetOperationList) sel).getSelects()) {
+                collectSelectScopeFilters(s, result, depth + 1);
+            }
+        } else if (sel instanceof ParenthesedSelect) {
+            collectSelectScopeFilters(((ParenthesedSelect) sel).getSelect(), result, depth + 1);
+        }
+    }
+
+    /**
+     * 提取 JOIN ON 条件列表（仅顶层，含下钻能力以外的兼容保留）
      */
     public List<FilterInfo> extractJoinFilters(PlainSelect select) {
         List<FilterInfo> result = new ArrayList<>();
@@ -299,46 +398,48 @@ public class JsqlSqlAnalyzer {
         for (Join join : select.getJoins()) {
             if (join.getOnExpressions() != null) {
                 for (Expression on : join.getOnExpressions()) {
-                    collectFilterClauses(on, "JOIN", result);
+                    collectFilterClauses(on, "JOIN", result, null);
                 }
             } else if (join.getOnExpression() != null) {
                 // JsqlParser 4.6 兼容旧 API
-                collectFilterClauses(join.getOnExpression(), "JOIN", result);
+                collectFilterClauses(join.getOnExpression(), "JOIN", result, null);
             }
         }
         return result;
     }
 
     /**
-     * 提取 WHERE 条件列表（按 AND/OR 拆分）
+     * 提取 WHERE 条件列表（按 AND/OR 拆分，仅顶层）
      */
     public List<FilterInfo> extractWhereFilters(PlainSelect select) {
         if (select == null) return new ArrayList<>();
         Expression where = select.getWhere();
         if (where == null) return new ArrayList<>();
         List<FilterInfo> result = new ArrayList<>();
-        collectFilterClauses(where, "WHERE", result);
+        collectFilterClauses(where, "WHERE", result, null);
         return result;
     }
 
     /**
-     * 递归拆分 AND/OR 表达式为子句列表
+     * 递归拆分 AND/OR 表达式为子句列表；scopeAliasMap 绑定条件所在作用域（顶层调用传 null）
      */
-    private void collectFilterClauses(Expression expr, String filterType, List<FilterInfo> result) {
+    private void collectFilterClauses(Expression expr, String filterType, List<FilterInfo> result,
+                                      Map<String, String> scopeAliasMap) {
         if (expr instanceof AndExpression) {
             AndExpression and = (AndExpression) expr;
-            collectFilterClauses(and.getLeftExpression(), filterType, result);
-            collectFilterClauses(and.getRightExpression(), filterType, result);
+            collectFilterClauses(and.getLeftExpression(), filterType, result, scopeAliasMap);
+            collectFilterClauses(and.getRightExpression(), filterType, result, scopeAliasMap);
         } else if (expr instanceof OrExpression) {
             OrExpression or = (OrExpression) expr;
-            collectFilterClauses(or.getLeftExpression(), filterType, result);
-            collectFilterClauses(or.getRightExpression(), filterType, result);
+            collectFilterClauses(or.getLeftExpression(), filterType, result, scopeAliasMap);
+            collectFilterClauses(or.getRightExpression(), filterType, result, scopeAliasMap);
         } else {
             // 叶子条件
             FilterInfo info = new FilterInfo();
             info.filterType = filterType;
             info.clause = expr.toString();
             info.fields = new ArrayList<>();
+            info.scopeAliasMap = scopeAliasMap;
             collectColumnRefs(expr, "condition", info.fields);
             result.add(info);
         }
@@ -450,6 +551,18 @@ public class JsqlSqlAnalyzer {
             return;
         }
 
+        // MySQL GROUP_CONCAT: 4.9 中解析为 MySQLGroupConcat（不继承 Function），需单独遍历其参数
+        if (expr instanceof net.sf.jsqlparser.expression.MySQLGroupConcat) {
+            net.sf.jsqlparser.expression.MySQLGroupConcat gc =
+                    (net.sf.jsqlparser.expression.MySQLGroupConcat) expr;
+            if (gc.getExpressionList() != null && gc.getExpressionList().getExpressions() != null) {
+                for (Expression arg : gc.getExpressionList().getExpressions()) {
+                    collectColumnRefs(arg, role, result);
+                }
+            }
+            return;
+        }
+
         // 二元运算（算术、比较、AND/OR）
         if (expr instanceof net.sf.jsqlparser.expression.operators.conditional.AndExpression) {
             AndExpression and = (AndExpression) expr;
@@ -467,6 +580,21 @@ public class JsqlSqlAnalyzer {
             ComparisonOperator cmp = (ComparisonOperator) expr;
             collectColumnRefs(cmp.getLeftExpression(), role, result);
             collectColumnRefs(cmp.getRightExpression(), role, result);
+            return;
+        }
+        if (expr instanceof InExpression) {
+            // IN (...): 左侧字段 + 右侧列表（右侧通常为字面量, 保险起见同样遍历）
+            // 缺失时 CASE WHEN x IN (...) 的条件字段会被静默丢弃, 导致子查询穿透索引缺列
+            InExpression in = (InExpression) expr;
+            collectColumnRefs(in.getLeftExpression(), role, result);
+            Expression right = in.getRightExpression();
+            if (right instanceof ExpressionList) {
+                for (Expression e : ((ExpressionList<?>) right)) {
+                    collectColumnRefs(e, role, result);
+                }
+            } else {
+                collectColumnRefs(right, role, result);
+            }
             return;
         }
         if (expr instanceof Addition) {

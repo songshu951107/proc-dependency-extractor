@@ -63,10 +63,17 @@ function computeHighlightLines(content, impactSource) {
   const tableName = impactSource.split('.').pop().toUpperCase()
   const shortName = tableName.replace(/^VT_/, '')
 
+  // 词边界匹配：表名前后不能紧跟标识符字符（[A-Z0-9_]）。
+  // 子串匹配会把 F_AC_CRBS_DEPOSIT_ACCT 误配到 F_AC_CRBS_DEPOSIT_ACCT_INT_RATE_DEF
+  // （后者是前者的延伸表名），导致高亮到引用其他表的行
+  const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const names = [tableName]
+  if (shortName && shortName !== tableName) names.push(shortName)
+  const tableRefPattern = new RegExp(`(?<![A-Z0-9_])(${names.map(escapeRegExp).join('|')})(?![A-Z0-9_])`)
+
   // 检查一行是否引用了该表
   function referencesTable(upperLine) {
-    return upperLine.includes(tableName)
-      || (shortName && shortName !== tableName && upperLine.includes(shortName))
+    return tableRefPattern.test(upperLine)
   }
 
   lines.forEach((line, idx) => {

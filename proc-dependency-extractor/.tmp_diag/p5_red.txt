@@ -1,0 +1,151 @@
+﻿
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+ :: Spring Boot ::                (v3.2.5)
+
+2026-08-31T13:32:38.740+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] c.h.e.parser.LineageExtractorTest        : Starting LineageExtractorTest using Java 17.0.20 with PID 23868 (started by cj199 in D:\HB\work_zuoye\proc-dependency-extractor)
+2026-08-31T13:32:38.742+08:00 DEBUG 23868 --- [proc-dependency-extractor] [           main] c.h.e.parser.LineageExtractorTest        : Running with Spring Boot v3.2.5, Spring v6.1.6
+2026-08-31T13:32:38.743+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] c.h.e.parser.LineageExtractorTest        : No active profile set, falling back to 1 default profile: "default"
+2026-08-31T13:32:39.273+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Neo4j repositories in DEFAULT mode.
+2026-08-31T13:32:39.280+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 4 ms. Found 0 Neo4j repository interfaces.
+2026-08-31T13:32:39.429+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data Neo4j repositories in DEFAULT mode.
+2026-08-31T13:32:39.444+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 14 ms. Found 0 Neo4j repository interfaces.
+2026-08-31T13:32:40.008+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] o.neo4j.driver.internal.DriverFactory    : Direct driver instance 1938374337 created for server address localhost:7687
+2026-08-31T13:32:40.234+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ�������ɹ�: CREATE CONSTRAINT table_name_unique IF NOT EXISTS 
+2026-08-31T13:32:40.246+08:00  WARN 23868 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ������ʧ�ܣ������Ѵ��ڻ� Neo4j �����ã�: There already exists an index (:Column {col_key}). A constraint cannot be created until the index has been dropped.; Error code 'Neo.ClientError.Schema.IndexAlreadyExists'
+2026-08-31T13:32:40.250+08:00  WARN 23868 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ������ʧ�ܣ������Ѵ��ڻ� Neo4j �����ã�: There already exists an index (:Script {file}). A constraint cannot be created until the index has been dropped.; Error code 'Neo.ClientError.Schema.IndexAlreadyExists'
+2026-08-31T13:32:40.256+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ�������ɹ�: CREATE CONSTRAINT report_file_unique IF NOT EXISTS
+2026-08-31T13:32:40.259+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ�������ɹ�: CREATE CONSTRAINT dataset_key_unique IF NOT EXISTS
+2026-08-31T13:32:40.262+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] c.h.e.config.Neo4jConstraintInitializer  : Neo4j Լ�������ɹ�: CREATE CONSTRAINT transform_id_unique IF NOT EXIST
+Logging initialized using 'class org.apache.ibatis.logging.stdout.StdOutImpl' adapter.
+Get /192.168.1.100 network interface 
+Get network interface info: name:wlan0 (Intel(R) Wi-Fi 6E AX211 160MHz)
+Initialization Sequence datacenterId:16 workerId:20
+ _ _   |_  _ _|_. ___ _ |    _ 
+| | |\/|_)(_| | |_\  |_)||_|_\ 
+     /               |         
+                        3.5.7 
+2026-08-31T13:32:41.944+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
+2026-08-31T13:32:42.874+08:00  INFO 23868 --- [proc-dependency-extractor] [           main] c.h.e.parser.LineageExtractorTest        : Started LineageExtractorTest in 4.401 seconds (process running for 5.237)
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6f9e404f] was not registered for synchronization because synchronization is not active
+2026-08-31T13:32:43.121+08:00  INFO 23868 --- [proc-dependency-extractor] [   scheduling-1] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+D:\HB\maven\bin\mvn.cmd : OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because b
+ootstrap classpath has been appended
+At line:15 char:3416
++ ... pgrep\bin'; D:\HB\maven\bin\mvn.cmd test -Dtest="LineageExtractorTest ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (OpenJDK 64-Bit ...s been appended:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+2026-08-31T13:32:43.447+08:00  INFO 23868 --- [proc-dependency-extractor] [   scheduling-1] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection com.mysql.cj.jdbc.ConnectionImpl@6e37c6bf
+2026-08-31T13:32:43.451+08:00  INFO 23868 --- [proc-dependency-extractor] [   scheduling-1] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+JDBC Connection [HikariProxyConnection@730746877 wrapping com.mysql.cj.jdbc.ConnectionImpl@6e37c6bf] will not be managed by Spring
+==>  Preparing: SELECT id,proc_name,sync_status,error_message,retry_count,create_time,update_time FROM neo4j_sync_log WHERE (sync_status = ? AND retry_count < ?)
+==> Parameters: FAILED(String), 3(Integer)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@6f9e404f]
+2026-08-31T13:32:44.093+08:00 DEBUG 23868 --- [proc-dependency-extractor] [           main] c.hb.extractor.parser.LineageExtractor   : parseBlock aliasMap: blockSeq=1, target=a_p5_t, aliasMap={T1=a_d_fin_mkt_prft_loss_dtl_10, T2=f_pt_crbs_teller_param}
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@416c1b0] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@909878836 wrapping com.mysql.cj.jdbc.ConnectionImpl@6e37c6bf] will not be managed by Spring
+==>  Preparing: SELECT column_name FROM table_column_meta WHERE table_name = ? ORDER BY ordinal_position
+==> Parameters: a_p5_t(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@416c1b0]
+2026-08-31T13:32:44.099+08:00 DEBUG 23868 --- [proc-dependency-extractor] [           main] com.hb.extractor.parser.DdlParser        : DDL �ļ�������: d:\HB\work_zuoye\jiaoben\a_p5_t_ddl.TXT
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@dcdb883] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@960630105 wrapping com.mysql.cj.jdbc.ConnectionImpl@6e37c6bf] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: a_d_fin_mkt_prft_loss_dtl_10(String)
+<==      Total: 0
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@dcdb883]
+Creating a new SqlSession
+SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@5dd227b7] was not registered for synchronization because synchronization is not active
+JDBC Connection [HikariProxyConnection@1027310894 wrapping com.mysql.cj.jdbc.ConnectionImpl@6e37c6bf] will not be managed by Spring
+==>  Preparing: SELECT id,ddl_info_id,schema_name,table_name,full_table_name,column_name,ordinal_position,column_default,is_nullable,data_type,column_type,character_maximum_length,numeric_precision,numeric_scale,character_set_name,collation_name,column_key,extra,column_comment,create_time FROM table_column_meta WHERE (table_name = ?)
+==> Parameters: f_pt_crbs_teller_param(String)
+<==    Columns: id, ddl_info_id, schema_name, table_name, full_table_name, column_name, ordinal_position, column_default, is_nullable, data_type, column_type, character_maximum_length, numeric_precision, numeric_scale, character_set_name, collation_name, column_key, extra, column_comment, create_time
+<==        Row: 268542, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_no, 1, <<BLOB>>, NO, varchar, varchar(16), 16, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268543, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, biz_org_no, 2, <<BLOB>>, YES, varchar, varchar(8), 8, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268544, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, acctg_org_no, 3, <<BLOB>>, YES, varchar, varchar(8), 8, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268545, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, txn_biz_org_no, 4, <<BLOB>>, YES, varchar, varchar(8), 8, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268546, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, txn_acctg_org_no, 5, <<BLOB>>, YES, varchar, varchar(8), 8, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268547, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_name_no, 6, <<BLOB>>, YES, varchar, varchar(44), 44, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268548, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_prop_no, 7, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268549, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_role_no, 8, <<BLOB>>, YES, varchar, varchar(4), 4, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268550, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, belo_dept_cd, 9, <<BLOB>>, YES, varchar, varchar(4), 4, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268551, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, acct_lvl_cd, 10, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268552, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_type_no, 11, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268553, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, activa_dt, 12, <<BLOB>>, YES, varchar, varchar(16), 16, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268554, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, term_dt, 13, <<BLOB>>, YES, varchar, varchar(16), 16, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268555, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, emp_no, 14, <<BLOB>>, YES, varchar, varchar(20), 20, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268556, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, cust_no, 15, <<BLOB>>, YES, varchar, varchar(24), 24, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268557, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, curr_txn_seq_no, 16, <<BLOB>>, YES, varchar, varchar(12), 12, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268558, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_media_cd, 17, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268559, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_passwd_no, 18, <<BLOB>>, YES, varchar, varchar(32), 32, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268560, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, passwd_modif_dt, 19, <<BLOB>>, YES, varchar, varchar(16), 16, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268561, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, passwd_vld_days, 20, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268562, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, passwd_cannot_repet_tms, 21, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268563, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, passwd_alw_error_tms, 22, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268564, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, passwd_error_tms, 23, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268565, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, cash_boot_tot_limitamt, 24, <<BLOB>>, YES, decimal, decimal(17,2), null, 17, 2, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268566, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, currcy_ctrl_flag, 25, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268567, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, currcy_sync_flag, 26, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268568, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, txn_grp_type_list, 27, <<BLOB>>, YES, varchar, varchar(1200), 1200, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268569, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, autho_grp_type_list, 28, <<BLOB>>, YES, varchar, varchar(1200), 1200, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268570, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, prod_txn_list, 29, <<BLOB>>, YES, varchar, varchar(800), 800, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268571, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, prod_autho_list, 30, <<BLOB>>, YES, varchar, varchar(800), 800, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268572, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, cut_txn, 31, <<BLOB>>, YES, varchar, varchar(500), 500, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268573, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, sign_in_tm, 32, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268574, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, sign_out_tm, 33, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268575, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, term_no, 34, <<BLOB>>, YES, varchar, varchar(10), 10, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268576, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, ip_addr, 35, <<BLOB>>, YES, varchar, varchar(30), 30, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268577, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, risk_lvl_cd, 36, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268578, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, daily_sett_flag, 37, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268579, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_activa_flag, 38, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268580, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_permis_sts_cd, 39, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268581, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_sign_in_sts_cd, 40, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268582, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, teller_sts_cd, 41, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268583, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, curr_non_roll_acct_seq_no, 42, <<BLOB>>, YES, varchar, varchar(160), 160, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268584, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, safeg_dt, 43, <<BLOB>>, YES, varchar, varchar(16), 16, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268585, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, safeg_tm, 44, <<BLOB>>, YES, decimal, decimal(10,0), null, 10, 0, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268586, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, safeg_teller_no, 45, <<BLOB>>, YES, varchar, varchar(16), 16, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268587, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, safeg_org_no, 46, <<BLOB>>, YES, varchar, varchar(8), 8, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268588, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, record_sts_cd, 47, <<BLOB>>, YES, varchar, varchar(2), 2, null, null, utf8, utf8_general_ci, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268589, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, start_dt, 48, <<BLOB>>, YES, date, date, null, null, null, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==        Row: 268590, 8532, fdm, f_pt_crbs_teller_param, fdm.f_pt_crbs_teller_param, end_dt, 49, <<BLOB>>, YES, date, date, null, null, null, null, null, null, null, <<BLOB>>, 2026-08-18 11:43:41
+<==      Total: 49
+Closing non transactional SqlSession [org.apache.ibatis.session.defaults.DefaultSqlSession@5dd227b7]
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 6.046 s <<< FAILURE! -- in com.hb.extractor.parser.LineageExtractorTest
+[ERROR] com.hb.extractor.parser.LineageExtractorTest.testPartitionSuffixTable_BareColumnFallsBackToBaseTableColumns -- Time elapsed: 1.247 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: ������׺������ data_dt Ӧ���˻���Ԫ����Ψһƥ����� a_d_fin_mkt_prft_loss_dtl_10.data_dt, ʵ�� inputs=[null.data_dt] ==> expected: <true> but was: <false>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at com.hb.extractor.parser.LineageExtractorTest.testPartitionSuffixTable_BareColumnFallsBackToBaseTableColumns(LineageExtractorTest.java:899)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:569)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+[ERROR] Failures: 
+[ERROR]   LineageExtractorTest.testPartitionSuffixTable_BareColumnFallsBackToBaseTableColumns:899 ������׺������ data_dt Ӧ���˻���Ԫ����Ψһƥ����� a_d_fin_mkt_prft_loss_dtl_10.data_dt, ʵ�� inputs=[null.data_dt] ==> expected: <true> but was: <false>
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.1.2:test (default-test) on project proc-dependency-extractor: There are test failures.
+[ERROR] 
+[ERROR] Please refer to D:\HB\work_zuoye\proc-dependency-extractor\target\surefire-reports for the individual test results.
+[ERROR] Please refer to dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

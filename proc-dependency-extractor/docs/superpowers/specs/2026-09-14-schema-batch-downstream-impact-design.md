@@ -79,15 +79,47 @@ fdm.f_ac_ctds_ldr_acct ──(proc 写入)--> cdm.c_agt_ldr_acct_intst
 
 ## 4. 后端设计
 
-### 4.1 新增接口
+### 4.1 异步任务接口
+
+因 schema 下可能数百张表、全量计算耗时，采用**异步任务 + 进度轮询**，不阻塞请求。
 
 ```
-GET  /api/impact/schema/{schema}/summary      # 汇总矩阵 + 行明细（一次返回全部）
-GET  /api/impact/schema/{schema}/export       # 导出 Excel
+POST /api/impact/schema/{schema}/task                        # 发起批量任务 → 立即返回 taskId（异步执行）
+GET  /api/impact/schema/{schema}/task/{taskId}/progress      # 轮询进度
+GET  /api/impact/schema/{schema}/task/{taskId}/result        # 取最终结果（status=done 后调用）
+GET  /api/impact/schema/{schema}/task/{taskId}/export        # 导出 Excel（复用同任务结果）
 ```
 
-- `{schema}` 为集市名（如 `FDM` / `PID`），大小写不敏感。
-- 因固定一层、响应为聚合指标与明细，**不需要排序/分页**；若后续表量过大再考虑。
+- `{schema}` 为集市名（如 `FDM`/`PID`），大小写不敏感。
+- 固定一层、响应为聚合指标与明细，无需分页排序。
+
+### 4.1.1 异步任务状态机
+
+```
+idle -> running(P%) -> done(含 result) | failed(含 error)
+```
+
+后端以**内存任务仓库 + 线程池**管理（`ConcurrentHashMap<taskId, BatchTask>`），无需持久化：
+
+```java
+class BatchTask {
+  String taskId;
+  String schema;
+  String status;            // running / done / failed / expired
+  int total;                // 起点表总数
+  int done; int failed;     // 已处理表 / 失败表
+  List<SummaryRow> rows;    // 结果（done 后填充）
+  String error;             // 任务级失败原因
+  long createTime;
+}
+```
+
+- **发起**：创建 task（status=running）→ 提交线程池异步跑 → 立即返回 taskId。
+- **进度响应**：`{taskId, status, total, done, failed, percent}`。
+- **结果**：status=done 返回完整 VO；running 抛 409（前端提示"进行中"）。
+- **单表失败**：done++、failed++，该行 `error` 置失败原因，不中断整体。
+- **任务级失败**（如 schema 枚举异常）：status=failed，`error` 置因。
+- **兜底**：同一 schema 新任务替换旧任务（旧置 expired）；任务超时/过期清理。
 
 ### 4.2 处理流程（后端内部）
 
@@ -163,11 +195,21 @@ class ReportRef {
 - **行点击下钻**：弹窗展示该行三类明细（受影响表 / 受影响存储过程 / 受影响报表），**不展示边图**，均为列表。
 - 明细数据已在 summary 响应中随行返回，下钻为纯前端切换，**无需二次请求**。
 
-### 5.2 导出按钮
+### 5.2 异步轮询与导出
+
+- **选 schema → 点「批量分析」**：请求 `POST /task` 得 taskId。
+- **启动轮询**：`setInterval` 每 2s 调 `/progress`：
+  - 按钮/进度条展示 `percent`；
+  - `status=done` → 停轮询，调 `/result` 渲染汇总矩阵 + 行明细；
+  - `status=failed` → 停轮询，`ElMessage` 报错。
+- **下钻明细/导出** 均基于已取回结果，**无额外请求**（明细已随 result 返回）。
+- **轮询超时**（如 5 分钟）：停轮询并提示"分析超时，可重新发起"。
+
+### 5.3 导出按钮
 
 - 触发 `/api/impact/schema/{schema}/export`，下载 Excel。
 
-### 5.3 实现位置
+### 5.4 实现位置
 
 - **独立批量入口**：新增独立的"集市批量影响"入口（新增页面/路由或独立块），**与现有单表分析完全分离**。
 - **保留单表分析**：现有 `ImpactFilter.vue`/`ImpactAnalysis.vue` 单表影响分析**原样保留、不回退、不耦合**；批量分析是新增的并行能力，不替代单表分析。

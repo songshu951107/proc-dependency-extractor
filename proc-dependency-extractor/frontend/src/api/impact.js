@@ -55,3 +55,18 @@ export function getSyncLog(params) {
 export function getSyncStatus() {
   return request({ url: '/impact/sync-status', method: 'get' })
 }
+
+// 批量 schema 下游影响（异步任务 + 进度轮询）
+export function startSchemaBatchTask(schema) {
+  return request({ url: `/impact/schema/${schema}/task`, method: 'post' })
+}
+export function getSchemaBatchProgress(schema, taskId) {
+  return request({ url: `/impact/schema/${schema}/task/${taskId}/progress`, method: 'get' })
+}
+export function getSchemaBatchResult(schema, taskId) {
+  return request({ url: `/impact/schema/${schema}/task/${taskId}/result`, method: 'get' })
+}
+// responseType blob：拦截器对 blob 不做 code 校验，正常返回 Blob
+export function exportSchemaBatch(schema, taskId) {
+  return request({ url: `/impact/schema/${schema}/task/${taskId}/export`, method: 'get', responseType: 'blob' })
+}

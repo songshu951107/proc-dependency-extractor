@@ -67,4 +67,17 @@ class SchemaBatchImpactServiceImplTest {
         assertEquals(2, row.getAffectedTables().size());
         assertEquals(2, row.getAffectedReports().size());
     }
+
+    @Test
+    void sweep_removesExpiredNonLatest_keepsLatest() {
+        var a = service.registerTaskForTest("FD_M");
+        service.markTaskDone(a);
+        service.ageTask(a, 31L * 60 * 1000); // 31 分钟，超过 30 分钟 TTL
+        var b = service.registerTaskForTest("fd_m"); // 同一 schema 的最新任务
+
+        service.sweep();
+
+        assertEquals(1, service.taskCount());
+        assertNotNull(service.getProgress(b.getTaskId()));
+    }
 }

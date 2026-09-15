@@ -8,6 +8,7 @@ import com.hb.extractor.mapper.TableDdlInfoMapper;
 import com.hb.extractor.mapper.TableLineageMapper;
 import com.hb.extractor.service.ReportImpactService;
 import com.hb.extractor.service.SchemaBatchImpactService;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -28,7 +29,7 @@ import java.util.stream.Collectors;
 @Service
 public class SchemaBatchImpactServiceImpl implements SchemaBatchImpactService {
 
-    private static class Task {
+    static class Task {
         final String taskId;
         final String schema;
         volatile String status = "running";
@@ -36,17 +37,21 @@ public class SchemaBatchImpactServiceImpl implements SchemaBatchImpactService {
         volatile int done;
         volatile int failed;
         volatile String error;
-        final long createTime = System.currentTimeMillis();
+        volatile long createTime = System.currentTimeMillis();
         volatile SchemaImpactSummaryVO result;
         Task(String taskId, String schema) {
             this.taskId = taskId;
             this.schema = schema;
+        }
+        String getTaskId() {
+            return taskId;
         }
     }
 
     private final ConcurrentHashMap<String, Task> tasks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Task> latestBySchema = new ConcurrentHashMap<>();
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
+    private static final long TASK_TTL_MILLIS = 30L * 60 * 1000;
 
     @Autowired
     private TableDdlInfoMapper ddlInfoMapper;
@@ -57,6 +62,13 @@ public class SchemaBatchImpactServiceImpl implements SchemaBatchImpactService {
 
     @Override
     public String start(String schema) {
+        sweep();
+        Task task = createTaskAndRegister(schema);
+        executor.submit(() -> run(task));
+        return task.getTaskId();
+    }
+
+    private Task createTaskAndRegister(String schema) {
         Task old = latestBySchema.get(schema.toLowerCase());
         if (old != null && !"done".equals(old.status) && !"failed".equals(old.status)) {
             old.status = "failed";
@@ -65,8 +77,51 @@ public class SchemaBatchImpactServiceImpl implements SchemaBatchImpactService {
         Task task = new Task(UUID.randomUUID().toString().replace("-", ""), schema);
         tasks.put(task.taskId, task);
         latestBySchema.put(schema.toLowerCase(), task);
-        executor.submit(() -> run(task));
-        return task.taskId;
+        return task;
+    }
+
+    /** 清理过期且已终结的任务；最新任务(含 being-replaced)保留，避免 latestBySchema 悬空。 */
+    void sweep() {
+        long now = System.currentTimeMillis();
+        List<String> toRemove = new ArrayList<>();
+        for (Map.Entry<String, Task> e : tasks.entrySet()) {
+            Task t = e.getValue();
+            boolean terminal = "done".equals(t.status) || "failed".equals(t.status);
+            if (terminal && now - t.createTime > TASK_TTL_MILLIS) {
+                toRemove.add(e.getKey());
+            }
+        }
+        for (String id : toRemove) {
+            Task t = tasks.remove(id);
+            if (t != null && latestBySchema.get(t.schema.toLowerCase()) == t) {
+                tasks.put(id, t); // 最新任务(含 being-replaced)保留，避免 latestBySchema 悬空
+            }
+        }
+    }
+
+    /** 包内可见供单测：注册任务。 */
+    Task registerTaskForTest(String schema) {
+        return createTaskAndRegister(schema);
+    }
+
+    /** 包内可见供单测：将任务标记为 done。 */
+    void markTaskDone(Task t) {
+        t.status = "done";
+    }
+
+    /** 包内可见供单测：老化任务 createTime。 */
+    void ageTask(Task t, long millis) {
+        t.createTime = System.currentTimeMillis() - millis;
+    }
+
+    /** 包内可见供单测：当前任务数。 */
+    int taskCount() {
+        return tasks.size();
+    }
+
+    @PreDestroy
+    void shutdown() {
+        executor.shutdownNow();
     }
 
     private void run(Task task) {

@@ -5,14 +5,20 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.hb.extractor.dto.*;
 import com.hb.extractor.entity.Neo4jSyncLog;
 import com.hb.extractor.entity.Neo4jSyncTaskEntity;
+import com.hb.extractor.dto.SchemaBatchProgressVO;
+import com.hb.extractor.dto.SchemaImpactSummaryVO;
 import com.hb.extractor.mapper.Neo4jSyncLogMapper;
+import com.hb.extractor.service.SchemaBatchImpactService;
 import com.hb.extractor.service.impl.AsyncNeo4jSyncService;
+import com.hb.extractor.service.impl.SchemaImpactExcelExporter;
 import com.hb.extractor.service.ImpactAnalysisService;
 import com.hb.extractor.service.Neo4jSyncService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.util.List;
 
 @Slf4j
@@ -31,6 +37,12 @@ public class ImpactAnalysisController {
 
     @Autowired
     private Neo4jSyncLogMapper neo4jSyncLogMapper;
+
+    @Autowired
+    private SchemaBatchImpactService schemaBatchImpactService;
+
+    @Autowired
+    private SchemaImpactExcelExporter schemaImpactExcelExporter;
 
     @GetMapping("/schemas")
     public Result<List<String>> getSchemas() {
@@ -135,5 +147,52 @@ public class ImpactAnalysisController {
     @GetMapping("/sync-status")
     public Result<List<Neo4jSyncLogVO>> getSyncStatus() {
         return Result.success(impactAnalysisService.getSyncStatus());
+    }
+
+    /** 发起 schema 批量一层下游影响分析（异步，立即返回 taskId）。 */
+    @PostMapping("/schema/{schema}/task")
+    public Result<String> startSchemaBatchTask(@PathVariable String schema) {
+        return Result.success(schemaBatchImpactService.start(schema));
+    }
+
+    /** 查询 schema 批量任务进度。 */
+    @GetMapping("/schema/{schema}/task/{taskId}/progress")
+    public Result<SchemaBatchProgressVO> schemaBatchProgress(@PathVariable String schema,
+                                                             @PathVariable String taskId) {
+        SchemaBatchProgressVO p = schemaBatchImpactService.getProgress(taskId);
+        if (p == null) return Result.error(404, "任务不存在或已清除");
+        return Result.success(p);
+    }
+
+    /** 取 schema 批量任务最终结果。进行中返回 409。 */
+    @GetMapping("/schema/{schema}/task/{taskId}/result")
+    public Result<SchemaImpactSummaryVO> schemaBatchResult(@PathVariable String schema,
+                                                           @PathVariable String taskId) {
+        try {
+            return Result.success(schemaBatchImpactService.getResult(taskId));
+        } catch (IllegalStateException e) {
+            return Result.error(409, e.getMessage());
+        }
+    }
+
+    /** 导出 schema 批量结果 Excel（4 sheet）。任务未完成返回 409。 */
+    @GetMapping("/schema/{schema}/task/{taskId}/export")
+    public void schemaBatchExport(@PathVariable String schema,
+                                  @PathVariable String taskId,
+                                  HttpServletResponse response) throws IOException {
+        SchemaImpactSummaryVO summary;
+        try {
+            summary = schemaBatchImpactService.getResult(taskId);
+        } catch (IllegalStateException e) {
+            response.setStatus(409);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write("{\"code\":409,\"message\":\""
+                    + e.getMessage().replace("\"", "'") + "\"}");
+            return;
+        }
+        String filename = "schema_impact_" + schema + ".xlsx";
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        schemaImpactExcelExporter.export(summary, response.getOutputStream());
     }
 }

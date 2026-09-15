@@ -44,6 +44,12 @@ const routes = [
     meta: { title: '报表影响分析' }
   },
   {
+    path: '/schema-impact',
+    name: 'SchemaImpact',
+    component: () => import('../views/SchemaImpactView.vue'),
+    meta: { title: '集市批量影响' }
+  },
+  {
     path: '/nl2sql',
     name: 'Nl2Sql',
     component: () => import('../views/Nl2SqlView.vue'),

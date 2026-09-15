@@ -29,6 +29,10 @@
             <el-icon><Document /></el-icon>
             <span>报表影响分析</span>
           </el-menu-item>
+          <el-menu-item index="/schema-impact">
+            <el-icon><Aim /></el-icon>
+            <span>集市批量影响</span>
+          </el-menu-item>
           <el-menu-item index="/nl2sql">
             <el-icon><MagicStick /></el-icon>
             <span>智能查数</span>

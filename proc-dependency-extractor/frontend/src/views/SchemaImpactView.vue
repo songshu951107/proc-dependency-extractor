@@ -86,6 +86,8 @@ const detailVisible = ref(false)
 const detailKind = ref('tables')
 const detailRows = ref([])
 let pollTimer = null
+const POLL_TIMEOUT_MS = 5 * 60 * 1000
+let pollStart = 0
 
 function percent() {
   return task.value ? task.value.percent : 0
@@ -135,7 +137,13 @@ async function startAnalysis() {
 }
 
 function poll(taskId) {
+  pollStart = Date.now()
   pollTimer = setInterval(async () => {
+    if (Date.now() - pollStart > POLL_TIMEOUT_MS) {
+      stopPoll()
+      ElMessage.error('分析超时，可重新发起')
+      return
+    }
     try {
       const res = await getSchemaBatchProgress(schema.value, taskId)
       const t = res.data

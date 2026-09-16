@@ -52,25 +52,152 @@ src/main/resources/application.yml     # 仅参考，真实配置用 §五 外�
 
 ---
 
-## 四、内网安装 Neo4j Community
+## 四、内网安装 Neo4j Community（详细步骤）
 
-（内网无外网时：在联网机下载 Neo4j Community 的 `.tar.gz`/`.zip` 拷入内网，或走内网镜像源安装）
+> Neo4j Community 安装**不需要手动建约束** —— 应用启动时 `Neo4jConstraintInitializer` 会自动幂等创建本节无需处理。
 
-```bash
-# 以 Linux 为例
-tar -xzf neo4j-community-5.x-unix.tar.gz -C /opt
-cd /opt/neo4j-community-5.x
+### 4.1 获取安装包（离线）
 
-# 设置初始密码（首次启动前执行；Community 用 set-initial-password）
-bin/neo4j-admin set-initial-password '强密码'
+内网无外网时，在**能联网的机器**下载 Neo4j Community 的 Linux tarball（选 5.x 稳定版，如 `neo4j-community-5.25.x-unix.tar.gz`），拷入内网；或走内网镜像源安装。
 
-# 启动
-bin/neo4j start
-# 确认
-curl http://内网Neo4jIP:7474
+```
+neo4j-community-5.25.x-unix.tar.gz     # 需一并确认：JDK 是否自带（见 4.3）
 ```
 
-> Neo4j 约束**无需手动建** —— 应用启动时 `Neo4jConstraintInitializer` 会自动幂等创建。
+> Neo4j 发行包通常自带一个捆绑的 JVM，一般无需单独安装 Java。若你拿到的包不含 JRE、启动时报缺 Java，则内网需装 JDK 17，并在 4.4 的 `conf/neo4j.conf` 或启动脚本里设置 `JAVA_HOME`。
+
+### 4.2 解压与目录结构
+
+```bash
+# 以 Linux 为例，采用 /opt 作为安装根
+tar -xzf neo4j-community-5.25.x-unix.tar.gz -C /opt
+# 得到 /opt/neo4j-community-5.25.x，软链方便管理
+ln -s /opt/neo4j-community-5.25.x /opt/neo4j
+cd /opt/neo4j
+
+# 目录说明
+#   bin/    启动命令（neo4j、neo4j-admin）
+#   conf/   配置文件（neo4j.conf）
+#   data/   数据与日志（databases/neo4j 为默认数据库，需持久化/备份）
+#   plugins/ 扩展
+```
+
+### 4.3 版本与 Java 校验（可选）
+
+```bash
+bin/neo4j console --version || true     # 打印版本
+# 若报缺少 Java，安装 JDK17 并在启动前设置：
+export JAVA_HOME=/path/to/jdk-17
+export PATH=$JAVA_HOME/bin:$PATH
+```
+
+### 4.4 修改 `conf/neo4j.conf`（关键：允许内网其他机器连接 + 内存）
+
+Core：默认只监听 localhost。**应用跑在另一台内网机器时，必须放开监听地址**，否则连不上 bolt/7687。
+
+```ini
+# 1) 监听几乎所有网卡，允许内网其他主机连接（关键项）
+server.default_listen_address=0.0.0.0
+
+# 2) 端口（默认即可，若要改才写）
+server.bolt.listen_address=:7687
+server.http.listen_address=:7474
+
+# 3) 内存（按内网机器规格调整；Community 版 heap 有上限）
+server.memory.heap.initial_size=512m
+server.memory.heap.max_size=1G
+server.memory.pagecache.size=512m
+```
+
+> 若应用与 Neo4j 就在**同一台机**且用 `bolt://localhost:7687`，可不改 `server.default_listen_address`。
+
+### 4.5 设置初始密码（首次启动前执行）
+
+Neo4j **默认账号是 `neo4j`**。Community 5.x 用以下命令直接设置密码（账号密码与 §五 内外网映射保持一致）：
+
+```bash
+cd /opt/neo4j
+# 5.x 语法
+bin/neo4j-admin dbms set-initial-password '强密码'
+# 若你拿到的还是 4.4 老包，则是：bin/neo4j-admin set-initial-password '强密码'
+```
+
+> 必须在数据库**首次启动前**执行；repeat 也可用于重置（5.x 会提示）。
+
+### 4.6 启动与开机自启
+
+```bash
+cd /opt/neo4j
+bin/neo4j start        # 后台常驻
+bin/neo4j status       # 查看状态
+bin/neo4j console      # 前台运行（调试用，Ctrl+C 停止）
+# 停止：bin/neo4j stop
+```
+
+要开机自启，写一个 systemd unit（内容示例）：
+
+```ini
+# /etc/systemd/system/neo4j.service
+[Unit]
+Description=Neo4j Community
+After=network.target
+
+[Service]
+Type=forking
+WorkingDirectory=/opt/neo4j
+ExecStart=/opt/neo4j/bin/neo4j start
+ExecStop=/opt/neo4j/bin/neo4j stop
+ExecReload=/opt/neo4j/bin/neo4j restart
+LimitNOFILE=40000
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+systemctl daemon-reload
+systemctl enable --now neo4j
+```
+
+### 4.7 验证连通
+
+```bash
+# HTTP 页面（浏览器可访问 7474 登录，账号 neo4j/强密码）
+curl http://127.0.0.1:7474
+# 端口监听
+ss -lntp | grep -E '7474|7687'
+# 应用侧测 Bolt（应用机器上）：若 7687 可连即成功
+```
+
+### 4.8 应用连接映射
+
+对应 §五 环境变量，账号/密码必须与 4.5 一致：
+
+```
+Spring 侧               Neo4j 侧
+SPRING_NEO4J_URI                 bolt://内网Neo4jIP:7687
+SPRING_NEO4J_AUTHENTICATION_USERNAME  neo4j（默认账号）
+SPRING_NEO4J_AUTHENTICATION_PASSWORD  4.5 设置的强密码
+```
+
+### 4.9 防火墙/安全
+
+```bash
+# 开放做bolt与http端口（内网其他机器连）
+firewall-cmd --add-port=7687/tcp --permanent
+firewall-cmd --add-port=7474/tcp --permanent
+firewall-cmd --reload
+# 或在云/安全组放行 7687、7474
+```
+
+> 生产建议：对外只放开应用访问 Neo4j 的 7687；7474 只在内网调试时开放。默认 `dbms.security.auth_enabled=true`，保持开启。
+
+### 4.10 数据持久化与迁移（可选）
+
+- 数据默认在 `/opt/neo4j/data/databases`，备份/迁移整目录即可（先 `bin/neo4j stop`）。
+- 若从本机迁移 Neo4j 数据：`bin/neo4j-admin database dump neo4j` → 拷 `.dump` 到内网 → `bin/neo4j-admin database load neo4j --from=xxx.dump`。
+- 本项目首选「内网重新解析生成」而非 dump 迁移（见 §八），dump 仅作备份手段。
 
 ---
 

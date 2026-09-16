@@ -24,6 +24,11 @@ export function reParseAllReports() {
   return request({ url: '/report/parse/all', method: 'post' })
 }
 
+// 获取配置的报表脚本目录（extractor.report.dir），用于动态展示默认目录
+export function getReportDir() {
+  return request({ url: '/report/config/dir', method: 'get' })
+}
+
 export function getReportList(params) {
   return request({ url: '/report/list', method: 'get', params })
 }

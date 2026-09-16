@@ -11,6 +11,7 @@ import com.hb.extractor.service.ReportParseService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -34,6 +35,20 @@ public class ReportController {
     private ReportDatasetMapper reportDatasetMapper;
     @Autowired
     private ReportCellBindingMapper reportCellBindingMapper;
+
+    /** 报表脚本目录（配置项 extractor.report.dir） */
+    @Value("${extractor.report.dir:d:/HB/work_zuoye/reports}")
+    private String reportDir;
+
+    /**
+     * 返回配置的报表脚本目录（extractor.report.dir）。
+     * GET /api/report/config/dir
+     * 前端用于动态展示"重新解析/上传落地"的默认目录。
+     */
+    @GetMapping("/config/dir")
+    public Result<String> configDir() {
+        return Result.success(reportDir);
+    }
 
     @PostMapping("/parse")
     public Result<ReportInfo> parse(@RequestBody Map<String, String> body) {
@@ -59,7 +74,7 @@ public class ReportController {
             return Result.error("文件名为空");
         }
         try {
-            Path reportsDir = Paths.get("d:/HB/work_zuoye/reports");
+            Path reportsDir = Paths.get(reportDir);
             Files.createDirectories(reportsDir);
             Path target = reportsDir.resolve(originalName);
             // 覆盖同名文件

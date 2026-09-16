@@ -104,7 +104,7 @@
         <!-- 全部重新解析 -->
         <el-tab-pane label="全部重新解析" name="all">
           <div class="parse-tab-content">
-            <p class="parse-tip">扫描默认 reports 目录（d:\HB\work_zuoye\reports）并重新解析所有报表文件。</p>
+            <p class="parse-tip">扫描默认 reports 目录（{{ reportDir || '未获取到配置' }}）并重新解析所有报表文件。</p>
             <el-button type="primary" :loading="parseAllLoading" @click="handleParseAll">
               开始解析
             </el-button>
@@ -140,7 +140,7 @@
         <el-tab-pane label="批量解析" name="batch">
           <div class="parse-tab-content">
             <p class="parse-tip">输入目录路径，批量解析该目录下所有报表文件。</p>
-            <el-input v-model="parseDirPath" placeholder="如 d:\HB\work_zuoye\reports" style="width: 100%" clearable />
+            <el-input v-model="parseDirPath" :placeholder="reportDir || '如 d:\HB\work_zuoye\reports'" style="width: 100%" clearable />
             <el-button type="primary" :loading="parseBatchLoading" style="margin-top: 12px"
                        @click="handleParseBatch">
               开始批量解析
@@ -157,7 +157,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import ReportImpactFilter from '../components/report/ReportImpactFilter.vue'
@@ -167,7 +167,7 @@ import ImpactFlowGraph from '../components/impact/ImpactFlowGraph.vue'
 import {
   findReportsByTable, findReportsByField, findByHeaderText,
   getReportDetail, parseReportUpload, parseReportBatch, reParseAllReports,
-  traceReportLineage
+  getReportDir, traceReportLineage
 } from '../api/report'
 
 const loading = ref(false)
@@ -207,6 +207,20 @@ const parseBatchLoading = ref(false)
 const parseDirPath = ref('')
 const selectedFile = ref(null)
 const uploadRef = ref(null)
+// 配置的报表脚本目录（extractor.report.dir），用于动态展示默认目录
+const reportDir = ref('')
+
+onMounted(async () => {
+  try {
+    const res = await getReportDir()
+    if (res.data) {
+      reportDir.value = res.data
+      if (!parseDirPath.value) parseDirPath.value = res.data
+    }
+  } catch (e) {
+    // 拉取配置失败不影响页面使用
+  }
+})
 
 // 解析成功后清空当前查询结果，避免展示过期数据
 function clearResultsAfterParse() {

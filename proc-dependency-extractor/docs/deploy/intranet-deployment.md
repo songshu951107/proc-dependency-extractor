@@ -1,0 +1,167 @@
+# 工程迁移到内网部署指南
+
+> 适用于：内网 MySQL 已有物理表字段元数据（columns0818.xlsx 内容，即 `table_ddl_info` / `table_column_meta`）、内网需新建 Neo4j 的场景。
+>
+> 前提结论：**代码层面无需改动**（报表目录已可配置、界面动态显示已就位）。剩余工作是「构建产物 + 内网安装 MySQL/Neo4j + 连接配置 + 脚本落位 + 首次解析生成血缘」。
+
+---
+
+## 一、环境与前提
+
+| 依赖 | 版本 | 说明 |
+|---|---|---|
+| JDK | 17 | 内网需安装，用于 `java -jar` |
+| MySQL | 8.x | 内网已有表结构，无需导入 |
+| Neo4j | Community（建议 5.x） | **内网需新装** |
+| 前端构建 | — | 内网不需要 Node，已打进 jar |
+
+> ⚠️ 内网通常无法访问公共 Maven 仓库和 `api.deepseek.com`。所以 **jar 必须在能联网的机器（本机）构建**，再拷入内网。
+
+---
+
+## 二、构建产物（在外网机/本机，联网）
+
+```bash
+cd proc-dependency-extractor
+mvn clean package -DskipTests
+```
+
+产出：`target/proc-dependency-extractor.jar`（内置前端 `static/`、MySQL 驱动、Neo4j 驱动）。
+
+拷入内网以下内容：
+
+```
+target/proc-dependency-extractor.jar
+src/main/resources/application.yml     # 仅参考，真实配置用 §五 外部化
+```
+
+---
+
+## 三、内网 MySQL 检查（已有表结构，跳过导入）
+
+1. 确认库存在且**库名与连接串一致**（默认 `proc_extractor`）。库名不同则在 §五 连接 URL 的 `/` 后改。
+2. 确认表齐全：`table_ddl_info`、`table_column_meta` 已就位。
+3. 建应用账号（或确认 root 密码）供连接，需权限：
+   ```sql
+   GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX
+   ON proc_extractor.* TO 'pde'@'内网服务IP' IDENTIFIED BY '强密码';
+   ```
+4. 确认字符集 `utf8mb4`、时区（连接串已含 `serverTimezone=Asia/Shanghai`）。
+
+> ⚠️ **不要**再调 `POST /api/meta/columns/import` —— 它会**清空 `table_column_meta` + `table_ddl_info` 再全量重导**，而内网已有这些表。
+
+---
+
+## 四、内网安装 Neo4j Community
+
+（内网无外网时：在联网机下载 Neo4j Community 的 `.tar.gz`/`.zip` 拷入内网，或走内网镜像源安装）
+
+```bash
+# 以 Linux 为例
+tar -xzf neo4j-community-5.x-unix.tar.gz -C /opt
+cd /opt/neo4j-community-5.x
+
+# 设置初始密码（首次启动前执行；Community 用 set-initial-password）
+bin/neo4j-admin set-initial-password '强密码'
+
+# 启动
+bin/neo4j start
+# 确认
+curl http://内网Neo4jIP:7474
+```
+
+> Neo4j 约束**无需手动建** —— 应用启动时 `Neo4jConstraintInitializer` 会自动幂等创建。
+
+---
+
+## 五、应用连接配置（外部化，不改代码）
+
+**方式 A：环境变量（推荐）**
+
+```bash
+# MySQL
+export SPRING_DATASOURCE_URL='jdbc:mysql://内网MySQLIP:3306/proc_extractor?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true'
+export SPRING_DATASOURCE_USERNAME=pde
+export SPRING_DATASOURCE_PASSWORD='xxx'
+
+# Neo4j
+export SPRING_NEO4J_URI='bolt://内网Neo4jIP:7687'
+export SPRING_NEO4J_AUTHENTICATION_USERNAME=neo4j
+export SPRING_NEO4J_AUTHENTICATION_PASSWORD='xxx'
+
+# 脚本/报表目录
+export EXTRACTOR_REPORT_DIR='/data/pde/reports'
+export EXTRACTOR_DDL_DIR='/data/pde/jiaoben'
+export EXTRACTOR_DDL_EXCEL_PATH='/data/pde/jiaoben/columns0818.xlsx'
+
+# 端口（可选，默认 8080）
+export SERVER_PORT=8080
+```
+
+**方式 B：外部配置 yml**，在 `/data/pde/conf/application.yml` 只写需覆盖项，启动加参数：
+
+```bash
+java -jar /data/pde/proc-dependency-extractor.jar \
+  --spring.config.additional-location=file:/data/pde/conf/application.yml
+```
+
+---
+
+## 六、脚本/文件落位
+
+```
+/data/pde/procs/20260915/     # 各日期目录（存储过程 .py）
+/data/pde/procs/20260916/
+/data/pde/reports/            # 报表 .cpt/.frm/.xml（若启用报表影响）
+```
+
+对应 §五 的 `EXTRACTOR_REPORT_DIR` 与「按目录解析」填的路径。
+
+---
+
+## 七、启动服务
+
+```bash
+java -version   # 确认 17
+java -jar /data/pde/proc-dependency-extractor.jar
+# 生产建议 systemd / nohup 后台运行
+```
+
+启动日志出现「Tomcat started on port 8080」即成功。应用能正常启动（Neo4j 约束初始化的连接失败仅 `warn`，不阻止启动）。
+
+> ⚠️ **nl2sql（AI 问数）内网默认不可用**：它调用外网 `api.deepseek.com`。内网隔离时此功能访问报错属预期。如需启用：内网部署 LLM 并改 `nl2sql.base-url` / `api-key`，或在网络策略开放该域名。
+
+---
+
+## 八、首次初始化与血缘生成
+
+1. 确认字段元数据已在（§三），无需导入。
+2. **生成存储过程血缘 + Neo4j 图**（内网当前没有这些数据）：
+   - 前端 **UploadView →「按目录路径解析」** 填某个日期目录根（如 `/data/pde/procs/20260915`）；或直调 `POST /api/proc/extract/batch` `{"path":"/data/pde/procs/20260915"}`
+   - 解析会**同时写 MySQL 血缘并同步 Neo4j**，无需单独导 Neo4j。
+3. （可选）报表：前端批量解析填 `EXTRACTOR_REPORT_DIR` 目录。
+4. 日常使用：
+   - 换新日期 →「按目录解析」填新日期目录（覆盖同名 proc）
+   - 内容微调 →「重新解析全部」（仅重刷当前入库那份，不扫新日期）
+
+---
+
+## 九、访问与验证清单
+
+| 检查 | 方式 |
+|---|---|
+| 前端 | 浏览器 `http://内网IP:8080` |
+| 后端就绪 | `GET http://内网IP:8080/api/impact/schemas` 返回 schema 列表 |
+| 血缘查询 | 影响分析页选 schema + 表，应有下游结果（验证 Neo4j 生效） |
+| 批量影响 | `/schema-impact` 页选 schema 跑一遍 |
+| 查看脚本 | proc 详情「查看脚本」能读到内网 .py（验证 `file_path` 配套） |
+
+---
+
+## 十、内网注意事项汇总
+
+1. **构建在外网、运行在内网** —— jar 必须在联网机打。
+2. **nl2sql 依赖外网** —— 内网隔离时不可用，需另行处理或接受缺省。
+3. **`file_path` 配套** —— 首次务必用「按目录解析」在内网生成，让 `proc_info.file_path` 指向内网真实路径。
+4. **Neo4j 首次约束自动建** —— 只需确账号密码可连。
+5. **字段元数据已有** —— 别跑 `import`（会清空重导）。

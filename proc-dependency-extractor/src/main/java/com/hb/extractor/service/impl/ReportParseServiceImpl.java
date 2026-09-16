@@ -12,6 +12,7 @@ import com.hb.extractor.parser.dto.*;
 import com.hb.extractor.service.ReportParseService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.neo4j.core.Neo4jClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +42,10 @@ public class ReportParseServiceImpl implements ReportParseService {
     private ReportCellBindingMapper reportCellBindingMapper;
     @Autowired
     private Neo4jClient neo4jClient;
+
+    /** 报表脚本目录（配置项 extractor.report.dir，可用环境变量 EXTRACTOR_REPORT_DIR 覆盖） */
+    @Value("${extractor.report.dir:d:/HB/work_zuoye/reports}")
+    private String reportDir;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -307,8 +312,8 @@ public class ReportParseServiceImpl implements ReportParseService {
     public List<ReportInfo> reParseAll() {
         List<ReportInfo> existing = reportInfoMapper.selectList(null);
         List<ReportInfo> results = new ArrayList<>();
-        // 假设报表文件在 reports 目录（从配置或固定路径获取）
-        return parseBatch("d:/HB/work_zuoye/reports");
+        // 假设报表文件在配置的报表目录（extractor.report.dir）
+        return parseBatch(reportDir);
     }
 
     @Override

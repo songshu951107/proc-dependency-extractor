@@ -1,6 +1,8 @@
 package com.hb.extractor.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.hb.extractor.dto.ReportReParseProgressVO;
+import com.hb.extractor.dto.ReportDatasetDetailVO;
 import com.hb.extractor.dto.Result;
 import com.hb.extractor.entity.ReportCellBinding;
 import com.hb.extractor.entity.ReportDataset;
@@ -106,6 +108,26 @@ public class ReportController {
         }
     }
 
+    /**
+     * 异步启动报表全量重新解析（写 MySQL + 同步 Neo4j），返回任务 id。
+     * 前端通过 POST /api/report/parse/all/start 获取 taskId，再轮询 progress。
+     */
+    @PostMapping("/parse/all/start")
+    public Result<String> startReParseAll() {
+        try {
+            return Result.success(reportParseService.startReParseAll());
+        } catch (Exception e) {
+            log.error("启动报表全量重解析失败", e);
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /** 查询报表全量重解析任务进度 */
+    @GetMapping("/parse/all/progress")
+    public Result<ReportReParseProgressVO> reParseProgress(@RequestParam String taskId) {
+        return Result.success(reportParseService.getReParseProgress(taskId));
+    }
+
     @GetMapping("/list")
     public Result<IPage<ReportInfo>> list(
             @RequestParam(defaultValue = "1") int pageNum,
@@ -127,6 +149,14 @@ public class ReportController {
         result.put("datasets", datasets);
         result.put("bindings", bindings);
         return Result.success(result);
+    }
+
+    @GetMapping("/{file}/datasets")
+    public Result<List<ReportDatasetDetailVO>> datasets(@PathVariable String file) {
+        if (reportParseService.getReportDetail(file) == null) {
+            return Result.error(404, "报表不存在");
+        }
+        return Result.success(reportParseService.getReportDatasets(file));
     }
 
     @DeleteMapping("/{file}")

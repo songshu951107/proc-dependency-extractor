@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hb.extractor.entity.*;
 import com.hb.extractor.mapper.*;
 import com.hb.extractor.dto.ReportReParseProgressVO;
+import com.hb.extractor.dto.ReportDatasetDetailVO;
 import com.hb.extractor.parser.CptXmlParser;
 import com.hb.extractor.parser.ReportSqlParser;
 import com.hb.extractor.parser.dto.*;
@@ -445,5 +446,28 @@ public class ReportParseServiceImpl implements ReportParseService {
     public ReportInfo getReportDetail(String file) {
         return reportInfoMapper.selectOne(new LambdaQueryWrapper<ReportInfo>()
                 .eq(ReportInfo::getFile, file));
+    }
+
+    @Override
+    public ReportDatasetDetailVO buildDatasetDetail(String dsName, String connection, String sqlText) {
+        ReportDatasetDetailVO vo = new ReportDatasetDetailVO();
+        vo.setDatasetName(dsName);
+        vo.setConnection(connection);
+        vo.setSqlText(sqlText);
+        vo.setSourceTables(reportSqlParser.extractTables(sqlText));
+        vo.setFieldMappings(reportSqlParser.extractColumns(sqlText));
+        vo.setTableCount(vo.getSourceTables().size());
+        return vo;
+    }
+
+    @Override
+    public List<ReportDatasetDetailVO> getReportDatasets(String file) {
+        List<ReportDataset> datasets = reportDatasetMapper.selectList(
+                new LambdaQueryWrapper<ReportDataset>().eq(ReportDataset::getReportFile, file));
+        List<ReportDatasetDetailVO> result = new ArrayList<>();
+        for (ReportDataset ds : datasets) {
+            result.add(buildDatasetDetail(ds.getDatasetName(), ds.getConnection(), ds.getSqlText()));
+        }
+        return result;
     }
 }

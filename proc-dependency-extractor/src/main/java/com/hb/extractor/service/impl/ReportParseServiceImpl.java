@@ -6,10 +6,12 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hb.extractor.entity.*;
 import com.hb.extractor.mapper.*;
+import com.hb.extractor.dto.ReportReParseProgressVO;
 import com.hb.extractor.parser.CptXmlParser;
 import com.hb.extractor.parser.ReportSqlParser;
 import com.hb.extractor.parser.dto.*;
 import com.hb.extractor.service.ReportParseService;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +25,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -48,6 +53,30 @@ public class ReportParseServiceImpl implements ReportParseService {
     private String reportDir;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /** 报表全量重解析异步任务（单个任务串行执行，避免并发重写报表数据） */
+    private final ExecutorService reParseExecutor = Executors.newSingleThreadExecutor();
+    private final ConcurrentHashMap<String, ReParseTask> reParseTasks = new ConcurrentHashMap<>();
+
+    /** 已完成任务保留时长（毫秒），避免长期占用内存 */
+    private static final long TASK_TTL_MILLIS = 30 * 60 * 1000L;
+
+    /** 报表全量重解析任务内部状态（volatile 保证跨线程可见） */
+    private static class ReParseTask {
+        final String taskId;
+        volatile String status = "RUNNING";
+        volatile int total;
+        volatile int done;
+        volatile int success;
+        volatile int fail;
+        volatile String current;
+        volatile String error;
+        final long startTime = System.currentTimeMillis();
+
+        ReParseTask(String taskId) {
+            this.taskId = taskId;
+        }
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -75,6 +104,7 @@ public class ReportParseServiceImpl implements ReportParseService {
             reportInfo.setFile(fileName);
             reportInfo.setName(metadata.getName());
             reportInfo.setType(metadata.getType());
+            reportInfo.setFilePath(path.toString());
             reportInfo.setParseTime(LocalDateTime.now());
             reportInfo.setDatasetCount(metadata.getDatasets().size());
             reportInfo.setCellCount(metadata.getCellBindings().size());
@@ -289,23 +319,92 @@ public class ReportParseServiceImpl implements ReportParseService {
     public List<ReportInfo> parseBatch(String dirPath) {
         List<ReportInfo> results = new ArrayList<>();
         // Files.walk 递归遍历子目录，适配多层文件夹存放报表文件
+        for (Path p : collectReportFiles(dirPath)) {
+            try {
+                results.add(parseAndSave(p.toString()));
+            } catch (Exception e) {
+                log.error("解析报表失败 file={}: {}", p, e.getMessage());
+            }
+        }
+        return results;
+    }
+
+    /** 递归收集目录下所有报表文件（.cpt / .frm / .xml） */
+    private List<Path> collectReportFiles(String dirPath) {
+        List<Path> files = new ArrayList<>();
         try (Stream<Path> stream = Files.walk(Paths.get(dirPath))) {
             stream.filter(Files::isRegularFile)
                     .filter(p -> {
                         String name = p.getFileName().toString().toLowerCase();
                         return name.endsWith(".cpt") || name.endsWith(".frm") || name.endsWith(".xml");
                     })
-                    .forEach(p -> {
-                        try {
-                            results.add(parseAndSave(p.toString()));
-                        } catch (Exception e) {
-                            log.error("解析报表失败 file={}: {}", p, e.getMessage());
-                        }
-                    });
+                    .forEach(files::add);
         } catch (IOException e) {
             throw new RuntimeException("读取目录失败: " + e.getMessage(), e);
         }
-        return results;
+        return files;
+    }
+
+    @Override
+    public String startReParseAll() {
+        purgeExpiredTasks();
+        ReParseTask task = new ReParseTask(UUID.randomUUID().toString().replace("-", ""));
+        reParseTasks.put(task.taskId, task);
+        reParseExecutor.submit(() -> {
+            try {
+                List<Path> files = collectReportFiles(reportDir);
+                task.total = files.size();
+                for (Path p : files) {
+                    task.current = p.getFileName().toString();
+                    try {
+                        parseAndSave(p.toString());
+                        task.success++;
+                    } catch (Exception e) {
+                        task.fail++;
+                        log.error("报表全量重解析失败 file={}: {}", p, e.getMessage());
+                    } finally {
+                        task.done++;
+                    }
+                }
+                task.status = "DONE";
+                log.info("报表全量重解析完成：total={}, success={}, fail={}", task.total, task.success, task.fail);
+            } catch (Exception e) {
+                task.status = "FAILED";
+                task.error = e.getMessage();
+                log.error("报表全量重解析异常", e);
+            }
+        });
+        return task.taskId;
+    }
+
+    @Override
+    public ReportReParseProgressVO getReParseProgress(String taskId) {
+        ReParseTask t = reParseTasks.get(taskId);
+        if (t == null) return null;
+        ReportReParseProgressVO vo = new ReportReParseProgressVO();
+        vo.setTaskId(t.taskId);
+        vo.setStatus(t.status);
+        vo.setTotal(t.total);
+        vo.setDone(t.done);
+        vo.setSuccess(t.success);
+        vo.setFail(t.fail);
+        vo.setCurrent(t.current);
+        vo.setError(t.error);
+        vo.setCreateTime(new java.util.Date(t.startTime));
+        vo.setPercent(t.total == 0 ? 0 : (int) (t.done * 100L / t.total));
+        return vo;
+    }
+
+    /** 清理已完成且超过保留时长的旧任务，防止 map 无限增长 */
+    private void purgeExpiredTasks() {
+        long now = System.currentTimeMillis();
+        reParseTasks.entrySet().removeIf(e ->
+                !"RUNNING".equals(e.getValue().status) && (now - e.getValue().startTime) > TASK_TTL_MILLIS);
+    }
+
+    @PreDestroy
+    public void shutdownReParseExecutor() {
+        reParseExecutor.shutdown();
     }
 
     @Override
@@ -332,7 +431,14 @@ public class ReportParseServiceImpl implements ReportParseService {
             wrapper.like(ReportInfo::getName, name);
         }
         wrapper.orderByDesc(ReportInfo::getParseTime);
-        return reportInfoMapper.selectPage(page, wrapper);
+        IPage<ReportInfo> result = reportInfoMapper.selectPage(page, wrapper);
+        // 旧数据 file_path 兜底：解析时已存路径，历史数据为 null 则用报表目录拼接
+        for (ReportInfo r : result.getRecords()) {
+            if (r.getFilePath() == null || r.getFilePath().isBlank()) {
+                r.setFilePath(reportDir + "/" + r.getFile());
+            }
+        }
+        return result;
     }
 
     @Override

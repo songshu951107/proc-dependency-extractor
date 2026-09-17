@@ -29,6 +29,9 @@ public class ReportInfo {
     /** 描述 */
     private String description;
 
+    /** 报表文件完整路径 */
+    private String filePath;
+
     /** 解析时间 */
     private LocalDateTime parseTime;
 

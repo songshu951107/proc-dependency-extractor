@@ -20,8 +20,14 @@ export function parseReportBatch(path) {
   return request({ url: '/report/parse/batch', method: 'post', data: { path } })
 }
 
-export function reParseAllReports() {
-  return request({ url: '/report/parse/all', method: 'post' })
+/** 异步启动报表全量重新解析，返回 taskId */
+export function startReParseAll() {
+  return request({ url: '/report/parse/all/start', method: 'post' })
+}
+
+/** 查询报表全量重新解析任务进度 */
+export function getReParseAllProgress(taskId) {
+  return request({ url: '/report/parse/all/progress', method: 'get', params: { taskId } })
 }
 
 // 获取配置的报表脚本目录（extractor.report.dir），用于动态展示默认目录
@@ -35,6 +41,10 @@ export function getReportList(params) {
 
 export function getReportDetail(file) {
   return request({ url: `/report/${encodeURIComponent(file)}`, method: 'get' })
+}
+
+export function getReportDatasets(file) {
+  return request({ url: `/report/${encodeURIComponent(file)}/datasets`, method: 'get' })
 }
 
 export function deleteReport(file) {

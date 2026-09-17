@@ -2,6 +2,9 @@
   <div class="report-impact-view">
     <div class="filter-header">
       <ReportImpactFilter :loading="loading" @query="handleQuery" />
+      <el-button type="info" plain class="parse-entry-btn" style="right: 104px" @click="reportListDialogVisible = true">
+        报表列表
+      </el-button>
       <el-button type="warning" plain class="parse-entry-btn" @click="parseDialogVisible = true">
         报表解析
       </el-button>
@@ -108,6 +111,12 @@
             <el-button type="primary" :loading="parseAllLoading" @click="handleParseAll">
               开始解析
             </el-button>
+            <div v-if="parseAllLoading" style="margin-top: 14px;">
+              <el-progress :percentage="reparsePercent()" :status="reparseStatus()" :stroke-width="16" />
+              <p v-if="reparseCurrent" style="margin-top: 6px; color: #909399; font-size: 12px;">
+                处理中: {{ reparseCurrent }}
+              </p>
+            </div>
           </div>
         </el-tab-pane>
 
@@ -153,20 +162,32 @@
         <el-button @click="parseDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 报表清单弹窗 -->
+    <ReportListDialog v-model="reportListDialogVisible"
+                      @select-report="openDrilldown" />
+
+    <!-- 数据集下钻弹窗 -->
+    <ReportDatasetDrilldownDialog
+                      :model-value="drilldownVisible"
+                      :report="drilldownReport"
+                      @update:model-value="drilldownVisible = $event" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
 import ReportImpactFilter from '../components/report/ReportImpactFilter.vue'
 import ReportList from '../components/report/ReportList.vue'
 import FieldMappingTable from '../components/report/FieldMappingTable.vue'
 import ImpactFlowGraph from '../components/impact/ImpactFlowGraph.vue'
+import ReportListDialog from '../components/report/ReportListDialog.vue'
+import ReportDatasetDrilldownDialog from '../components/report/ReportDatasetDrilldownDialog.vue'
 import {
   findReportsByTable, findReportsByField, findByHeaderText,
-  getReportDetail, parseReportUpload, parseReportBatch, reParseAllReports,
+  getReportDetail, parseReportUpload, parseReportBatch, startReParseAll, getReParseAllProgress,
   getReportDir, traceReportLineage
 } from '../api/report'
 
@@ -200,6 +221,16 @@ const hideUnmatched = ref(false)
 
 // ---- 报表解析弹窗 ----
 const parseDialogVisible = ref(false)
+
+// ---- 报表清单弹窗 + 数据集下钻 ----
+const reportListDialogVisible = ref(false)
+const drilldownVisible = ref(false)
+const drilldownReport = ref(null)
+function openDrilldown(report) {
+  drilldownReport.value = report
+  drilldownVisible.value = true
+}
+
 const activeParseTab = ref('all')
 const parseAllLoading = ref(false)
 const parseFileLoading = ref(false)
@@ -209,6 +240,29 @@ const selectedFile = ref(null)
 const uploadRef = ref(null)
 // 配置的报表脚本目录（extractor.report.dir），用于动态展示默认目录
 const reportDir = ref('')
+// ---- 全量重新解析异步任务进度 ----
+const reparseData = ref(null)
+const reparseCurrent = computed(() => (reparseData.value ? reparseData.value.current : '') || '')
+let reparseTimer = null
+let reparseStart = 0
+const RE_PARSE_TIMEOUT_MS = 20 * 60 * 1000
+
+function reparsePercent() {
+  return reparseData.value ? reparseData.value.percent || 0 : 0
+}
+function reparseStatus() {
+  if (!reparseData.value) return ''
+  const s = reparseData.value.status
+  return s === 'FAILED' ? 'exception' : (s === 'DONE' ? 'success' : '')
+}
+function stopReParsePoll() {
+  if (reparseTimer) {
+    clearInterval(reparseTimer)
+    reparseTimer = null
+  }
+  reparseData.value = null
+}
+onBeforeUnmount(stopReParsePoll)
 
 onMounted(async () => {
   try {
@@ -236,14 +290,49 @@ function clearResultsAfterParse() {
 
 async function handleParseAll() {
   parseAllLoading.value = true
+  reparseData.value = null
   try {
-    const res = await reParseAllReports()
-    ElMessage.success(`解析完成，共 ${res.data?.length || 0} 个报表`)
-    clearResultsAfterParse()
+    const res = await startReParseAll()
+    const taskId = res.data
+    if (!taskId) throw new Error('未返回任务 id')
+    reparseStart = Date.now()
+    reparseTimer = setInterval(() => pollReParse(taskId), 2000)
+    pollReParse(taskId)
   } catch (e) {
-    ElMessage.error('解析失败: ' + (e.message || ''))
-  } finally {
+    stopReParsePoll()
     parseAllLoading.value = false
+    ElMessage.error('启动解析失败: ' + (e.message || ''))
+  }
+}
+
+async function pollReParse(taskId) {
+  if (Date.now() - reparseStart > RE_PARSE_TIMEOUT_MS) {
+    stopReParsePoll()
+    parseAllLoading.value = false
+    ElMessage.error('解析超时，请检查后端日志')
+    return
+  }
+  try {
+    const res = await getReParseAllProgress(taskId)
+    const d = res.data
+    if (!d) {
+      stopReParsePoll()
+      parseAllLoading.value = false
+      return
+    }
+    reparseData.value = d
+    if (d.status === 'DONE') {
+      stopReParsePoll()
+      parseAllLoading.value = false
+      ElMessage.success(`解析完成：成功 ${d.success}，失败 ${d.fail}`)
+      clearResultsAfterParse()
+    } else if (d.status === 'FAILED') {
+      stopReParsePoll()
+      parseAllLoading.value = false
+      ElMessage.error('解析失败: ' + (d.error || '未知错误'))
+    }
+  } catch (e) {
+    // 单次轮询失败交给下次
   }
 }
 

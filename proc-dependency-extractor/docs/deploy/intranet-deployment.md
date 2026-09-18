@@ -40,13 +40,39 @@ src/main/resources/application.yml     # 仅参考，真实配置用 §五 外�
 ## 三、内网 MySQL 检查（已有表结构，跳过导入）
 
 1. 确认库存在且**库名与连接串一致**（默认 `proc_extractor`）。库名不同则在 §五 连接 URL 的 `/` 后改。
-2. 确认表齐全：`table_ddl_info`、`table_column_meta` 已就位。
+2. **用以下完整表清单核对内网库**（除字段元数据外，应用还依赖血缘/报表/任务等表，缺任一张启动或查询即报错）：
+   ```
+   字段元数据:  table_ddl_info,   table_column_meta
+   血缘:        table_lineage,    sql_block_info,   table_block_condition,
+               table_field_mapping, table_transform_input
+   存储过程:    proc_info,        proc_table_dependency, proc_parse_fail
+   报表:        report_info,      report_dataset,   report_cell_binding
+   任务/同步:    neo4j_sync_task,  neo4j_sync_log,   rebuild_task
+   ```
+   ```sql
+   -- 一键核对缺失表（结果只列出当前没有的表）
+   SELECT t.TABLE_NAME FROM (
+     SELECT 'table_ddl_info' t UNION SELECT 'table_column_meta' UNION SELECT 'table_lineage'
+     UNION SELECT 'sql_block_info' UNION SELECT 'table_block_condition' UNION SELECT 'table_field_mapping'
+     UNION SELECT 'table_transform_input' UNION SELECT 'proc_info' UNION SELECT 'proc_table_dependency'
+     UNION SELECT 'proc_parse_fail' UNION SELECT 'report_info' UNION SELECT 'report_dataset'
+     UNION SELECT 'report_cell_binding' UNION SELECT 'neo4j_sync_task' UNION SELECT 'neo4j_sync_log'
+     UNION SELECT 'rebuild_task'
+   ) t LEFT JOIN information_schema.tables s
+     ON s.table_schema='proc_extractor' AND s.table_name=t.t
+   WHERE s.table_name IS NULL;
+   ```
+   - **校验命令**：`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='proc_extractor';` 应 ≥ 15。
+   - **DDL 来源**：仓库 `src/main/resources/db/` 下有 4 张表 DDL（`neo4j_sync_task.sql`/`neo4j_sync_log.sql`/`proc_parse_fail.sql`/`rebuild_task.sql`）。其余表**无全量 schema.sql**，缺失时按约定列名/类型手工建或用本开发库 `mysqldump --no-data proc_extractor 表名` 导出。
 3. 建应用账号（或确认 root 密码）供连接，需权限：
    ```sql
    GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX
    ON proc_extractor.* TO 'pde'@'内网服务IP' IDENTIFIED BY '强密码';
    ```
-4. 确认字符集 `utf8mb4`、时区（连接串已含 `serverTimezone=Asia/Shanghai`）。
+4. **确认 MySQL 允许应用主机远端连接**（若不一定在同一台机）：
+   - 改 `my.cnf` 的 `bind-address` 为 `0.0.0.0`（或 MySQL 所在内网 IP），重启 MySQL；
+   - 上一步账号 `@'内网服务IP'` 的 host 需覆盖应用机地址。
+5. 确认字符集 `utf8mb4`、时区（连接串已含 `serverTimezone=Asia/Shanghai`）。
 
 > ⚠️ **不要**再调 `POST /api/meta/columns/import` —— 它会**清空 `table_column_meta` + `table_ddl_info` 再全量重导**，而内网已有这些表。
 
@@ -187,8 +213,10 @@ SPRING_NEO4J_AUTHENTICATION_PASSWORD  4.5 设置的强密码
 # 开放做bolt与http端口（内网其他机器连）
 firewall-cmd --add-port=7687/tcp --permanent
 firewall-cmd --add-port=7474/tcp --permanent
+# 若前端/API 在另一台内网机器的应用需要访问本应用 8080，同样放行
+firewall-cmd --add-port=8080/tcp --permanent
 firewall-cmd --reload
-# 或在云/安全组放行 7687、7474
+# 或在云/安全组放行 7687、7474、8080
 ```
 
 > 生产建议：对外只放开应用访问 Neo4j 的 7687；7474 只在内网调试时开放。默认 `dbms.security.auth_enabled=true`，保持开启。

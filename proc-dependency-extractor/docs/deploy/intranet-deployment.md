@@ -31,9 +31,15 @@ mvn clean package -DskipTests
 拷入内网以下内容：
 
 ```
-target/proc-dependency-extractor.jar
-src/main/resources/application.yml     # 仅参考，真实配置用 §五 外部化
+target/proc-dependency-extractor.jar        # 应用 jar
+docs/deploy/schema.sql                      # 内网建表脚本（17 张表，仅结构）
+docs/deploy/.env.example                    # 环境变量模板 → 内网改名为 .env 并填真实值
+docs/deploy/start.sh                        # Linux 启动脚本（start/stop/status/restart）
+docs/deploy/pde.service                     # systemd 服务单元（推荐）
+src/main/resources/application.yml          # 仅参考，真实配置用 §五 外部化
 ```
+
+> 📦 也可自行构建：`cd proc-dependency-extractor && mvn clean package -DskipTests`（联网机）。
 
 ---
 
@@ -230,6 +236,8 @@ firewall-cmd --reload
 ---
 
 ## 五、应用连接配置（外部化，不改代码）
+
+> ✨ **推荐：直接用仓库的 `.env.example`** —— 拷入内网改名为 `.env`，填入真实值，由 `start.sh` 或 `pde.service` 自动加载（见 §七）。下面的「方式 A/B」仅作字段对照说明，无需再手工维护。
 
 **方式 A：环境变量（推荐）**
 

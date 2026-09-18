@@ -1,0 +1,29 @@
+# /etc/systemd/system/pde.service
+# proc-dependency-extractor 应用服务（Linux systemd）
+# 安装：
+#   cp pde.service /etc/systemd/system/pde.service
+#   改动路径后需 sed 替换下面对应值，再：
+#   systemctl daemon-reload && systemctl enable --now pde
+# 常用：systemctl {start|stop|restart|status} pde
+[Unit]
+Description=Proc Dependency Extractor
+After=network.target mysql.service neo4j.service
+
+[Service]
+Type=simple
+User=pde
+WorkingDirectory=/data/pde
+# 从 /data/pde/.env 注入环境变量（Spring 松绑定，如 EXTRACTOR_REPORT_DIR 等）
+EnvironmentFile=/data/pde/.env
+ExecStart=/usr/bin/java -Xms512m -Xmx512m -jar /data/pde/proc-dependency-extractor.jar
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+# 目录读写与打开文件数
+LimitNOFILE=65535
+
+# 可选：如用独立运行用户，先创建
+# RuntimeDirectory=pde
+
+[Install]
+WantedBy=multi-user.target

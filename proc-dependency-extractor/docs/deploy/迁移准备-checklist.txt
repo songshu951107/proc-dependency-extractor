@@ -1,0 +1,64 @@
+=====================================================================
+ proc-dependency-extractor 内网迁移准备 Checklist
+ 用法：逐项核对，完成一项打 [x]。交付物均位于 docs/deploy/ 目录。
+=====================================================================
+
+【A. 代码 / 仓库侧（开发机一次完成）】
+[ ] A1  未提交改动已整理提交（工作区 git status 干净）
+[ ] A2  明文密钥已从配置移除（nl2sql api-key / base-url 已改为环境变量）
+[ ] A3  已处理 git 历史中的明文 key：
+        - 方案1：git filter-repo 清理历史；或
+        - 方案2：轮换 deepseek key（旧 key 作废）
+[ ] A4  已生成并校验 docs/deploy/schema.sql（17 张表，仅结构、幂等）
+[ ] A5  已生成 docs/deploy/.env.example（环境变量模板）
+[ ] A6  已生成 docs/deploy/start.sh 与 docs/deploy/pde.service（Linux 启动）
+[ ] A7  （联网机）已执行构建：mvn clean package -DskipTests
+        产物：target/proc-dependency-extractor.jar（内置前端/驱动）
+
+【B. 联网 → 内网 拷贝】
+[ ] B1  target/proc-dependency-extractor.jar 拷入内网 /data/pde/
+[ ] B2  docs/deploy/schema.sql 拷入内网（建表用）
+[ ] B3  docs/deploy/.env.example、start.sh、pde.service 拷入内网 /data/pde/
+[ ] B4  报表目录拷入内网 EXTRACTOR_REPORT_DIR（/data/pde/reports/）
+[ ] B5  DDL 元数据目录拷入内网 EXTRACTOR_DDL_DIR（/data/pde/jiaoben/，含 columns0818.xlsx）
+
+【C. 内网基础设施】
+[ ] C1  安装 JDK 17（java -version）
+[ ] C2  安装 MySQL 8，建库 proc_extractor 与账号 pde，授权 SELECT/INSERT/UPDATE/
+        DELETE/CREATE/ALTER/INDEX
+        - 确认则 MySQL 允许应用主机远端连接（bind-address + 账号 host）
+        - 确认字符集 utf8mb4、时区 Asia/Shanghai
+[ ] C3  安装 Neo4j Community，设初始强密码，放开 0.0.0.0 监听，放行 7687/7474
+[ ] C4  （如启用 nl2sql）内网 LLM 网关就绪，拿到 NL2SQL_API_KEY / NL2SQL_BASE_URL
+
+【D. 数据库初始化】
+[ ] D1  建表：mysql -u<user> -p proc_extractor < schema.sql
+[ ] D2  校验表齐全：SELECT COUNT(*) FROM information_schema.tables
+        WHERE table_schema='proc_extractor';  → 应为 17
+[ ] D3  导入字段元数据（已有则跳过，勿跑 POST /api/meta/columns/import，避免清空重导）
+
+【E. 应用配置与启动】
+[ ] E1  cp .env.example .env，填入真实 MySQL/Neo4j/目录 值（不含真实 key 入库）
+[ ] E2  启动：systemctl enable --now pde（或 ./start.sh start）
+[ ] E3  看日志确认 "Tomcat started on port 8080"（Neo4j 约束 warn 可忽略）
+[ ] E4  放行应用端口 8080（防火墙/安全组）
+
+【F. 首次数与血统生成】
+[ ] F1  生成存储过程血缘+Neo4j 图：前端 UploadView「按目录解析」
+        填日期目录，或 POST /api/proc/extract/batch {"path":"日期目录根"}
+[ ] F2  （可选）报表：前端批量解析 EXTRACTOR_REPORT_DIR 目录，
+        使 report_info.file_path 指向内网路径
+[ ] F3  验证：GET /api/impact/schemas 返回列表；血缘查询有下游结果
+
+【G. 上线验收】
+[ ] G1  浏览器 http://内网IP:8080 可打开前端
+[ ] G2  影响分析页 schema+表 出结果
+[ ] G3  批量影响 /schema-impact 跑一遍
+[ ] G4  proc 详情「查看脚本」能读到内网 .py（file_path 配套）
+[ ] G5  报表清单「文件所在路径」指向服务器路径
+[ ] G6  密钥：grep -rn "sk-" src 无结果；仅经 NL2SQL_API_KEY 注入
+[ ] G7  nl2sql：不加密钥时调用报"未配置密钥"属预期（验收按接口可达判定）
+
+=====================================================================
+ 相关文档：docs/deploy/intranet-deployment.md（§一~§十一 详细步骤）
+=====================================================================

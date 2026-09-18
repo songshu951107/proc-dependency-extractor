@@ -43,7 +43,7 @@ src/main/resources/application.yml     # 仅参考，真实配置用 §五 外�
 2. **用以下完整表清单核对内网库**（除字段元数据外，应用还依赖血缘/报表/任务等表，缺任一张启动或查询即报错）：
    ```
    字段元数据:  table_ddl_info,   table_column_meta
-   血缘:        table_lineage,    sql_block_info,   table_block_condition,
+   血缘:        table_lineage,    table_lineage_filter, sql_block_info, table_block_condition,
                table_field_mapping, table_transform_input
    存储过程:    proc_info,        proc_table_dependency, proc_parse_fail
    报表:        report_info,      report_dataset,   report_cell_binding
@@ -53,17 +53,17 @@ src/main/resources/application.yml     # 仅参考，真实配置用 §五 外�
    -- 一键核对缺失表（结果只列出当前没有的表）
    SELECT t.TABLE_NAME FROM (
      SELECT 'table_ddl_info' t UNION SELECT 'table_column_meta' UNION SELECT 'table_lineage'
-     UNION SELECT 'sql_block_info' UNION SELECT 'table_block_condition' UNION SELECT 'table_field_mapping'
-     UNION SELECT 'table_transform_input' UNION SELECT 'proc_info' UNION SELECT 'proc_table_dependency'
-     UNION SELECT 'proc_parse_fail' UNION SELECT 'report_info' UNION SELECT 'report_dataset'
-     UNION SELECT 'report_cell_binding' UNION SELECT 'neo4j_sync_task' UNION SELECT 'neo4j_sync_log'
-     UNION SELECT 'rebuild_task'
+     UNION SELECT 'table_lineage_filter' UNION SELECT 'sql_block_info' UNION SELECT 'table_block_condition'
+     UNION SELECT 'table_field_mapping' UNION SELECT 'table_transform_input' UNION SELECT 'proc_info'
+     UNION SELECT 'proc_table_dependency' UNION SELECT 'proc_parse_fail' UNION SELECT 'report_info'
+     UNION SELECT 'report_dataset' UNION SELECT 'report_cell_binding' UNION SELECT 'neo4j_sync_task'
+     UNION SELECT 'neo4j_sync_log' UNION SELECT 'rebuild_task'
    ) t LEFT JOIN information_schema.tables s
      ON s.table_schema='proc_extractor' AND s.table_name=t.t
    WHERE s.table_name IS NULL;
    ```
-   - **校验命令**：`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='proc_extractor';` 应 ≥ 15。
-   - **DDL 来源**：仓库 `src/main/resources/db/` 下有 4 张表 DDL（`neo4j_sync_task.sql`/`neo4j_sync_log.sql`/`proc_parse_fail.sql`/`rebuild_task.sql`）。其余表**无全量 schema.sql**，缺失时按约定列名/类型手工建或用本开发库 `mysqldump --no-data proc_extractor 表名` 导出。
+   - **校验命令**：`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='proc_extractor';` 应为 **17**。
+   - **DDL 来源**：仓库已提供全量建表脚本 **`docs/deploy/schema.sql`**（17 张表，仅结构、幂等 DROP+CREATE，内网空库直接 `mysql -u<user> -p proc_extractor < schema.sql` 建表即可），其中的 `neo4j_sync_task`/`neo4j_sync_log`/`proc_parse_fail`/`rebuild_task` 与 `src/main/resources/db/` 下的单表 DDL 一致。
 3. 建应用账号（或确认 root 密码）供连接，需权限：
    ```sql
    GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX
@@ -287,6 +287,8 @@ java -jar /data/pde/proc-dependency-extractor.jar
 ```
 
 启动日志出现「Tomcat started on port 8080」即成功。应用能正常启动（Neo4j 约束初始化的连接失败仅 `warn`，不阻止启动）。
+
+> 📦 仓库 `docs/deploy/` 已提供可直接使用的产物：建表脚本 `schema.sql`、环境变量模板 `.env.example`、Linux 启动脚本 `start.sh`、systemd 服务 `pde.service`。推荐方式：`cp .env.example .env` 改真实值 → `systemctl enable --now pde` 或 `./start.sh start`。
 
 > ⚠️ **nl2sql（AI 问数）内网默认不可用**：它调用外网 `api.deepseek.com`。内网隔离时此功能访问报错属预期。如需启用：内网部署 LLM 并改 `nl2sql.base-url` / `api-key`，或在网络策略开放该域名。
 

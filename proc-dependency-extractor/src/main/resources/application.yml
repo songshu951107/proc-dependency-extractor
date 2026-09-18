@@ -59,8 +59,9 @@ impact:
     max-retry-count: 3
 
 nl2sql:
-  api-key: ${NL2SQL_API_KEY:sk-099e31453cc943adaea9f439bfc8b389}
-  base-url: https://api.deepseek.com/v1
+  # 密钥一律走环境变量注入，代码库不保存明文（值缺失时调用方会明确报“未配置密钥”）
+  api-key: ${NL2SQL_API_KEY:}
+  base-url: ${NL2SQL_BASE_URL:https://api.deepseek.com/v1}
   model: deepseek-v4-flash
   temperature: 0
   max-candidate-tables: 10

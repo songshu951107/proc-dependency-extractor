@@ -223,6 +223,10 @@ export EXTRACTOR_DDL_EXCEL_PATH='/data/pde/jiaoben/columns0818.xlsx'
 
 # 端口（可选，默认 8080）
 export SERVER_PORT=8080
+
+# AI 问数密钥（可选，仅启用 nl2sql 时；不设则调用报“未配置密钥”，见 §十一）
+export NL2SQL_API_KEY='真实key'
+export NL2SQL_BASE_URL='内网LLM网关地址或 http默认 https://api.deepseek.com/v1'
 ```
 
 **方式 B：外部配置 yml**，在 `/data/pde/conf/application.yml` 只写需覆盖项，启动加参数：
@@ -292,3 +296,68 @@ java -jar /data/pde/proc-dependency-extractor.jar
 3. **`file_path` 配套** —— 首次务必用「按目录解析」在内网生成，让 `proc_info.file_path` 指向内网真实路径。
 4. **Neo4j 首次约束自动建** —— 只需确账号密码可连。
 5. **字段元数据已有** —— 别跑 `import`（会清空重导）。
+
+---
+
+## 十一、上线前：密钥清理与报表路径要求（必读，具体操作）
+
+### 11.1 移除代码库中的明文密钥（在本机/联网机执行，部署前）
+
+**要求**：代码库（含后续提交）不再保存任何真实密钥，一律走环境变量注入。
+
+**步骤：**
+1. 编辑 `src/main/resources/application.yml` 的 `nl2sql:` 段，将 api-key 的默认值去掉：
+   ```yaml
+   nl2sql:
+     # 密钥一律走环境变量注入，代码库不保存明文（值缺失时调用方会明确报"未配置密钥"）
+     api-key: ${NL2SQL_API_KEY:}
+     base-url: ${NL2SQL_BASE_URL:https://api.deepseek.com/v1}
+   ```
+   > 值留空而非写一个假 key：留空时调用会明确报"未配置密钥"，便于定位；写假 key 只能换来 401，且同样进库。
+2. 全仓扫描确认无其它明文密钥：
+   ```bash
+   # 在 git 仓库根执行
+   grep -rn --include="*.yml" --include="*.yaml" --include="*.properties" --include="*.json" -E "sk-[A-Za-z0-9]{20,}" src | head -20
+   ```
+   无输出为通过。若命中，一并改成 `${环境变量}` 形式。
+3. Commit 本次改动。**注意**：若 git 历史里已含真实 key，`grep` 只查工作区看不到历史——共享内网代码库前要么用 `git filter-repo` 清历史、要么轮换该 key；最低要求是**从本次提交起不再带 key**。
+4. 本地/内网都通过环境变量注入（见 §五 末尾）：
+   ```bash
+   export NL2SQL_API_KEY='真实key'
+   export NL2SQL_BASE_URL='内网LLM网关地址或省略保持默认'
+   ```
+
+### 11.2 报表 `report_info.file_path` 路径要求
+
+**要求**：报表清单「文件所在路径」列应指向内网真实路径；报表血缘不依赖该字段，仅影响展示与重新解析定位。
+
+**步骤：**
+1. 内网首次部署完成后，对报表目录执行一次「重新解析全部」或「按目录解析」(填 `EXTRACTOR_REPORT_DIR` 对应目录)。`parseAndSave` 会把该报表的 `file_path` 重写为服务器路径。
+2. 校验路径是否已指向服务器：
+   ```sql
+   SELECT file, file_path FROM report_info WHERE file_path LIKE 'd:%' OR file_path LIKE '%:\\%';
+   -- 期望结果：无记录或已由「重新解析」覆盖为内网路径
+   ```
+   正常情况下直接看完整清单即可：
+   ```sql
+   SELECT file, file_path FROM report_info LIMIT 20;
+   ```
+3. 若内网承接旧库拷贝（`report_info` 里 file_path 是本机盘符 `d:/...`），**不必手工改库**：在服务器上重新解析一次该报表即覆盖；在重新解析前，报表清单的路径列会显示旧路径（仅展示层，不影响血缘/数据集/字段映射）。
+
+### 11.3 nl2sql（AI 问数）内网处理
+
+- **不启用（默认）**：内网不设 `NL2SQL_API_KEY`、不部署 LLM。此时调用该功能返回错误属**预期行为**——部署验收按"接口可达、业务报未配置密钥"判定，不算缺陷。
+- **启用**：内网部署 LLM 网关，设置环境变量 `NL2SQL_API_KEY`、`NL2SQL_BASE_URL`（见 §五）后重启即可切换，无需改代码。
+- **完全隐藏入口**：当前前端一直渲染入口；如需内网彻底不显示问数入口，属后续迭代需求（需前端改动），本版本不包含。
+
+### 11.4 上线验收快速清单
+
+| 项 | 验收命令 / 行为 |
+|---|---|
+| 后端就绪 | `GET http://内网IP:8080/api/impact/schemas` 返回列表 |
+| MySQL 连通 | 影响分析页能查 schema/表 |
+| Neo4j 生效 | 血缘查询返回下游结果 |
+| 报表清单路径 | `SELECT file_path FROM report_info` 指向服务器路径 |
+| 旧库 path 覆盖 | 重新解析某报表后其 file_path 变为内网路径 |
+| 密钥 | `grep -rn "sk-" src` 无结果；仅经 `NL2SQL_API_KEY` 注入 |
+| nl2sql | 不加密钥时调用报"未配置密钥"（预期） |

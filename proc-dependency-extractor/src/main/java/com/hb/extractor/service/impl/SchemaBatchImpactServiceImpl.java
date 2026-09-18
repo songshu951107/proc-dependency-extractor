@@ -206,6 +206,25 @@ public class SchemaBatchImpactServiceImpl implements SchemaBatchImpactService {
         row.setAffectedReportCount(reportMap.size());
         row.setAffectedReports(new ArrayList<>(reportMap.values()));
 
+        // 起点表自身被引用的报表：反向查询 source ← Dataset ← Report，按 file 去重
+        LinkedHashMap<String, ReportImpactVO.ReportRef> selfReportMap = new LinkedHashMap<>();
+        String[] st = sourceFull.toLowerCase().split("\\.");
+        if (st.length >= 2) {
+            try {
+                ReportImpactVO selfVo = reportImpactService.findReportsByTable(st[0], st[1]);
+                if (selfVo != null) {
+                    for (ReportImpactVO.ReportRef r : selfVo.getReports()) {
+                        if (r.getFile() == null || r.getFile().isEmpty()) continue;
+                        selfReportMap.putIfAbsent(r.getFile(), r);
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("起点表自身报表查询失败 table={}: {}", sourceFull, ex.getMessage());
+            }
+        }
+        row.setSelfReportCount(selfReportMap.size());
+        row.setSelfReports(new ArrayList<>(selfReportMap.values()));
+
         List<AffectedTableVO> aff = new ArrayList<>();
         for (Map.Entry<String, String> e : targetProc.entrySet()) {
             AffectedTableVO a = new AffectedTableVO();

@@ -15,9 +15,13 @@ public class SchemaImpactRowVO {
     private Integer affectedTableCount;
     private Integer affectedProcCount;
     private Integer affectedReportCount;
+    /** 起点表自身被引用的报表数（反向查询起点表 ← Dataset ← Report） */
+    private Integer selfReportCount;
     /** 单表失败原因 */
     private String error;
     private List<AffectedTableVO> affectedTables = new ArrayList<>();
     private List<String> affectedProcs = new ArrayList<>();
     private List<ReportImpactVO.ReportRef> affectedReports = new ArrayList<>();
+    /** 起点表自身被引用的报表明细（按 file 去重） */
+    private List<ReportImpactVO.ReportRef> selfReports = new ArrayList<>();
 }

@@ -69,6 +69,39 @@ class SchemaBatchImpactServiceImplTest {
     }
 
     @Test
+    void buildRow_countsSourceTableSelfReports() {
+        when(tableLineageMapper.selectList(any())).thenReturn(Arrays.asList(
+                lineage("cdm.c_agt_ldr_acct_intst", "p1")));
+
+        // 受影响目标表引用 rpt_a.xlsx
+        ReportImpactVO.ReportRef r1 = new ReportImpactVO.ReportRef();
+        r1.setFile("rpt_a.xlsx"); r1.setName("A");
+        ReportImpactVO voCdm = new ReportImpactVO();
+        voCdm.getReports().add(r1);
+        when(reportImpactService.findReportsByTable("cdm", "c_agt_ldr_acct_intst")).thenReturn(voCdm);
+
+        // 起点表 fdm.f_ac_ctds_ldr_acct 自身引用 rpt_a.xlsx 与 rpt_c.xlsx（rpt_a 与目标表共用，仍计入起点表自身集合）
+        ReportImpactVO.ReportRef self1 = new ReportImpactVO.ReportRef();
+        self1.setFile("rpt_a.xlsx"); self1.setName("A");
+        ReportImpactVO.ReportRef self2 = new ReportImpactVO.ReportRef();
+        self2.setFile("rpt_c.xlsx"); self2.setName("C");
+        ReportImpactVO voSelf = new ReportImpactVO();
+        voSelf.getReports().add(self1);
+        voSelf.getReports().add(self2);
+        when(reportImpactService.findReportsByTable("fdm", "f_ac_ctds_ldr_acct")).thenReturn(voSelf);
+
+        SchemaImpactRowVO row = service.buildRow("fdm.f_ac_ctds_ldr_acct");
+
+        assertEquals(2, row.getSelfReportCount());
+        assertEquals(2, row.getSelfReports().size());
+        // 起点表自身报表集合按 file 去重
+        assertEquals(1, row.getSelfReports().stream().filter(r -> "rpt_a.xlsx".equals(r.getFile())).count());
+        // 受影响报表与起点表自身报表互不影响
+        assertEquals(1, row.getAffectedReportCount());
+        assertEquals(1, row.getAffectedReports().size());
+    }
+
+    @Test
     void sweep_removesExpiredNonLatest_keepsLatest() {
         var a = service.registerTaskForTest("FD_M");
         service.markTaskDone(a);

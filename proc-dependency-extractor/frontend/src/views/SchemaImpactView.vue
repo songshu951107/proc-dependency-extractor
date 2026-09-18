@@ -38,6 +38,13 @@
           </el-link>
         </template>
       </el-table-column>
+      <el-table-column label="起点表被引用报表数" width="150" align="center">
+        <template #default="{ row }">
+          <el-link type="primary" :disabled="!row.selfReportCount" @click="openDetail(row, 'selfReports')">
+            {{ row.selfReportCount }}
+          </el-link>
+        </template>
+      </el-table-column>
       <el-table-column label="状态" min-width="140">
         <template #default="{ row }">
           <span v-if="row.error" style="color: #f56c6c;">失败: {{ row.error }}</span>
@@ -56,6 +63,12 @@
           <el-table-column prop="name" label="受影响存储过程" min-width="360" />
         </template>
         <template v-else-if="detailKind === 'reports'">
+          <el-table-column prop="file" label="报表文件" min-width="220" />
+          <el-table-column prop="name" label="报表名称" min-width="160" />
+          <el-table-column prop="datasetName" label="数据集" min-width="160" />
+          <el-table-column prop="connection" label="连接" min-width="140" />
+        </template>
+        <template v-else-if="detailKind === 'selfReports'">
           <el-table-column prop="file" label="报表文件" min-width="220" />
           <el-table-column prop="name" label="报表名称" min-width="160" />
           <el-table-column prop="datasetName" label="数据集" min-width="160" />
@@ -98,7 +111,9 @@ function taskStatus() {
 }
 function detailTitle() {
   const t = detailKind.value === 'tables' ? '被影响表明细'
-    : detailKind.value === 'procs' ? '受影响存储过程明细' : '涉及报表明细'
+    : detailKind.value === 'procs' ? '受影响存储过程明细'
+    : detailKind.value === 'reports' ? '涉及报表明细'
+    : '起点表被引用报表明细'
   return t
 }
 
@@ -177,6 +192,8 @@ function openDetail(row, kind) {
     detailRows.value = row.affectedTables || []
   } else if (kind === 'procs') {
     detailRows.value = (row.affectedProcs || []).map((p) => ({ name: p }))
+  } else if (kind === 'selfReports') {
+    detailRows.value = row.selfReports || []
   } else {
     detailRows.value = row.affectedReports || []
   }

@@ -117,6 +117,14 @@
                 处理中: {{ reparseCurrent }}
               </p>
             </div>
+            <div v-if="reparseFailList.length" style="margin-top: 14px;">
+              <div style="color: #f56c6c; font-weight: 600; margin-bottom: 6px;">
+                解析失败 {{ reparseFailList.length }} 个：
+              </div>
+              <ul style="margin: 0; padding-left: 18px; color: #f56c6c; font-size: 13px; line-height: 1.8; max-height: 180px; overflow: auto;">
+                <li v-for="(f, i) in reparseFailList" :key="i">{{ f }}</li>
+              </ul>
+            </div>
           </div>
         </el-tab-pane>
 
@@ -243,6 +251,7 @@ const reportDir = ref('')
 // ---- 全量重新解析异步任务进度 ----
 const reparseData = ref(null)
 const reparseCurrent = computed(() => (reparseData.value ? reparseData.value.current : '') || '')
+const reparseFailList = computed(() => (reparseData.value && reparseData.value.failList) || [])
 let reparseTimer = null
 let reparseStart = 0
 const RE_PARSE_TIMEOUT_MS = 20 * 60 * 1000
@@ -260,7 +269,7 @@ function stopReParsePoll() {
     clearInterval(reparseTimer)
     reparseTimer = null
   }
-  reparseData.value = null
+  // 保留 reparseData 以便完成后仍能看到失败明细；新一次「开始解析」在 handleParseAll 中会重置
 }
 onBeforeUnmount(stopReParsePoll)
 

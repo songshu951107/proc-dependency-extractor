@@ -15,4 +15,6 @@ public class ColumnMapping {
     private String sourceTable;
     /** 源字段名(大写，如 GL_NUM)，无法解析时为null */
     private String sourceField;
+    /** 报表表头-最小粒度列名(仅报表数据集下钻填充，其它场景为null) */
+    private String reportHeader;
 }

@@ -30,16 +30,17 @@ public class ReportSqlParser {
     /** 单词 token（用于裸列提取） */
     private static final Pattern WORD_PATTERN = Pattern.compile("\\b(\\w+)\\b");
 
-    /** AS 别名: expr AS alias 或 expr AS 'alias' / "alias"（帆软报表常用单引号汉字别名，如 round(bal/10000,2) as '账户余额'） */
+    /** AS 别名: expr AS alias 或 expr AS 'alias' / "alias"（帆软报表常用单引号汉字别名，如 round(bal/10000,2) as '账户余额'）；支持裸中文别名（如 a.X AS 五级分类） */
     private static final Pattern AS_ALIAS_PATTERN = Pattern.compile(
-            "(?i)\\bAS\\s+(\\w+|'[^']*'|\"[^\"]*\")\\s*$");
+            "(?i)\\bAS\\s+([\\w\\u4e00-\\u9fff]+|'[^']*'|\"[^\"]*\")\\s*$");
 
     /** alias.field 模式 */
     private static final Pattern ALIAS_FIELD_PATTERN = Pattern.compile("(\\w+)\\.(\\w+)");
 
-    /** 末尾空格别名: expr alias 或 expr 'alias'（Oracle 风格无 AS + 引号别名） */
+    /** 末尾空格别名: expr alias 或 expr 'alias'（Oracle 风格无 AS + 引号别名）。
+     *  ``\w`` 之外兼容中文字符别名（如 `a.CNT 合同文本号`）。 */
     private static final Pattern SPACE_ALIAS_PATTERN = Pattern.compile(
-            "\\s+(\\w+|'[^']*'|\"[^\"]*\")\\s*$");
+            "\\s+([\\w\\u4e00-\\u9fff]+|'[^']*'|\"[^\"]*\")\\s*$");
 
     /**
      * 预处理 SQL：去除帆软参数和注释。

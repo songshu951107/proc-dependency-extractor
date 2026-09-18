@@ -72,6 +72,8 @@ public class ReportParseServiceImpl implements ReportParseService {
         volatile int fail;
         volatile String current;
         volatile String error;
+        /** 失败报表明细：目录/文件名 - 原因 */
+        final List<String> failList = Collections.synchronizedList(new ArrayList<>());
         final long startTime = System.currentTimeMillis();
 
         ReParseTask(String taskId) {
@@ -112,8 +114,13 @@ public class ReportParseServiceImpl implements ReportParseService {
 
             List<ReportCellBinding> allBindings = new ArrayList<>();
 
-            // 解析每个数据集
+            // 解析每个数据集（按 MySQL 大小写不敏感唯一索引口径去重，如 EVA/eva 视为同名）
+            Set<String> seenDatasetNames = new HashSet<>();
             for (DatasetInfo ds : metadata.getDatasets()) {
+                if (!seenDatasetNames.add(ds.getName().toUpperCase(Locale.ROOT))) {
+                    log.warn("报表含重复数据集名，跳过 report={} dataset={}", fileName, ds.getName());
+                    continue;
+                }
                 List<TableRef> tableRefs = new ArrayList<>();
                 List<ColumnMapping> columnMappings = new ArrayList<>();
                 try {
@@ -134,15 +141,20 @@ public class ReportParseServiceImpl implements ReportParseService {
                 rd.setCreateTime(LocalDateTime.now());
                 reportDatasetMapper.insert(rd);
 
-                // 合并单元格绑定与字段映射
+                // 合并单元格绑定与字段映射（别名优先，次按源字段名兜底，兼容中/英文绑定列名）
                 Map<String, ColumnMapping> mappingByAlias = new LinkedHashMap<>();
                 for (ColumnMapping cm : columnMappings) {
-                    mappingByAlias.put(cm.getSelectAlias().toUpperCase(), cm);
+                    if (cm.getSelectAlias() != null) {
+                        mappingByAlias.put(getUppercase(cm.getSelectAlias()), cm);
+                    }
+                    if (cm.getSourceField() != null) {
+                        mappingByAlias.putIfAbsent(getUppercase(cm.getSourceField()), cm);
+                    }
                 }
 
                 for (CellBinding cb : metadata.getCellBindings()) {
                     if (!cb.getDsName().equals(ds.getName())) continue;
-                    ColumnMapping cm = mappingByAlias.get(cb.getColumnName().toUpperCase());
+                    ColumnMapping cm = mappingByAlias.get(getUppercase(cb.getColumnName()));
 
                     ReportCellBinding rcb = new ReportCellBinding();
                     rcb.setReportFile(fileName);
@@ -226,7 +238,8 @@ public class ReportParseServiceImpl implements ReportParseService {
                 Map<String, Object> queriesParams = new HashMap<>();
                 queriesParams.put("key", datasetKey);
                 queriesParams.put("tableName", tableName);
-                queriesParams.put("alias", ref.getAlias());
+                // 表无别名时用表完整名兜底，避免 Neo4j MERGE 空属性报错
+                queriesParams.put("alias", ref.getAlias() != null && !ref.getAlias().isBlank() ? ref.getAlias() : tableName);
                 neo4jClient.query("MATCH (d:Dataset {key: $key}), (t:Table {name: $tableName}) " +
                         "MERGE (d)-[:QUERIES {alias: $alias}]->(t)").bindAll(queriesParams).run();
             }
@@ -362,6 +375,7 @@ public class ReportParseServiceImpl implements ReportParseService {
                         task.success++;
                     } catch (Exception e) {
                         task.fail++;
+                        task.failList.add(p.getFileName().toString() + ": " + e.getMessage());
                         log.error("报表全量重解析失败 file={}: {}", p, e.getMessage());
                     } finally {
                         task.done++;
@@ -391,6 +405,7 @@ public class ReportParseServiceImpl implements ReportParseService {
         vo.setFail(t.fail);
         vo.setCurrent(t.current);
         vo.setError(t.error);
+        vo.setFailList(new ArrayList<>(t.failList));
         vo.setCreateTime(new java.util.Date(t.startTime));
         vo.setPercent(t.total == 0 ? 0 : (int) (t.done * 100L / t.total));
         return vo;
@@ -464,10 +479,51 @@ public class ReportParseServiceImpl implements ReportParseService {
     public List<ReportDatasetDetailVO> getReportDatasets(String file) {
         List<ReportDataset> datasets = reportDatasetMapper.selectList(
                 new LambdaQueryWrapper<ReportDataset>().eq(ReportDataset::getReportFile, file));
+        // 字段映射以报表样式列字段为准：取自 report_cell_binding（报表实际绑定显示的列），而非数据集 SELECT 全部字段
+        List<ReportCellBinding> bindings = reportCellBindingMapper.selectList(
+                new LambdaQueryWrapper<ReportCellBinding>().eq(ReportCellBinding::getReportFile, file));
+        Map<String, List<ReportCellBinding>> bindingsByDs = bindings.stream()
+                .collect(Collectors.groupingBy(ReportCellBinding::getDatasetName));
         List<ReportDatasetDetailVO> result = new ArrayList<>();
         for (ReportDataset ds : datasets) {
-            result.add(buildDatasetDetail(ds.getDatasetName(), ds.getConnection(), ds.getSqlText()));
+            ReportDatasetDetailVO vo = buildDatasetDetail(ds.getDatasetName(), ds.getConnection(), ds.getSqlText());
+            // SELECT * / 无显式列清单的数据集：单一源表时，用报表绑定列名兜底推断来源字段（列名即源表同名列）
+            String fallbackTable = null;
+            try {
+                List<TableRef> tables = reportSqlParser.extractTables(ds.getSqlText());
+                if (tables.size() == 1) {
+                    fallbackTable = tables.get(0).getFullName();
+                }
+            } catch (Exception ignored) {
+                // 解析异常则不做兜底，保持原样
+            }
+            List<ColumnMapping> reportMappings = new ArrayList<>();
+            for (ReportCellBinding b : bindingsByDs.getOrDefault(ds.getDatasetName(), Collections.emptyList())) {
+                ColumnMapping cm = new ColumnMapping();
+                cm.setSelectAlias(b.getSelectAlias());
+                cm.setSourceTable(b.getSourceTable());
+                cm.setSourceField(b.getSourceField());
+                cm.setSourceExpr(b.getSourceExpr());
+                cm.setReportHeader(b.getHeaderText());
+                if (b.getSourceField() == null && fallbackTable != null
+                        && b.getColumnName() != null && !b.getColumnName().isBlank()) {
+                    cm.setSourceTable(fallbackTable);
+                    cm.setSourceField(b.getColumnName().toUpperCase());
+                    cm.setSourceExpr(fallbackTable + "." + b.getColumnName());
+                    if (cm.getSelectAlias() == null) {
+                        cm.setSelectAlias(b.getColumnName());
+                    }
+                }
+                reportMappings.add(cm);
+            }
+            vo.setFieldMappings(reportMappings);
+            result.add(vo);
         }
         return result;
+    }
+
+    /** 转大写，null 安全 */
+    private String getUppercase(String s) {
+        return s == null ? null : s.toUpperCase();
     }
 }

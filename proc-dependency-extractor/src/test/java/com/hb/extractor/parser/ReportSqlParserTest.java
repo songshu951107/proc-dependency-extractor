@@ -43,6 +43,33 @@ class ReportSqlParserTest {
     }
 
     @Test
+    void testSelectAliasChineseSpace_noAs() {
+        // 无 AS 的空格中文别名：列名应为中文别名，源字段仍为英文字段
+        String sql = "SELECT a.ACTUALARTIFICIALNO 合同文本号 FROM G_AG_ZWLOAN_HKMX a";
+        List<ColumnMapping> mappings = reportSqlParser.extractColumns(sql);
+
+        assertEquals(1, mappings.size());
+        assertEquals("合同文本号", mappings.get(0).getSelectAlias());
+        assertEquals("ACTUALARTIFICIALNO", mappings.get(0).getSourceField());
+        assertEquals("g_ag_zwloan_hkmx", mappings.get(0).getSourceTable());
+    }
+
+    @Test
+    void testSelectAliasChineseAs_unifiedChineseAlias() {
+        // 显式 AS 中文与空格中文统一识别为中文别名（selectAlias 取中文，源字段仍取英文），保证报表单元格中文列名可命中来源字段
+        String sql = "SELECT a.CLASSIFIY 五级分类, a.CLASSIFIY2 AS 五级分类2 FROM RPT.T a";
+        List<ColumnMapping> mappings = reportSqlParser.extractColumns(sql);
+
+        assertEquals(2, mappings.size());
+        // 无 AS 空格中文（统一被识别为中文别名）
+        assertEquals("五级分类", mappings.get(0).getSelectAlias());
+        assertEquals("CLASSIFIY", mappings.get(0).getSourceField());
+        // 显式 AS 中文：现在同样取中文别名，源字段仍取英文
+        assertEquals("五级分类2", mappings.get(1).getSelectAlias());
+        assertEquals("CLASSIFIY2", mappings.get(1).getSourceField());
+    }
+
+    @Test
     void testSelectAliasSpace() {
         String sql = "select nvl(a.CURR_BAL,0) CURR_BAL from RPT.T a";
         List<ColumnMapping> mappings = reportSqlParser.extractColumns(sql);

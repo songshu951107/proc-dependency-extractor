@@ -1,6 +1,14 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
+import { getToken, getUser, setUser } from '../utils/auth'
+import { getCurrentUser } from '../api/auth'
 
 const routes = [
+  {
+    path: '/login',
+    name: 'Login',
+    component: () => import('../views/LoginView.vue'),
+    meta: { title: '登录', public: true }
+  },
   {
     path: '/',
     name: 'Upload',
@@ -44,22 +52,46 @@ const routes = [
     meta: { title: '报表影响分析' }
   },
   {
+    path: '/dict',
+    name: 'DataDict',
+    component: () => import('../views/DataDictView.vue'),
+    meta: { title: '数据字典' }
+  },
+  {
+    path: '/reportlib',
+    name: 'ReportLib',
+    component: () => import('../views/ReportLibView.vue'),
+    meta: { title: '报表库' }
+  },
+  {
     path: '/schema-impact',
     name: 'SchemaImpact',
     component: () => import('../views/SchemaImpactView.vue'),
     meta: { title: '集市批量影响' }
-  },
-  {
-    path: '/nl2sql',
-    name: 'Nl2Sql',
-    component: () => import('../views/Nl2SqlView.vue'),
-    meta: { title: '智能查数' }
   }
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes
+})
+
+router.beforeEach(async (to, from, next) => {
+  if (to.meta.public) return next()
+  if (!getToken()) return next('/login')
+  if (!getUser()) {
+    try {
+      const res = await getCurrentUser()
+      setUser(res.data)
+    } catch (e) {
+      return next('/login')
+    }
+  }
+  const user = getUser()
+  const allowed = (user?.menus || []).some(m =>
+    m.path === to.path || (m.children || []).some(c => c.path === to.path))
+  if (!allowed && to.path !== '/') return next('/')
+  next()
 })
 
 export default router

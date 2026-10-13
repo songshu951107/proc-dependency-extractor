@@ -1,53 +1,65 @@
 <template>
-  <el-container style="height: 100vh">
-    <el-header style="background: #409eff; color: #fff; display: flex; align-items: center;">
-      <el-icon style="margin-right: 8px;"><Connection /></el-icon>
-      <span style="font-size: 18px; font-weight: bold;">存储过程依赖表名提取系统</span>
+  <router-view v-if="isLogin" />
+  <el-container v-else style="height: 100vh">
+    <el-header style="background:#409eff;color:#fff;display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center">
+        <el-icon style="margin-right:8px"><Connection /></el-icon>
+        <span style="font-size:18px;font-weight:bold">影响分析工具</span>
+      </div>
+      <el-dropdown @command="onCommand">
+        <span style="color:#fff;cursor:pointer">{{ user?.realName || user?.username }} ▾</span>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="pwd">修改密码</el-dropdown-item>
+            <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
     </el-header>
     <el-container>
-      <el-aside width="200px" style="background: #304156;">
-        <el-menu
-          :default-active="$route.path"
-          router
-          background-color="#304156"
-          text-color="#bfcbd9"
-          active-text-color="#409eff"
-        >
-          <el-menu-item index="/">
-            <el-icon><Upload /></el-icon>
-            <span>导入脚本</span>
-          </el-menu-item>
-          <el-menu-item index="/procs">
-            <el-icon><List /></el-icon>
-            <span>存储过程列表</span>
-          </el-menu-item>
-          <el-menu-item index="/impact">
-            <el-icon><Aim /></el-icon>
-            <span>影响分析</span>
-          </el-menu-item>
-          <el-menu-item index="/report-impact">
-            <el-icon><Document /></el-icon>
-            <span>报表影响分析</span>
-          </el-menu-item>
-          <el-menu-item index="/schema-impact">
-            <el-icon><Aim /></el-icon>
-            <span>集市批量影响</span>
-          </el-menu-item>
-          <el-menu-item index="/nl2sql">
-            <el-icon><MagicStick /></el-icon>
-            <span>智能查数</span>
-          </el-menu-item>
+      <el-aside width="200px" style="background:#304156">
+        <el-menu :default-active="$route.path" router background-color="#304156"
+                 text-color="#bfcbd9" active-text-color="#409eff">
+          <template v-for="m in user?.menus || []" :key="m.id">
+            <el-sub-menu v-if="m.children && m.children.length" :index="String(m.id)">
+              <template #title><span>{{ m.menuName }}</span></template>
+              <el-menu-item v-for="c in m.children" :key="c.id" :index="c.path">{{ c.menuName }}</el-menu-item>
+            </el-sub-menu>
+            <el-menu-item v-else :index="m.path">{{ m.menuName }}</el-menu-item>
+          </template>
         </el-menu>
       </el-aside>
-      <el-main>
-        <router-view />
-      </el-main>
+      <el-main><router-view /></el-main>
     </el-container>
+    <ChangePasswordDialog v-model="showPwd" @success="showPwd=false" />
   </el-container>
 </template>
 
 <script setup>
-import { Upload, List, Connection, Aim, Document, MagicStick } from '@element-plus/icons-vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Connection } from '@element-plus/icons-vue'
+import { getUser, clearAuth } from './utils/auth'
+import request from './api/request'
+import ChangePasswordDialog from './components/ChangePasswordDialog.vue'
+
+const route = useRoute()
+const router = useRouter()
+const user = computed(() => getUser())
+const isLogin = computed(() => route.path === '/login')
+const showPwd = ref(false)
+
+watch(() => route.path, (path) => {
+  if (!isLogin.value) {
+    request.post('/logs/page-view', { pagePath: path, pageName: route.meta.title || path })
+      .catch(() => {})
+  }
+})
+
+function onCommand(cmd) {
+  if (cmd === 'pwd') showPwd.value = true
+  if (cmd === 'logout') { clearAuth(); router.replace('/login') }
+}
 </script>
 
 <style>

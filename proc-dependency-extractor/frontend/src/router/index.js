@@ -74,6 +74,12 @@ const routes = [
     name: 'UserManage',
     component: () => import('../views/UserManageView.vue'),
     meta: { title: '用户管理' }
+  },
+  {
+    path: '/roles',
+    name: 'RoleManage',
+    component: () => import('../views/RoleManageView.vue'),
+    meta: { title: '角色管理' }
   }
 ]
 

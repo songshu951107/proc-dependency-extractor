@@ -2,11 +2,13 @@ package com.hb.extractor.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.hb.extractor.annotation.RequireAdmin;
+import com.hb.extractor.dto.ImportResultDTO;
 import com.hb.extractor.dto.Result;
 import com.hb.extractor.dto.UserSaveRequest;
 import com.hb.extractor.entity.SysUser;
 import com.hb.extractor.service.UserService;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RequireAdmin
 @RestController
@@ -41,5 +43,10 @@ public class UserController {
     @PostMapping("/{id}/reset-password")
     public Result<Void> resetPassword(@PathVariable Long id) {
         userService.resetPassword(id); return Result.success();
+    }
+
+    @PostMapping("/import")
+    public Result<ImportResultDTO> importExcel(@RequestParam("file") MultipartFile file) {
+        return Result.success(userService.importExcel(file));
     }
 }

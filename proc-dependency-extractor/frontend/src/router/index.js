@@ -68,6 +68,12 @@ const routes = [
     name: 'SchemaImpact',
     component: () => import('../views/SchemaImpactView.vue'),
     meta: { title: '集市批量影响' }
+  },
+  {
+    path: '/users',
+    name: 'UserManage',
+    component: () => import('../views/UserManageView.vue'),
+    meta: { title: '用户管理' }
   }
 ]
 

@@ -1,11 +1,9 @@
 package com.hb.extractor.controller;
-import com.hb.extractor.annotation.RequireAdmin;
 import com.hb.extractor.dto.Result;
 import com.hb.extractor.service.AnalyticsService;
 import org.springframework.web.bind.annotation.*;
 import java.util.*;
 
-@RequireAdmin
 @RestController
 @RequestMapping("/api/analytics")
 public class AnalyticsController {

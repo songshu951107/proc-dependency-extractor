@@ -85,13 +85,23 @@ INSERT INTO sys_menu (id, menu_code, menu_name, path, icon, parent_id, sort_orde
   (9, 'system',         '系统管理',     NULL,             'Setting',    0, 90, 'GROUP'),
   (10,'users',          '用户管理',     '/users',         'User',       9, 91, 'MENU'),
   (11,'roles',          '角色管理',     '/roles',         'Avatar',     9, 92, 'MENU'),
-  (12,'analytics',      '使用分析',     '/analytics',     'DataLine',   9, 93, 'MENU')
+  (12,'analytics',      '使用分析',     '/analytics',     'DataLine',   0, 60, 'MENU')
 ON DUPLICATE KEY UPDATE menu_name = VALUES(menu_name);
+
+-- 「使用分析」从「系统管理」分组拆出为顶级、可独立分配的页面（兼容已部署库）
+UPDATE sys_menu SET parent_id = 0, sort_order = 60 WHERE menu_code = 'analytics';
 
 -- ADMIN 全部菜单
 INSERT IGNORE INTO sys_role_menu (role_id, menu_id) SELECT 1, id FROM sys_menu;
--- USER 业务菜单（1-8，排除系统管理 9-12）
+-- USER 业务菜单（1-8，排除系统管理 9-11；使用分析 12 已独立，由管理员按需分配）
 INSERT IGNORE INTO sys_role_menu (role_id, menu_id) SELECT 2, id FROM sys_menu WHERE id BETWEEN 1 AND 8;
+
+-- 清理历史脏数据：非 ADMIN 角色不得持有「系统管理」分组及其子菜单（system/users/roles），
+-- 避免「侧边栏看得到、点进去 403」的不一致
+DELETE rm FROM sys_role_menu rm
+  JOIN sys_role r ON r.id = rm.role_id
+  JOIN sys_menu m ON m.id = rm.menu_id
+  WHERE r.role_code <> 'ADMIN' AND m.menu_code IN ('system', 'users', 'roles');
 
 -- 默认管理员账号 admin / 1234.Com（BCrypt）
 INSERT INTO sys_user (username, password, real_name, role_id, status, must_change_pwd) VALUES

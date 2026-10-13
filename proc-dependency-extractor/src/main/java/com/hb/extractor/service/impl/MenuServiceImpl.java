@@ -50,6 +50,17 @@ public class MenuServiceImpl implements MenuService {
     @Override
     @Transactional
     public void assignMenus(Long roleId, List<Long> menuIds) {
+        SysRole role = roleMapper.selectById(roleId);
+        if (role == null) throw new BusinessException(400, "角色不存在");
+        // 「系统管理」分组（menu_code=system 及其子树）为管理员专属，禁止分配给非 ADMIN 角色
+        if (!"ADMIN".equals(role.getRoleCode()) && menuIds != null) {
+            Set<Long> adminOnly = adminOnlyMenuIds();
+            for (Long menuId : menuIds) {
+                if (adminOnly.contains(menuId)) {
+                    throw new BusinessException(403, "「系统管理」菜单仅可分配给管理员角色");
+                }
+            }
+        }
         roleMenuMapper.delete(new LambdaQueryWrapper<SysRoleMenu>().eq(SysRoleMenu::getRoleId, roleId));
         if (menuIds == null) return;
         for (Long menuId : menuIds) {
@@ -58,6 +69,24 @@ public class MenuServiceImpl implements MenuService {
             rm.setMenuId(menuId);
             roleMenuMapper.insert(rm);
         }
+    }
+
+    /** 「系统管理」分组（menu_code=system）及其所有后代的菜单 id */
+    private Set<Long> adminOnlyMenuIds() {
+        List<SysMenu> all = menuMapper.selectList(null);
+        Set<Long> ids = new HashSet<>();
+        Long rootId = all.stream().filter(m -> "system".equals(m.getMenuCode()))
+                .map(SysMenu::getId).findFirst().orElse(null);
+        if (rootId == null) return ids;
+        ids.add(rootId);
+        boolean changed = true;
+        while (changed) {
+            changed = false;
+            for (SysMenu m : all) {
+                if (m.getParentId() != null && ids.contains(m.getParentId()) && ids.add(m.getId())) changed = true;
+            }
+        }
+        return ids;
     }
 
     private List<MenuVO> buildTree(List<Long> includeIds) {

@@ -1,6 +1,7 @@
 <template>
   <el-dialog :model-value="modelValue" :title="force ? '首次登录请修改密码' : '修改密码'"
              width="420px" :close-on-click-modal="!force" :show-close="!force"
+             :close-on-press-escape="!force"
              @close="onClose">
     <el-form :model="form" label-width="80px">
       <el-form-item label="原密码">

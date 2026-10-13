@@ -106,8 +106,9 @@ router.beforeEach(async (to, from, next) => {
     }
   }
   const user = getUser()
-  const allowed = (user?.menus || []).some(m =>
-    m.path === to.path || (m.children || []).some(c => c.path === to.path))
+  const allowedPaths = (user?.menus || []).flatMap(m =>
+    [m.path, ...(m.children || []).map(c => c.path)]).filter(Boolean)
+  const allowed = allowedPaths.some(p => to.path === p || to.path.startsWith(p + '/'))
   if (!allowed && to.path !== '/') return next('/')
   next()
 })

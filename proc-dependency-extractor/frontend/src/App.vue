@@ -45,9 +45,11 @@ import ChangePasswordDialog from './components/ChangePasswordDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
-const user = computed(() => getUser())
+const user = ref(getUser())
 const isLogin = computed(() => route.path === '/login')
 const showPwd = ref(false)
+
+watch(() => route.fullPath, () => { user.value = getUser() })
 
 watch(() => route.path, (path) => {
   if (!isLogin.value) {

@@ -80,6 +80,12 @@ const routes = [
     name: 'RoleManage',
     component: () => import('../views/RoleManageView.vue'),
     meta: { title: '角色管理' }
+  },
+  {
+    path: '/analytics',
+    name: 'Analytics',
+    component: () => import('../views/AnalyticsView.vue'),
+    meta: { title: '使用分析' }
   }
 ]
 

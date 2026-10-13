@@ -58,6 +58,8 @@ public class AuthInterceptor implements HandlerInterceptor {
     }
 
     private boolean write(HttpServletResponse response, int code, String message) throws Exception {
+        // preHandle 返回 false 时 Spring 不会回调 afterCompletion,故在此清理 ThreadLocal,避免身份残留
+        UserContext.clear();
         response.setStatus(200);
         response.setContentType("application/json;charset=UTF-8");
         response.getWriter().write(objectMapper.writeValueAsString(Result.error(code, message)));

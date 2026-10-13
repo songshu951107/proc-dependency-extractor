@@ -95,5 +95,5 @@ INSERT IGNORE INTO sys_role_menu (role_id, menu_id) SELECT 2, id FROM sys_menu W
 
 -- 默认管理员账号 admin / 1234.Com（BCrypt）
 INSERT INTO sys_user (username, password, real_name, role_id, status, must_change_pwd) VALUES
-  ('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iKTVEFDa', '系统管理员', 1, 1, 0)
+  ('admin', '$2a$10$p3InZzc5Ag.vpsijQnZ6DewkXWf5rfXZtfGmr3fUMSKYHzrjS4u6O', '系统管理员', 1, 1, 0)
 ON DUPLICATE KEY UPDATE username = VALUES(username);

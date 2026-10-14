@@ -31,6 +31,7 @@
 - 活跃用户 = 区间内有登录或有页面访问的**去重**用户数。
 - DAU = 当天去重活跃用户数。
 - 人均访问 = 区间页面访问量 ÷ 区间活跃用户数（活跃用户为 0 时记为 0）。
+- 最近活跃 = `max(最近登录时间, 最近页面访问时间)`。
 - 区间边界：`visit_time/login_time >= DATE_SUB(CURDATE(), INTERVAL (days-1) DAY)`。
 
 ## 后端接口与数据契约
@@ -41,8 +42,8 @@
 | ------------------------------- | ------------- | --------------------------------- | ----------------- |
 | `/api/analytics/overview`       | days          | 登录次数、活跃用户、页面访问、人均访问               | 概览区 4 KPI         |
 | `/api/analytics/trend`          | days          | 每日 `{d, dau, loginSucc}`          | 活跃区折线 + 登录成功趋势    |
-| `/api/analytics/hour-distribution` | days       | 24 个小时桶的活跃量                       | 活跃时段分布            |
-| `/api/analytics/page-top`       | days          | `{name, c}` + 占比                  | 功能热度排行            |
+| `/api/analytics/hour-distribution` | days       | 24 个小时桶的「登录次数 + 页面访问次数」          | 活跃时段分布            |
+| `/api/analytics/page-top`       | days          | `{name, c, pct}`，pct = 该页访问量 ÷ 全部页面访问量 | 功能热度排行            |
 | `/api/analytics/page-trend`     | days, top     | Top3 页面每日访问量                      | 功能热度趋势            |
 | `/api/analytics/user-activity`  | days, keyword | 用户 + 区间登录数/访问量/最近活跃               | 用户明细表             |
 | `/api/analytics/drill`          | type, days/date/id | 明细行列表                        | 统一下钻（day/page/user） |

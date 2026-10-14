@@ -10,8 +10,38 @@ public class AnalyticsController {
     private final AnalyticsService service;
     public AnalyticsController(AnalyticsService service) { this.service = service; }
 
-    @GetMapping("/overview") public Result<Map<String, Object>> overview() { return Result.success(service.overview()); }
-    @GetMapping("/login-trend") public Result<List<Map<String, Object>>> loginTrend() { return Result.success(service.loginTrend()); }
-    @GetMapping("/page-top") public Result<List<Map<String, Object>>> pageTop() { return Result.success(service.pageTop()); }
-    @GetMapping("/user-activity") public Result<List<Map<String, Object>>> userActivity() { return Result.success(service.userActivity()); }
+    @GetMapping("/overview")
+    public Result<Map<String, Object>> overview(@RequestParam(defaultValue = "30") int days) {
+        return Result.success(service.overview(days));
+    }
+    @GetMapping("/trend")
+    public Result<List<Map<String, Object>>> trend(@RequestParam(defaultValue = "30") int days) {
+        return Result.success(service.trend(days));
+    }
+    @GetMapping("/hour-distribution")
+    public Result<List<Map<String, Object>>> hourDistribution(@RequestParam(defaultValue = "30") int days) {
+        return Result.success(service.hourDistribution(days));
+    }
+    @GetMapping("/page-top")
+    public Result<List<Map<String, Object>>> pageTop(@RequestParam(defaultValue = "30") int days) {
+        return Result.success(service.pageTop(days));
+    }
+    @GetMapping("/page-trend")
+    public Result<Map<String, Object>> pageTrend(@RequestParam(defaultValue = "30") int days,
+                                                 @RequestParam(defaultValue = "3") int top) {
+        return Result.success(service.pageTrend(days, top));
+    }
+    @GetMapping("/user-activity")
+    public Result<List<Map<String, Object>>> userActivity(@RequestParam(defaultValue = "30") int days,
+                                                          @RequestParam(required = false) String keyword) {
+        return Result.success(service.userActivity(days, keyword));
+    }
+    @GetMapping("/drill")
+    public Result<Map<String, Object>> drill(@RequestParam String type,
+                                             @RequestParam(defaultValue = "30") int days,
+                                             @RequestParam(required = false) String date,
+                                             @RequestParam(required = false) String pageName,
+                                             @RequestParam(required = false) Long userId) {
+        return Result.success(service.drill(type, days, date, pageName, userId));
+    }
 }

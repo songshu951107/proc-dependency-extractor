@@ -20,8 +20,11 @@
 
     <!-- 2. 活跃区 -->
     <div style="display:flex;gap:12px;margin-bottom:16px">
-      <el-card style="flex:2">
+      <el-card style="flex:2;position:relative">
         <div ref="trendRef" style="height:300px"></div>
+        <div v-if="!trendData.length" class="chart-empty">
+          <el-empty description="暂无数据" :image-size="80" />
+        </div>
       </el-card>
       <el-card style="flex:1">
         <div ref="hourRef" style="height:300px"></div>
@@ -30,11 +33,17 @@
 
     <!-- 3. 功能热度区 -->
     <div style="display:flex;gap:12px;margin-bottom:16px">
-      <el-card style="flex:1">
+      <el-card style="flex:1;position:relative">
         <div ref="pageTopRef" style="height:300px"></div>
+        <div v-if="!pageTopData.length" class="chart-empty">
+          <el-empty description="暂无数据" :image-size="80" />
+        </div>
       </el-card>
-      <el-card style="flex:1">
+      <el-card style="flex:1;position:relative">
         <div ref="pageTrendRef" style="height:300px"></div>
+        <div v-if="!pageTrendData.series.length" class="chart-empty">
+          <el-empty description="暂无数据" :image-size="80" />
+        </div>
       </el-card>
     </div>
 
@@ -44,7 +53,7 @@
         <el-input v-model="keyword" placeholder="搜索用户名 / 姓名" clearable
                   style="width:240px" @input="onSearch" />
       </div>
-      <el-table :data="activity" border height="300" @row-click="onUserClick">
+      <el-table :data="activity" border height="300" empty-text="暂无数据" @row-click="onUserClick">
         <el-table-column prop="username" label="用户名" />
         <el-table-column prop="realName" label="姓名" />
         <el-table-column prop="loginCount" label="区间登录数" />
@@ -86,6 +95,9 @@ const loading = ref(false)
 const kpis = ref([])
 const activity = ref([])
 const keyword = ref('')
+const trendData = ref([])
+const pageTopData = ref([])
+const pageTrendData = ref({ dates: [], series: [] })
 const drill = ref({ visible: false, type: '', title: '', rows: [], columns: [], events: [] })
 
 const trendRef = ref(); const hourRef = ref()
@@ -116,6 +128,7 @@ function loadOverview() {
 function loadTrend() {
   return trend(days.value).then(r => {
     const data = r.data
+    trendData.value = data
     renderChart('trend', trendRef.value, {
       tooltip: { trigger: 'axis' }, legend: { data: ['DAU', '登录次数'] },
       xAxis: { type: 'category', data: data.map(t => t.d) },
@@ -142,6 +155,7 @@ function loadHour() {
 
 function loadPageTop() {
   return pageTop(days.value).then(r => {
+    pageTopData.value = r.data
     const data = r.data.slice().reverse()
     renderChart('pageTop', pageTopRef.value, {
       tooltip: { trigger: 'axis' },
@@ -159,6 +173,7 @@ function loadPageTop() {
 
 function loadPageTrend() {
   return pageTrend(days.value, 3).then(r => {
+    pageTrendData.value = r.data
     const { dates, series } = r.data
     renderChart('pageTrend', pageTrendRef.value, {
       tooltip: { trigger: 'axis' }, legend: {},
@@ -235,3 +250,7 @@ onUnmounted(() => {
   Object.values(charts).forEach(c => c.dispose())
 })
 </script>
+
+<style scoped>
+.chart-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+</style>

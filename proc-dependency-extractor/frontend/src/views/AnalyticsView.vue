@@ -26,8 +26,11 @@
           <el-empty description="暂无数据" :image-size="80" />
         </div>
       </el-card>
-      <el-card style="flex:1">
+      <el-card style="flex:1;position:relative">
         <div ref="hourRef" style="height:300px"></div>
+        <div v-if="!hourData.some(h => h.c > 0)" class="chart-empty">
+          <el-empty description="暂无数据" :image-size="80" />
+        </div>
       </el-card>
     </div>
 
@@ -96,6 +99,7 @@ const kpis = ref([])
 const activity = ref([])
 const keyword = ref('')
 const trendData = ref([])
+const hourData = ref([])
 const pageTopData = ref([])
 const pageTrendData = ref({ dates: [], series: [] })
 const drill = ref({ visible: false, type: '', title: '', rows: [], columns: [], events: [] })
@@ -144,6 +148,7 @@ function loadTrend() {
 function loadHour() {
   return hourDistribution(days.value).then(r => {
     const data = r.data
+    hourData.value = data
     renderChart('hour', hourRef.value, {
       tooltip: { trigger: 'axis' },
       xAxis: { type: 'category', data: data.map(t => t.hour + '时') },

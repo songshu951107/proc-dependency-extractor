@@ -51,9 +51,9 @@ public class AnalyticsServiceImpl implements AnalyticsService {
     }
 
     @Override public List<Map<String, Object>> pageTop(int days) {
-        List<Map<String, Object>> raw = mapper.pageTop(normalizeDays(days) - 1);
-        long total = 0;
-        for (Map<String, Object> r : raw) total += ((Number) r.get("c")).longValue();
+        int off = normalizeDays(days) - 1;
+        List<Map<String, Object>> raw = mapper.pageTop(off);
+        long total = mapper.pageViews(off);
         for (Map<String, Object> r : raw) {
             long c = ((Number) r.get("c")).longValue();
             r.put("pct", total == 0 ? 0 : Math.round((double) c / total * 1000) / 10.0);

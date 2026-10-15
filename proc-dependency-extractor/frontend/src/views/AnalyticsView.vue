@@ -126,7 +126,7 @@ function loadOverview() {
       { label: `${days.value}天页面访问`, value: d.pageViews },
       { label: `${days.value}天人均访问`, value: d.avgPageViews }
     ]
-  })
+  }).catch(() => {})
 }
 
 function loadTrend() {
@@ -142,7 +142,7 @@ function loadTrend() {
         { name: '登录次数', type: 'line', smooth: true, data: data.map(t => t.loginSucc) }
       ]
     }, p => openDayDrill(p.name))
-  })
+  }).catch(() => {})
 }
 
 function loadHour() {
@@ -155,7 +155,7 @@ function loadHour() {
       yAxis: { type: 'value' },
       series: [{ type: 'bar', data: data.map(t => t.c) }]
     })
-  })
+  }).catch(() => {})
 }
 
 function loadPageTop() {
@@ -173,7 +173,7 @@ function loadPageTop() {
         label: { show: true, position: 'right', formatter: p => data[p.dataIndex].pct + '%' }
       }]
     }, p => openPageDrill(p.name))
-  })
+  }).catch(() => {})
 }
 
 function loadPageTrend() {
@@ -186,11 +186,11 @@ function loadPageTrend() {
       yAxis: { type: 'value' },
       series: series.map(s => ({ name: s.name, type: 'line', smooth: true, data: s.data }))
     })
-  })
+  }).catch(() => {})
 }
 
 function loadActivity() {
-  return userActivity(days.value, keyword.value).then(r => { activity.value = r.data })
+  return userActivity(days.value, keyword.value).then(r => { activity.value = r.data }).catch(() => {})
 }
 
 let searchTimer = null

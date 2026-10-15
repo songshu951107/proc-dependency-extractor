@@ -47,4 +47,22 @@ class AnalyticsServiceSmokeTest {
         Map<String, Object> d = service.drill("user", 30, null, null, 1L);
         assertTrue(d.get("events") instanceof List);
     }
+
+    @Test
+    void userActivityShapeAndOrdering() {
+        List<Map<String, Object>> rows = service.userActivity(30, null);
+        assertFalse(rows.isEmpty());
+        Map<String, Object> first = rows.get(0);
+        assertNotNull(first.get("id"));
+        assertNotNull(first.get("username"));
+        assertNotNull(first.get("loginCount"));
+        assertNotNull(first.get("pageViews"));
+        assertNotNull(first.get("lastActive"));
+        long prev = Long.MAX_VALUE;
+        for (Map<String, Object> r : rows) {
+            long pv = ((Number) r.get("pageViews")).longValue();
+            assertTrue(pv <= prev, "userActivity 应按 pageViews 降序");
+            prev = pv;
+        }
+    }
 }

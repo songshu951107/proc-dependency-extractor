@@ -61,16 +61,24 @@ public interface AnalyticsMapper {
             "GROUP BY page_name, DATE(visit_time) ORDER BY d")
     List<Map<String, Object>> pageTrend(@Param("daysOff") int daysOff, @Param("limit") int limit);
 
+    // 每个用户仅一次聚合（LEFT JOIN 派生表），而非逐用户 4 个相关子查询；
+    // 语义保持不变：loginCount/pageViews 限窗口内，lastActive 取全时段最近活跃
     @Select("SELECT u.id, u.username, u.real_name realName, " +
-            "(SELECT COUNT(*) FROM sys_login_log l WHERE l.user_id=u.id AND l.success=1 " +
-            "  AND l.login_time >= DATE_SUB(CURDATE(), INTERVAL #{daysOff} DAY)) loginCount, " +
-            "(SELECT COUNT(*) FROM sys_page_log p WHERE p.user_id=u.id " +
-            "  AND p.visit_time >= DATE_SUB(CURDATE(), INTERVAL #{daysOff} DAY)) pageViews, " +
-            "GREATEST(" +
-            "  COALESCE((SELECT MAX(login_time) FROM sys_login_log l WHERE l.user_id=u.id AND l.success=1), '1970-01-01')," +
-            "  COALESCE((SELECT MAX(visit_time) FROM sys_page_log p WHERE p.user_id=u.id), '1970-01-01')" +
-            ") lastActive " +
+            "IFNULL(lg.c, 0) loginCount, IFNULL(pv.c, 0) pageViews, " +
+            "GREATEST(IFNULL(lg.lastLogin, '1970-01-01'), IFNULL(pv.lastVisit, '1970-01-01')) lastActive " +
             "FROM sys_user u " +
+            "LEFT JOIN (" +
+            "  SELECT user_id, " +
+            "    SUM(CASE WHEN login_time >= DATE_SUB(CURDATE(), INTERVAL #{daysOff} DAY) THEN 1 ELSE 0 END) c, " +
+            "    MAX(login_time) lastLogin " +
+            "  FROM sys_login_log WHERE success=1 GROUP BY user_id" +
+            ") lg ON lg.user_id = u.id " +
+            "LEFT JOIN (" +
+            "  SELECT user_id, " +
+            "    SUM(CASE WHEN visit_time >= DATE_SUB(CURDATE(), INTERVAL #{daysOff} DAY) THEN 1 ELSE 0 END) c, " +
+            "    MAX(visit_time) lastVisit " +
+            "  FROM sys_page_log GROUP BY user_id" +
+            ") pv ON pv.user_id = u.id " +
             "WHERE u.username LIKE CONCAT('%', IFNULL(#{keyword},''), '%') " +
             "   OR u.real_name LIKE CONCAT('%', IFNULL(#{keyword},''), '%') " +
             "ORDER BY pageViews DESC")

@@ -1,0 +1,17 @@
+--- tmp1030\dwa_c_agt_deposit_acct_inf.py
++++ tmp1030\converted\dwa_c_agt_deposit_acct_inf.py
+@@ -474,11 +474,11 @@
+       ,T1.cust_name
+       ,T2.govern_structure
+   FROM {FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF T1
+- LEFT JOIN {FDM}.F_PT_ECIF_PUB_CUST_INF    T2
+-        ON T1.cust_no = t2.cust_no
++ LEFT JOIN {ODM}.O_ECIF_M_CI_ORG T2
++        ON T1.cust_no = t2.cust_id
+        AND T2.start_dt <= DATE '{ETL_TX_DT}'
+        AND T2.end_dt > DATE '{ETL_TX_DT}'
+-       AND t2.del_flag <> 'D'
++       AND t2.del_ind <> 'D'
+      WHERE T1.start_dt <= DATE '{ETL_TX_DT}'
+        AND T1.end_dt > DATE '{ETL_TX_DT}'
+        AND t1.del_flag <> 'D'

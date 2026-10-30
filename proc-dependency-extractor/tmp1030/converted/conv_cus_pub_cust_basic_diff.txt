@@ -1,0 +1,106 @@
+--- tmp1030\dwa_c_cus_pub_cust_basic_inf.py
++++ tmp1030\converted\dwa_c_cus_pub_cust_basic_inf.py
+@@ -563,35 +563,35 @@
+        ,A1.iden_type_cd                                   AS iden_type_cd                       -- 证件类型
+        ,A1.iden_no                                        AS iden_no                            -- 证件号码
+        ,CASE WHEN (LENGTH(A2.iden_no)='18' AND A2.iden_no LIKE '9%') THEN A2.iden_no 
+-             WHEN (LENGTH(A.uscc_cd)='18' AND A.uscc_cd LIKE '9%') THEN A.uscc_cd 
++             WHEN (LENGTH(A.busi_lic_no)='18' AND A.busi_lic_no LIKE '9%') THEN A.busi_lic_no 
+              ELSE NULL 			 
+          END AS uscc                                                                                    -- 统一社会信用代码
+-	   ,CASE WHEN A.org_cd<>'' THEN A.org_cd                                                            
++	   ,CASE WHEN A.org_code<>'' THEN A.org_code                                                            
+ 	         WHEN A2.iden_type_cd = '13700' THEN A2.iden_no                                             
+ 	         ELSE NULL END AS organ_cd                                                                   -- 组织机构代码
+ 	  ,NVL(C.regis_no,'')                                 AS rgst_regis_no	                             -- 登记注册号
+ 	  ,TO_CHAR(F.iden_eff_dt,'YYYYMMDD')                   AS rgst_rgst_dt                               -- 注册登记日期
+-	  ,CASE WHEN NVL(A.uscc_cd,'')<>'' THEN A.uscc_cd ELSE NULL END AS indus_and_comme_biz_licen_no      -- 工商营业执照号
++	  ,CASE WHEN NVL(A.busi_lic_no,'')<>'' THEN A.busi_lic_no ELSE NULL END AS indus_and_comme_biz_licen_no      -- 工商营业执照号
+       ,NULL                                                AS indus_and_comme_biz_licen_expir_dt          -- 工商营业执照到期日
+ 	  ,NULL                                                AS sharehd_flag                                -- 股东标志
+ 	  ,''                                                AS rural_city_flag                             -- 农村城市标志
+-	  ,A.credit_loan_subdv_indus_type_cd                   AS indus_class_cd                              -- 行业类别代码 信贷细分行业类型   INDUSTRYTYPE--  信贷表 
+-	  ,A.CY_OR_ZONE_CD AS nation_cd -- 国籍代码
++	  ,A.industry_sub_type                   AS indus_class_cd                              -- 行业类别代码 信贷细分行业类型   INDUSTRYTYPE--  信贷表 
++	  ,A.nation_code AS nation_cd -- 国籍代码
+ 	  ,CASE WHEN D.name <> '' THEN D.name                                                               
+             ELSE NULL END                                AS statu_rep_cust_name                         -- 法定代表人客户姓名
+ 	  ,CASE WHEN D.iden_type_cd<>'' THEN D.iden_type_cd                                                       
+             ELSE NULL END                                AS statu_rep_iden_type_cd                      -- 法定代表人身份证件类型
+       ,CASE WHEN D.iden_no <> '' AND D.iden_no IS NOT NULL THEN D.iden_no --  21:法人                
+             ELSE J.lp_rep_iden_no  END                   AS statu_rep_iden_no                           -- 法定代表人证件号码
+-      ,NVL(A.STATU_REP_CONTACT_PHONE_NO,J.LP_REP_TEL_NO) as statu_rep_tel -- 法定代表人电话号码
++      ,NVL(A.legal_repr_tel,J.LP_REP_TEL_NO) as statu_rep_tel -- 法定代表人电话号码
+ 	  ,C.set_up_dt AS set_up_dt     -- 成立日期
+-	  ,CASE WHEN A.ent_scale_pboc in ('1','2','3','4') THEN A.ent_scale_pboc ELSE NULL END AS ent_scale_cd -- 企业规模代码
++	  ,CASE WHEN A.ent_scale_rh in ('1','2','3','4') THEN A.ent_scale_rh ELSE NULL END AS ent_scale_cd -- 企业规模代码
+ 	  ,CASE WHEN NVL(E.liste_ent_flag,'') IN ( '1','0') THEN E.liste_ent_flag ELSE NULL END AS liste_compy_flag -- 上市公司标志
+ 	  ,'' as dom_resdnt_flag -- 境内居民标志
+ 	  ,NULL                                               AS related_grp_cust_no                        -- 关联集团客户号
+ 	  ,A1.create_org                                      AS create_org_no                              -- 创建机构号
+ 	  ,CASE WHEN NVL(J.safeg_org_no,'')<>'' THEN J.safeg_org_no ELSE NULL END AS update_org_no          -- 更新机构号
+-	  ,CASE WHEN NVL(A.admin_area_cd,'')<>'' THEN A.admin_area_cd ELSE NULL END AS admin_area_cd        -- 行政区划代码
++	  ,CASE WHEN NVL(A.area_code,'')<>'' THEN A.area_code ELSE NULL END AS admin_area_cd        -- 行政区划代码
+ 	  ,CASE WHEN C.opera_scope<>'' AND C.opera_scope IS NOT NULL THEN SUBSTR(TRIM(C.opera_scope),1,300)
+           ELSE NULL END                                 AS opera_biz_scope                            -- 经营（业务）范围
+ 	  ,NULL                                               AS hold_type_cd                               -- 控股类型代码
+@@ -606,7 +606,7 @@
+             WHEN S.opera_sts_cd = '400' THEN '04'            --  当年关闭
+             WHEN S.opera_sts_cd IN ('500', '600') THEN '05'  --  当年破产
+             ELSE NULL END                                 AS opera_sts_cd                              -- 经营状态代码
+-	  ,CASE WHEN NVL(A.cy_or_zone_cd,'')<>'' THEN A.cy_or_zone_cd ELSE NULL END AS rgst_cy_cd          -- 注册国家代码
++	  ,CASE WHEN NVL(A.nation_code,'')<>'' THEN A.nation_code ELSE NULL END AS rgst_cy_cd          -- 注册国家代码
+ 	  ,C.rgst_cap AS rgst_cap                                                                          -- 注册资金
+ 	  ,C.rgst_cap_currcy_cd                                                                            -- 注册资金币种代码 
+ 	  ,CASE WHEN NVL(C.register_addr,'')<>'' THEN C.register_addr ELSE NULL END AS rgst_addr           -- 注册地址
+@@ -625,8 +625,8 @@
+  INNER JOIN {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_TMP3 A2 --   客户
+    ON A1.src_sys_cust_no = A2.CUST_NO AND A2.start_dt <= DATE '{ETL_TX_DT}' AND A2.end_dt > DATE '{ETL_TX_DT}' 
+   AND A2.del_flag <> 'D'
+- INNER JOIN {FDM}.F_PT_ECIF_PUB_CUST_INF A -- ECIF对公客户信息
+-   ON A1.src_sys_cust_no = A.CUST_NO AND A.start_dt <= DATE '{ETL_TX_DT}' AND A.end_dt > DATE '{ETL_TX_DT}'
++ INNER JOIN {ODM}.O_ECIF_M_CI_ORG A -- ECIF对公客户信息
++   ON A1.src_sys_cust_no = A.cust_id AND A.start_dt <= DATE '{ETL_TX_DT}' AND A.end_dt > DATE '{ETL_TX_DT}'
+  LEFT JOIN {FDM}.F_PT_ECIF_PUB_CUST_RGST_INF C -- 注册信息
+    ON A1.src_sys_cust_no = C.cust_no
+   AND C.start_dt <= date '{ETL_TX_DT}'
+@@ -635,7 +635,7 @@
+    ON A1.src_sys_cust_no = D.cust_no
+   AND D.stem_person_type_cd = '21' --  法人
+  LEFT JOIN {FDM}.F_PT_ECIF_PUB_CUST_IMPORT_FLAG E -- 机构客户重要标志
+-   ON A.cust_no = E.cust_no
++   ON A.cust_id = E.cust_no
+   AND E.start_dt <= date '{ETL_TX_DT}'
+   AND E.end_dt > date '{ETL_TX_DT}'
+  LEFT JOIN (
+@@ -776,7 +776,7 @@
+       ,CASE WHEN NVL(H.base_acct,'') <>'' THEN H.base_acct ELSE NULL END AS basic_deposit_acct_no       -- 基本存款账号
+ 	  ,CASE WHEN NVL(H.base_acct_op_name,'') <>'' THEN H.BASE_ACCT_OP_NAME ELSE NULL END AS basic_acct_openbank_name -- 基本账户开户行名称
+ 	  ,NULL                 AS opera_sts_cd                                 --  经营状态代码
+-	  ,CASE WHEN NVL(C.cy_or_zone_cd,'')<>'' THEN C.cy_or_zone_cd ELSE NULL END AS rgst_cy_cd --  注册国家代码
++	  ,CASE WHEN NVL(C.nation_code,'')<>'' THEN C.nation_code ELSE NULL END AS rgst_cy_cd --  注册国家代码
+ 	  ,B.rgst_cap             AS rgst_cap                                     --  注册资金
+ 	  ,B.rgst_cap_currcy_cd   AS rgst_cap_currcy_cd                           --  注册资金币种代码
+ 	  ,NULL                   AS rgst_addr                                    --  注册地址
+@@ -849,8 +849,8 @@
+          WHERE D2.start_dt <= date '{ETL_TX_DT}' AND  D2.end_dt > date '{ETL_TX_DT}' AND  D2.del_flag <> 'D'           
+       )B
+   ON A1.unifi_cust_no = B.cust_no
+- LEFT JOIN {FDM}.F_PT_ECIF_PUB_CUST_INF C -- ECIF对公客户基本信息
+-   ON A1.unifi_cust_no = C.cust_no AND C.start_dt <= DATE '{ETL_TX_DT}' AND C.end_dt > DATE '{ETL_TX_DT}'
++ LEFT JOIN {ODM}.O_ECIF_M_CI_ORG C -- ECIF对公客户基本信息
++   ON A1.unifi_cust_no = C.cust_id AND C.start_dt <= DATE '{ETL_TX_DT}' AND C.end_dt > DATE '{ETL_TX_DT}'
+  LEFT JOIN  {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_TMP2  H  
+    ON A1.unifi_cust_no=H.main_cust_no
+ WHERE A1.data_dt=DATE '{ETL_TX_DT}' AND A1.data_sourc='CRBS'
+@@ -1030,8 +1030,8 @@
+  FROM {CDM}.C_CUS_UNIFI_CUST_INF_PUB A1  
+ INNER JOIN {CDM}.VT_C_CUS_PUB_CUST_BASIC_INF_TMP5 B -- 对公客户基本信息表
+   ON A1.src_sys_cust_no = B.cust_no
+- LEFT JOIN {FDM}.F_PT_ECIF_PUB_CUST_INF C -- ECIF对公客户基本信息
+-   ON A1.src_sys_cust_no = C.cust_no AND C.start_dt <= DATE '{ETL_TX_DT}' AND C.end_dt > DATE '{ETL_TX_DT}'
++ LEFT JOIN {ODM}.O_ECIF_M_CI_ORG C -- ECIF对公客户基本信息
++   ON A1.src_sys_cust_no = C.cust_id AND C.start_dt <= DATE '{ETL_TX_DT}' AND C.end_dt > DATE '{ETL_TX_DT}'
+  LEFT JOIN {FDM}.F_PT_CRMS_LOAN_GROUP_CUST_RELATED_RELA N-- 集团客户关联关系表  
+    ON B.cust_no=N.cust_no
+   AND N.start_dt <= DATE '{ETL_TX_DT}'

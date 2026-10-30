@@ -1,0 +1,60 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+          "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html>
+
+<head><meta charset="utf-8">
+    <meta http-equiv="Content-Type"
+          content="text/html; charset=utf-8" />
+    <title></title>
+    <style type="text/css">
+        table.diff {font-family:Courier; border:medium;}
+        .diff_header {background-color:#e0e0e0}
+        td.diff_header {text-align:right}
+        .diff_next {background-color:#c0c0c0}
+        .diff_add {background-color:#aaffaa}
+        .diff_chg {background-color:#ffff77}
+        .diff_sub {background-color:#ffaaaa}
+    </style>
+</head>
+
+<body>
+    
+    <table class="diff" id="difflib_chg_to0__top"
+           cellspacing="0" cellpadding="0" rules="groups" >
+        <colgroup></colgroup> <colgroup></colgroup> <colgroup></colgroup>
+        <colgroup></colgroup> <colgroup></colgroup> <colgroup></colgroup>
+        <thead><tr><th class="diff_next"><br /></th><th colspan="2" class="diff_header">tmp1030\dwa_c_agt_deposit_acct_inf.py (原)</th><th class="diff_next"><br /></th><th colspan="2" class="diff_header">tmp1030\converted\dwa_c_agt_deposit_acct_inf.py (转换后)</th></tr></thead>
+        <tbody>
+            <tr><td class="diff_next" id="difflib_chg_to0__0"></td><td class="diff_header" id="from0_474">474</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;,T1.cust_name</td><td class="diff_next"></td><td class="diff_header" id="to0_474">474</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;,T1.cust_name</td></tr>
+            <tr><td class="diff_next"></td><td class="diff_header" id="from0_475">475</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;,T2.govern_structure</td><td class="diff_next"></td><td class="diff_header" id="to0_475">475</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;,T2.govern_structure</td></tr>
+            <tr><td class="diff_next"></td><td class="diff_header" id="from0_476">476</td><td nowrap="nowrap">&nbsp;&nbsp;FROM&nbsp;{FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF&nbsp;T1</td><td class="diff_next"></td><td class="diff_header" id="to0_476">476</td><td nowrap="nowrap">&nbsp;&nbsp;FROM&nbsp;{FDM}.F_PT_ECIF_WHOLE_BANK_CUST_INF&nbsp;T1</td></tr>
+            <tr><td class="diff_next"><a href="#difflib_chg_to0__1">n</a></td><td class="diff_header" id="from0_477">477</td><td nowrap="nowrap"><span class="diff_sub">&nbsp;LEFT&nbsp;JOIN&nbsp;{FDM}.F_PT_ECIF_PUB_CUST_INF&nbsp;&nbsp;&nbsp;&nbsp;T2</span></td><td class="diff_next"><a href="#difflib_chg_to0__1">n</a></td><td class="diff_header" id="to0_477">477</td><td nowrap="nowrap"><span class="diff_add">&nbsp;LEFT&nbsp;JOIN&nbsp;{ODM}.O_ECIF_M_CI_ORG&nbsp;T2</span></td></tr>
+            <tr><td class="diff_next" id="difflib_chg_to0__1"></td><td class="diff_header" id="from0_478">478</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ON&nbsp;T1.cust_no&nbsp;=&nbsp;t2.cust_<span class="diff_chg">no</span></td><td class="diff_next"></td><td class="diff_header" id="to0_478">478</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ON&nbsp;T1.cust_no&nbsp;=&nbsp;t2.cust_<span class="diff_chg">id</span></td></tr>
+            <tr><td class="diff_next"></td><td class="diff_header" id="from0_479">479</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AND&nbsp;T2.start_dt&nbsp;&lt;=&nbsp;DATE&nbsp;'{ETL_TX_DT}'</td><td class="diff_next"></td><td class="diff_header" id="to0_479">479</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AND&nbsp;T2.start_dt&nbsp;&lt;=&nbsp;DATE&nbsp;'{ETL_TX_DT}'</td></tr>
+            <tr><td class="diff_next"></td><td class="diff_header" id="from0_480">480</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AND&nbsp;T2.end_dt&nbsp;&gt;&nbsp;DATE&nbsp;'{ETL_TX_DT}'</td><td class="diff_next"></td><td class="diff_header" id="to0_480">480</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AND&nbsp;T2.end_dt&nbsp;&gt;&nbsp;DATE&nbsp;'{ETL_TX_DT}'</td></tr>
+            <tr><td class="diff_next"><a href="#difflib_chg_to0__top">t</a></td><td class="diff_header" id="from0_481">481</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AND&nbsp;t2.del_<span class="diff_chg">flag</span>&nbsp;&lt;&gt;&nbsp;'D'</td><td class="diff_next"><a href="#difflib_chg_to0__top">t</a></td><td class="diff_header" id="to0_481">481</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AND&nbsp;t2.del_<span class="diff_chg">ind</span>&nbsp;&lt;&gt;&nbsp;'D'</td></tr>
+            <tr><td class="diff_next"></td><td class="diff_header" id="from0_482">482</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;WHERE&nbsp;T1.start_dt&nbsp;&lt;=&nbsp;DATE&nbsp;'{ETL_TX_DT}'</td><td class="diff_next"></td><td class="diff_header" id="to0_482">482</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;WHERE&nbsp;T1.start_dt&nbsp;&lt;=&nbsp;DATE&nbsp;'{ETL_TX_DT}'</td></tr>
+            <tr><td class="diff_next"></td><td class="diff_header" id="from0_483">483</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AND&nbsp;T1.end_dt&nbsp;&gt;&nbsp;DATE&nbsp;'{ETL_TX_DT}'</td><td class="diff_next"></td><td class="diff_header" id="to0_483">483</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AND&nbsp;T1.end_dt&nbsp;&gt;&nbsp;DATE&nbsp;'{ETL_TX_DT}'</td></tr>
+            <tr><td class="diff_next"></td><td class="diff_header" id="from0_484">484</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AND&nbsp;t1.del_flag&nbsp;&lt;&gt;&nbsp;'D'</td><td class="diff_next"></td><td class="diff_header" id="to0_484">484</td><td nowrap="nowrap">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;AND&nbsp;t1.del_flag&nbsp;&lt;&gt;&nbsp;'D'</td></tr>
+        </tbody>
+    </table>
+    <table class="diff" summary="Legends">
+        <tr> <th colspan="2"> Legends </th> </tr>
+        <tr> <td> <table border="" summary="Colors">
+                      <tr><th> Colors </th> </tr>
+                      <tr><td class="diff_add">&nbsp;Added&nbsp;</td></tr>
+                      <tr><td class="diff_chg">Changed</td> </tr>
+                      <tr><td class="diff_sub">Deleted</td> </tr>
+                  </table></td>
+             <td> <table border="" summary="Links">
+                      <tr><th colspan="2"> Links </th> </tr>
+                      <tr><td>(f)irst change</td> </tr>
+                      <tr><td>(n)ext change</td> </tr>
+                      <tr><td>(t)op</td> </tr>
+                  </table></td> </tr>
+    </table>
+</body>
+
+</html>

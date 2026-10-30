@@ -166,11 +166,21 @@ class TableTransformer:
         # 与 join 别名反查 {stmt_idx: {tbl_alias_lower: (fj_alias, orig_alias)}}
         self.applied_renames = []
         self.fj_map = {}
+        # 行号换算旁路信息（不改转换行为，仅供 _fix_line_numbers 消费）：
+        # 各 pass 的替换/注入事件表 (start, old_len, new_len)，start 为该 pass
+        # 输入文本基准的偏移
+        self._p1_edits = []   # pass1 表引用替换（块原文基准）
+        self._p2_edits = []   # pass2 列改名（pass1 后基准）
+        self._inj_segs = []   # pass3 注入段 (S, L, nl)：S/L 为 pass3 后基准
+                              # 起点/长度，nl 为净增行数
 
     def reset_block_state(self):
         """每三引号块处理前重置改写记录（记录仅块内有效）。"""
         self.applied_renames = []
         self.fj_map = {}
+        self._p1_edits = []
+        self._p2_edits = []
+        self._inj_segs = []
 
     # ---- pass1: 表引用替换 ----
     def pass1_table_ref(self, sql, notes):
@@ -181,6 +191,7 @@ class TableTransformer:
                 continue
             # match 范围含库前缀+表名+别名，替换时保留别名
             new_ref = '{%s}.%s %s' % (self.new_db, self.new_table, m.group(1))
+            self._p1_edits.append((m.start(), m.end() - m.start(), len(new_ref)))
             out.append(sql[last:m.start()])
             out.append(new_ref)
             last = m.end()
@@ -188,6 +199,8 @@ class TableTransformer:
                 'type': 'table_ref', 'line': line_of(sql, m.start()),
                 'old': ' '.join(m.group(0).split()),
                 'new': '{%s}.%s %s' % (self.new_db, self.new_table, m.group(1)),
+                # 块原文基准偏移（_fix_line_numbers 换算用）
+                '_off': m.start(),
             })
             changed += 1
         out.append(sql[last:])
@@ -220,7 +233,11 @@ class TableTransformer:
                     'old': '%s.%s' % (alias, old_col),
                     'new': '%s.%s' % (alias, new_col),
                     '_rename': (alias.lower(), old_col, new_col),
+                    # pass1 后基准偏移（_fix_line_numbers 换算用）
+                    '_off': m.start(),
                 }))
+        # 旁路：pass2 替换事件表（pass1 后基准），供行号换算统一基准
+        self._p2_edits = [(s, e - s, len(new)) for s, e, new, _n in edits]
         edits.sort(key=lambda x: x[0], reverse=True)
         for s, e, new, note in edits:
             sql = sql[:s] + new + sql[e:]
@@ -278,6 +295,8 @@ class TableTransformer:
                     'old': '%s.%s' % (alias, need_col),
                     'new': '%s.%s' % (ja, jcfg['take_col']),
                     '_joinrec': (alc, need_col, jcfg['take_col']),
+                    # pass2 后基准偏移（与注入点同基准，_fix_line_numbers 比较用）
+                    '_off': m.start(),
                 }))
         if not edits:
             return sql, 0
@@ -294,6 +313,8 @@ class TableTransformer:
                         'type': 'join_inject_failed', 'line': line_of(sql, a),
                         'old': '别名 %s（语句 %d）未找到注入点' % (alias, si + 1),
                         'new': '请人工补齐 LEFT JOIN',
+                        # pass2 后基准偏移（语句首，无注入位移语义）
+                        '_off': a,
                     })
                     continue
                 ins = self._build_join_sql(ja, alias)
@@ -303,8 +324,21 @@ class TableTransformer:
                     '_fj': ja,
                     # 注入文本 = 换行 + 3 行 JOIN 子句 + 换行，净增行数随记
                     '_inj_nl': ins.count('\n') + 2,
+                    # 注入点 pass2 后基准偏移（与各 note 的 _off 同基准比较）
+                    '_inj_off': pos,
                 }))
         edits.sort(key=lambda x: x[0], reverse=True)
+        # 旁路：注入段表（pass3 后基准）——S 为注入文本在 pass3 输出文本中
+        # 的起点（前面注入的长度累计推移），供 pass4 note 口径回退与
+        # _fix_line_numbers 统一排序
+        inj_raw = sorted(((s, len(new), note['_inj_nl'])
+                          for s, _e, new, note in edits if '_inj_nl' in note),
+                         key=lambda x: x[0])
+        inj_segs, acc = [], 0
+        for s, seg_len, seg_nl in inj_raw:
+            inj_segs.append((s + acc, seg_len, seg_nl))
+            acc += seg_len
+        self._inj_segs = inj_segs
         n = 0
         for s, e, new, note in edits:
             sql = sql[:s] + new + sql[e:]
@@ -375,6 +409,9 @@ class TableTransformer:
                                     'line': line_of(sql, m2.start()),
                                     'old': '%s.%s' % (s_al, m2.group(2)),
                                     'new': '%s.%s' % (s_al, nc),
+                                    # pass3 注入后口径的块内偏移
+                                    # （_fix_line_numbers 回退注入段换算）
+                                    '_off': m2.start(),
                                 }))
                 i = qe + 1
         edits.sort(key=lambda x: x[0], reverse=True)
@@ -530,18 +567,61 @@ class TableTransformer:
 
 # ---------------------------------------------------------------- 主流程
 
-def _fix_line_numbers(old_block, new_block, notes, base_before, add_lines):
+def _map_offset(off, events):
+    """把「替换应用前」基准的偏移映射到「应用后」基准。
+    events 为替换事件表 [(start, old_len, new_len)]，start 均为应用前基准；
+    仅当替换段整体位于 off 之前时 off 随长度差推移（各 pass 的替换互不
+    重叠，故可任意顺序累加）。"""
+    return off + sum(nl - ol for s, ol, nl in events if s + ol <= off)
+
+
+def _fix_line_numbers(notes, tr, base_before, add_lines):
     """把块内行号换算为全文行号（契约见规格 §5.1）。
     line = 转换前全文行号；new_line = 转换后全文行号。
-    join_inject 不改其他行内容，但注入文本以换行包裹 3 行 JOIN 子句、
-    净增 _inj_nl 行（pass3 记录）；其自身 new_line 用 pass3 记录的
-    _new_line_block 精确换算。注入点落在某行行首侧，该行上排于注入之后
-    的 note（如 WHERE 行内列改名）及其后各行均随注入位移——故同行内
-    join_inject 先于其他 note 处理。"""
+
+    各 pass 记录 note 位置的文本基准不同：table_ref=块原文、rename=pass1 后、
+    join_ref/join_inject=pass2 后、subquery_prop=pass3 注入后。统一换算到
+    「pass2 后」基准（= 注入点基准）后，按 (块内行号, 块内偏移) 排序：
+
+    - subquery_prop 先回退 pass3 注入段（line 与偏移同步减），消除注入
+      造成的口径污染（形态2 的双重计数根源）；
+    - table_ref/rename 的偏移经 _map_offset 顺向映射，消除 pass1/pass2
+      替换造成的行内偏移漂移；
+    - 同行 note 与注入点的先后由块内偏移精确判定：注入点之前的 note
+      不吃注入位移，之后的随注入位移（形态1 的「join_inject 同行优先」
+      排序无法区分前后，故弃用）。
+
+    join_inject 自身的 new_line 用 pass3 记录的 _new_line_block 精确换算。"""
+    # 1) 统一各 note 到 pass2 后基准的 (块内行号, 块内偏移)
+    segs = sorted(tr._inj_segs, key=lambda x: x[0], reverse=True)
+    for note in notes:
+        typ = note.get('type')
+        if typ == 'subquery_prop':
+            off, ln = note.pop('_off'), note['line']
+            for S, L, nl in segs:
+                if off >= S + L:  # 注入段整体在该位置之前
+                    off -= L
+                    ln -= nl
+            note['line'] = ln
+            note['_off'] = off
+        elif typ == 'table_ref':
+            off = _map_offset(note.pop('_off'), tr._p1_edits)
+            note['_off'] = _map_offset(off, tr._p2_edits)
+        elif typ == 'rename':
+            note['_off'] = _map_offset(note.pop('_off'), tr._p2_edits)
+        # join_ref/_inj_off 本就是 pass2 后基准，无需换算
+    # 2) 注入点与 note 统一排序：(块内行号, 块内偏移)；同位置时注入优先
+    events = []
+    for note in notes:
+        if note.get('type') == 'join_inject':
+            events.append((note['line'], note.pop('_inj_off'), 0, note))
+        else:
+            events.append((note['line'], note.pop('_off', 0), 1, note))
+    events.sort(key=lambda x: (x[0], x[1], x[2]))
+    # 3) 顺序扫描：注入点之前的 note 不位移，之后的累计注入位移
     inj = 0
-    for note in sorted(notes, key=lambda x:
-                       (x['line'], 0 if x.get('type') == 'join_inject' else 1)):
-        note['line'] = note['line'] + base_before - 1
+    for line, _off, _kind, note in events:
+        note['line'] = line + base_before - 1
         if note.get('type') == 'join_inject':
             note['new_line'] = (note.pop('_new_line_block')
                                 + base_before - 1 + add_lines)
@@ -572,8 +652,7 @@ def transform_text(text, tables_cfg, notes_by_table):
             n0 = len(notes)
             new_block = do_block(m.group(2))
             base_before = text.count('\n', 0, m.start(2)) + 1
-            _fix_line_numbers(m.group(2), new_block, notes[n0:],
-                              base_before, add_lines)
+            _fix_line_numbers(notes[n0:], tr, base_before, add_lines)
             add_lines += new_block.count('\n') - m.group(2).count('\n')
             out.append(text[last:m.start(2)])
             out.append(new_block)

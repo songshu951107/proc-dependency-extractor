@@ -23,6 +23,7 @@ import difflib
 import json
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 
 # ---------------------------------------------------------------- 词法扫描
@@ -299,6 +300,9 @@ class TableTransformer:
                 edits.append((pos, pos, '\n' + ins + '\n', {
                     'type': 'join_inject', 'line': line_of(sql, pos),
                     'old': '(无)', 'new': ' '.join(ins.split()),
+                    '_fj': ja,
+                    # 注入文本 = 换行 + 3 行 JOIN 子句 + 换行，净增行数随记
+                    '_inj_nl': ins.count('\n') + 2,
                 }))
         edits.sort(key=lambda x: x[0], reverse=True)
         n = 0
@@ -308,6 +312,13 @@ class TableTransformer:
                 self.applied_renames.append(note.pop('_joinrec'))
             notes.append(note)
             n += 1
+        # join_inject：在转换后块文本中精确定位注入内容行（FJn 别名块内唯一；
+        # _build_join_sql 生成的 JOIN 行以 FJn+换行结尾，故锚点为「空格+FJn+换行」）
+        for note in notes:
+            if note.get('type') == 'join_inject' and note.get('_fj'):
+                p = sql.find(' ' + note['_fj'] + '\n')
+                if p >= 0:
+                    note['_new_line_block'] = line_of(sql, p)
         # join 别名反查（pass4 子查询传播用）
         for si, amap in stmt_alias_ja.items():
             self.fj_map[si] = dict(amap)
@@ -519,8 +530,31 @@ class TableTransformer:
 
 # ---------------------------------------------------------------- 主流程
 
+def _fix_line_numbers(old_block, new_block, notes, base_before, add_lines):
+    """把块内行号换算为全文行号（契约见规格 §5.1）。
+    line = 转换前全文行号；new_line = 转换后全文行号。
+    join_inject 不改其他行内容，但注入文本以换行包裹 3 行 JOIN 子句、
+    净增 _inj_nl 行（pass3 记录）；其自身 new_line 用 pass3 记录的
+    _new_line_block 精确换算。注入点落在某行行首侧，该行上排于注入之后
+    的 note（如 WHERE 行内列改名）及其后各行均随注入位移——故同行内
+    join_inject 先于其他 note 处理。"""
+    inj = 0
+    for note in sorted(notes, key=lambda x:
+                       (x['line'], 0 if x.get('type') == 'join_inject' else 1)):
+        note['line'] = note['line'] + base_before - 1
+        if note.get('type') == 'join_inject':
+            note['new_line'] = (note.pop('_new_line_block')
+                                + base_before - 1 + add_lines)
+            inj += note.pop('_inj_nl')
+        else:
+            note['new_line'] = note['line'] + inj + add_lines
+
+
 def transform_text(text, tables_cfg, notes_by_table):
-    """对整份 PY 文本做转换：三引号块内逐表三遍转换，块外原样。"""
+    """对整份 PY 文本做转换：三引号块内逐表三遍转换，块外原样。
+    notes 的 line/new_line 均为全文行号（多表对时 line 以该表处理前文本为准，
+    当前单表对场景 = input 原文行号）。"""
+    add_lines = 0  # 已处理块累计净增行数
     for old_table, cfg in tables_cfg.items():
         tr = TableTransformer(old_table, cfg)
         notes = notes_by_table.setdefault(old_table, [])
@@ -535,8 +569,14 @@ def transform_text(text, tables_cfg, notes_by_table):
 
         out, last = [], 0
         for m in SQL_BLOCK_RE.finditer(text):
+            n0 = len(notes)
+            new_block = do_block(m.group(2))
+            base_before = text.count('\n', 0, m.start(2)) + 1
+            _fix_line_numbers(m.group(2), new_block, notes[n0:],
+                              base_before, add_lines)
+            add_lines += new_block.count('\n') - m.group(2).count('\n')
             out.append(text[last:m.start(2)])
-            out.append(do_block(m.group(2)))
+            out.append(new_block)
             last = m.end(2)
         out.append(text[last:])
         text = ''.join(out)
@@ -576,6 +616,39 @@ def residue_check(text, tables_cfg):
     return res
 
 
+def build_report_json(src_name, tables_cfg, notes_by_table, residues,
+                      py_status, error=None):
+    """机读报告（规格 §5.1）。residues 元组结构为 (type, content, line)。"""
+    edits = []
+    for old_table, notes in notes_by_table.items():
+        for n in notes:
+            edits.append({'type': n['type'], 'table': old_table,
+                          'line': n['line'], 'new_line': n['new_line'],
+                          'old': n['old'], 'new': n['new']})
+    edits.sort(key=lambda e: (e['line'], e['new_line']))
+    by_type = {}
+    for e in edits:
+        by_type[e['type']] = by_type.get(e['type'], 0) + 1
+    first_tbl = next(iter(tables_cfg))
+    first_cfg = tables_cfg[first_tbl]
+    rep = {
+        'script': src_name,
+        'converted_at': datetime.now().isoformat(timespec='seconds'),
+        'config': {'old_db': first_cfg.get('old_db', ''),
+                   'old_table': first_tbl,
+                   'new_db': first_cfg.get('new_db', ''),
+                   'new_table': first_cfg['new_table']},
+        'summary': dict(by_type, total=len(edits), residues=len(residues)),
+        'edits': edits,
+        'residues': [{'type': t, 'content': c, 'line': ln}
+                     for t, c, ln in residues],
+        'py_compile': py_status,
+    }
+    if error:
+        rep['error'] = error
+    return rep
+
+
 def build_html_diff(old_text, new_text, src, out):
     old_lines = old_text.splitlines()
     new_lines = new_text.splitlines()
@@ -595,6 +668,8 @@ def main():
     ap.add_argument('--config', default='transform_config.json')
     ap.add_argument('--report-prefix', default='conversion',
                     help='报告前缀：生成 <prefix>_report.md / _diff.txt / _diff.html')
+    ap.add_argument('--report-json', default=None,
+                    help='report.json 输出路径；缺省为 <out去.py>.report.json')
     args = ap.parse_args()
 
     cfg_path = Path(args.config)
@@ -674,13 +749,23 @@ def main():
                                                     args.report_prefix))
     if residues:
         print('  ⚠ 残留 %d 处，见报告残留检查节' % len(residues))
-    # py_compile 校验
+    # py_compile 校验（FAIL 也要产出 report.json，前端展示失败态）
     import py_compile
+    py_status, error = 'PASS', None
     try:
         py_compile.compile(args.out, doraise=True)
         print('  - py_compile: PASS')
     except py_compile.PyCompileError as e:
+        py_status, error = 'FAIL', str(e)
         print('  - py_compile: FAIL %s' % e, file=sys.stderr)
+    report = build_report_json(src.name, tables_cfg, notes_by_table,
+                               residues, py_status, error)
+    report_path = (Path(args.report_json) if args.report_json
+                   else Path(str(args.out)[:-3] + '.report.json'))
+    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2),
+                           encoding='utf-8')
+    print('  - report.json: %s' % report_path)
+    if py_status == 'FAIL':
         sys.exit(2)
 
 

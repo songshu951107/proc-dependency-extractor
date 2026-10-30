@@ -740,33 +740,19 @@ def build_html_diff(old_text, new_text, src, out):
     return html
 
 
-def main():
-    ap = argparse.ArgumentParser(description='表映射驱动脚本转换（Step 4 执行层）')
-    ap.add_argument('--script', required=True, help='待转换脚本 .py')
-    ap.add_argument('--out', required=True, help='转换后脚本 .py')
-    ap.add_argument('--config', default='transform_config.json')
-    ap.add_argument('--report-prefix', default='conversion',
-                    help='报告前缀：生成 <prefix>_report.md / _diff.txt / _diff.html')
-    ap.add_argument('--report-json', default=None,
-                    help='report.json 输出路径；缺省为 <out去.py>.report.json')
-    args = ap.parse_args()
-
-    cfg_path = Path(args.config)
-    if not cfg_path.exists():
-        print('缺少转换配置 %s（Step 3 人工确认后生成）' % args.config, file=sys.stderr)
-        sys.exit(1)
-    config = json.loads(cfg_path.read_text(encoding='utf-8'))
+def convert_one(src, out, config_path):
+    """转换单脚本：写 out、report.md/_diff.txt/_diff.html，返回 report dict。
+    report.json 写到 <out 去扩展名>.report.json；py_compile FAIL 不抛异常，
+    通过 report['py_compile']/report['error'] 表达。"""
+    text = Path(src).read_text(encoding='utf-8')
+    config = json.loads(Path(config_path).read_text(encoding='utf-8'))
     tables_cfg = config.get('tables', {})
-    if not tables_cfg:
-        print('配置无 tables 条目', file=sys.stderr)
-        sys.exit(1)
-
-    src = Path(args.script)
-    text = src.read_text(encoding='utf-8')
     notes_by_table = {}
     new_text = transform_text(text, tables_cfg, notes_by_table)
+    Path(out).write_text(new_text, encoding='utf-8')
 
-    Path(args.out).write_text(new_text, encoding='utf-8')
+    # 报告文件名前缀基准：out 去扩展名（converted.py → converted）
+    report_prefix = str(Path(out).with_suffix(''))
 
     # 残留检查（转换后文本）
     residues = residue_check(new_text, tables_cfg)
@@ -774,16 +760,16 @@ def main():
     # unified diff
     diff = difflib.unified_diff(
         text.splitlines(keepends=True), new_text.splitlines(keepends=True),
-        fromfile=args.script, tofile=args.out)
+        fromfile=str(src), tofile=str(out))
     diff_txt = ''.join(diff)
-    Path(args.report_prefix + '_diff.txt').write_text(diff_txt, encoding='utf-8')
+    Path(report_prefix + '_diff.txt').write_text(diff_txt, encoding='utf-8')
 
     # HTML 并排
-    html = build_html_diff(text, new_text, args.script, args.out)
-    Path(args.report_prefix + '_diff.html').write_text(html, encoding='utf-8')
+    html = build_html_diff(text, new_text, str(src), str(out))
+    Path(report_prefix + '_diff.html').write_text(html, encoding='utf-8')
 
     # 报告
-    rep = ['# 转换报告（%s → %s）\n' % (args.script, args.out)]
+    rep = ['# 转换报告（%s → %s）\n' % (str(src), str(out))]
     n_total = 0
     for old_table, notes in notes_by_table.items():
         rep.append('## 表：%s → %s\n' % (old_table,
@@ -817,34 +803,75 @@ def main():
     else:
         rep.append('✅ 无旧表引用残留、无别名作用域内旧列残留。\n')
 
-    Path(args.report_prefix + '_report.md').write_text(
+    Path(report_prefix + '_report.md').write_text(
         '\n'.join(rep), encoding='utf-8')
 
-    print('[OK] 转换完成：')
-    print('  - 转换后脚本: %s' % args.out)
-    print('  - 转换点: %d 处' % n_total)
-    print('  - 报告: %s_report.md' % args.report_prefix)
-    print('  - diff: %s_diff.txt / %s_diff.html' % (args.report_prefix,
-                                                    args.report_prefix))
-    if residues:
-        print('  ⚠ 残留 %d 处，见报告残留检查节' % len(residues))
     # py_compile 校验（FAIL 也要产出 report.json，前端展示失败态）
     import py_compile
     py_status, error = 'PASS', None
     try:
-        py_compile.compile(args.out, doraise=True)
-        print('  - py_compile: PASS')
+        py_compile.compile(str(out), doraise=True)
     except py_compile.PyCompileError as e:
         py_status, error = 'FAIL', str(e)
-        print('  - py_compile: FAIL %s' % e, file=sys.stderr)
-    report = build_report_json(src.name, tables_cfg, notes_by_table,
+    report = build_report_json(Path(src).name, tables_cfg, notes_by_table,
                                residues, py_status, error)
-    report_path = (Path(args.report_json) if args.report_json
-                   else Path(str(args.out)[:-3] + '.report.json'))
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2),
-                           encoding='utf-8')
+    Path(str(out)[:-3] + '.report.json').write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+    return report
+
+
+def main():
+    ap = argparse.ArgumentParser(description='表映射驱动脚本转换（Step 4 执行层）')
+    ap.add_argument('--script', required=True, help='待转换脚本 .py')
+    ap.add_argument('--out', required=True, help='转换后脚本 .py')
+    ap.add_argument('--config', default='transform_config.json')
+    ap.add_argument('--report-prefix', default='conversion',
+                    help='报告前缀：生成 <prefix>_report.md / _diff.txt / _diff.html')
+    ap.add_argument('--report-json', default=None,
+                    help='report.json 输出路径；缺省为 <out去.py>.report.json')
+    args = ap.parse_args()
+
+    cfg_path = Path(args.config)
+    if not cfg_path.exists():
+        print('缺少转换配置 %s（Step 3 人工确认后生成）' % args.config, file=sys.stderr)
+        sys.exit(1)
+    config = json.loads(cfg_path.read_text(encoding='utf-8'))
+    tables_cfg = config.get('tables', {})
+    if not tables_cfg:
+        print('配置无 tables 条目', file=sys.stderr)
+        sys.exit(1)
+
+    report = convert_one(args.script, args.out, args.config)
+
+    # convert_one 报告文件名基于 out 前缀；按 --report-prefix 挪名（任务 1 行为不变）
+    out_prefix = str(Path(args.out).with_suffix(''))
+    if out_prefix != args.report_prefix:
+        for suffix in ('_report.md', '_diff.txt', '_diff.html'):
+            f = Path(out_prefix + suffix)
+            if f.exists():
+                f.replace(Path(args.report_prefix + suffix))
+    # report.json：convert_one 缺省写在 <out去.py>.report.json；
+    # --report-json 指定时挪到该路径
+    default_rj = Path(str(args.out)[:-3] + '.report.json')
+    report_path = Path(args.report_json) if args.report_json else default_rj
+    if report_path != default_rj and default_rj.exists():
+        default_rj.replace(report_path)
+
+    print('[OK] 转换完成：')
+    print('  - 转换后脚本: %s' % args.out)
+    print('  - 转换点: %d 处' % report['summary']['total'])
+    print('  - 报告: %s_report.md' % args.report_prefix)
+    print('  - diff: %s_diff.txt / %s_diff.html' % (args.report_prefix,
+                                                    args.report_prefix))
+    if report['summary']['residues']:
+        print('  ⚠ 残留 %d 处，见报告残留检查节' % report['summary']['residues'])
+    if report['py_compile'] == 'PASS':
+        print('  - py_compile: PASS')
+    else:
+        print('  - py_compile: FAIL %s' % report.get('error', ''),
+              file=sys.stderr)
     print('  - report.json: %s' % report_path)
-    if py_status == 'FAIL':
+    if report['py_compile'] == 'FAIL':
         sys.exit(2)
 
 

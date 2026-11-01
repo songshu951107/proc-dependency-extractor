@@ -11,6 +11,11 @@ const routes = [
   },
   {
     path: '/',
+    // 登录后默认进入「数据字典」
+    redirect: '/dict'
+  },
+  {
+    path: '/upload',
     name: 'Upload',
     component: () => import('../views/UploadView.vue'),
     meta: { title: '导入脚本' }
@@ -86,6 +91,18 @@ const routes = [
     name: 'Analytics',
     component: () => import('../views/AnalyticsView.vue'),
     meta: { title: '使用分析' }
+  },
+  {
+    path: '/transform',
+    name: 'TransformList',
+    component: () => import('../views/TransformListView.vue'),
+    meta: { title: '脚本转换' }
+  },
+  {
+    path: '/transform/:name',
+    name: 'TransformDetail',
+    component: () => import('../views/TransformDetailView.vue'),
+    meta: { title: '转换对比' }
   }
 ]
 
@@ -109,7 +126,8 @@ router.beforeEach(async (to, from, next) => {
   const allowedPaths = (user?.menus || []).flatMap(m =>
     [m.path, ...(m.children || []).map(c => c.path)]).filter(Boolean)
   const allowed = allowedPaths.some(p => to.path === p || to.path.startsWith(p + '/'))
-  if (!allowed && to.path !== '/') return next('/')
+  // 无权访问时跳到第一个有权限的菜单页（默认页 /dict 也可能不在该角色授权内）
+  if (!allowed) return next(allowedPaths[0] || '/login')
   next()
 })
 

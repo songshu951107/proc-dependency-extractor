@@ -63,7 +63,7 @@ async function fetchData() {
   loading.value = true
   try {
     const { data } = await listScripts()
-    list.value = data.data || []
+    list.value = data || []
   } finally {
     loading.value = false
   }
@@ -88,7 +88,7 @@ async function doUpload({ file }) {
     } catch { return }
   }
   const { data } = await uploadScript(file)
-  ElMessage.success(data.data)
+  ElMessage.success(data)
   fetchData()
 }
 

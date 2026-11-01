@@ -48,6 +48,10 @@ extractor:
     # 例如 /data/reports，用外部配置或环境变量 EXTRACTOR_REPORT_DIR 覆盖。
     dir: ${EXTRACTOR_REPORT_DIR:d:/HB/work_zuoye/reports}
 
+# 脚本转换产物根目录（input/ 待转换，output/ 产物；可用 TRANSFORM_BASE_DIR 环境变量覆盖）
+transform:
+  base-dir: ${TRANSFORM_BASE_DIR:./transforms}
+
 impact:
   analysis:
     default-depth: 5

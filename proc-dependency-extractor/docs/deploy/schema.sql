@@ -1,4 +1,4 @@
--- =====================================================================
+﻿-- =====================================================================
 -- proc-dependency-extractor 内网初始化建表脚本（仅结构，无数据）
 -- 由开发库 proc_extractor 导出，覆盖全部 17 张业务表。
 -- 用途：内网新建空库后执行本脚本建表，再按需导入数据。
@@ -79,7 +79,6 @@ DROP TABLE IF EXISTS `proc_parse_fail`;
 CREATE TABLE `proc_parse_fail` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
   `proc_name` varchar(255) NOT NULL COMMENT '存储过程名',
-  `task_id` varchar(64) DEFAULT NULL COMMENT '解析任务ID(本次解析任务的taskId,同步/上传等无任务上下文时为空)',
   `block_seq` int NOT NULL DEFAULT '0' COMMENT 'SQL块序号',
   `block_type` varchar(32) DEFAULT NULL COMMENT '块类型',
   `fail_reason` text COMMENT '失败原因(中文可读+原始)',
@@ -87,8 +86,7 @@ CREATE TABLE `proc_parse_fail` (
   `resolved` tinyint NOT NULL DEFAULT '0' COMMENT '是否已处理',
   `created_at` datetime DEFAULT NULL COMMENT '时间',
   PRIMARY KEY (`id`),
-  KEY `idx_proc_fail` (`proc_name`,`resolved`),
-  KEY `idx_parse_fail_task` (`task_id`)
+  KEY `idx_proc_fail` (`proc_name`,`resolved`)
 ) ENGINE=InnoDB AUTO_INCREMENT=40 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 DROP TABLE IF EXISTS `proc_table_dependency`;
@@ -339,23 +337,23 @@ DROP TABLE IF EXISTS `table_transform_input`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `table_transform_input` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
-  `field_mapping_id` bigint NOT NULL COMMENT '关联 table_field_mapping.id',
-  `lineage_id` bigint NOT NULL COMMENT '关联 table_lineage.id(冗余,便于直接查询)',
-  `proc_name` varchar(200) NOT NULL COMMENT '存储过程名(冗余)',
-  `target_field` varchar(200) NOT NULL COMMENT '目标字段名(冗余)',
-  `source_table_short` varchar(200) DEFAULT NULL COMMENT '输入字段来源表简称',
-  `source_field` varchar(200) DEFAULT NULL COMMENT '输入字段名',
-  `source_alias` varchar(100) DEFAULT NULL COMMENT '表达式中该字段别名',
-  `role` varchar(20) NOT NULL DEFAULT 'value' COMMENT '输入角色:value/condition',
-  `input_order` int NOT NULL COMMENT '在表达式中出现的顺序(从零开始)',
-  `extract_time` datetime NOT NULL COMMENT '提取时间',
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '涓婚敭',
+  `field_mapping_id` bigint NOT NULL COMMENT '鍏宠仈 table_field_mapping.id',
+  `lineage_id` bigint NOT NULL COMMENT '鍏宠仈 table_lineage.id(鍐椾綑,渚夸簬鐩存帴鏌ヨ?)',
+  `proc_name` varchar(200) NOT NULL COMMENT '瀛樺偍杩囩▼鍚?鍐椾綑)',
+  `target_field` varchar(200) NOT NULL COMMENT '鐩?爣瀛楁?鍚?鍐椾綑)',
+  `source_table_short` varchar(200) DEFAULT NULL COMMENT '杈撳叆瀛楁?鏉ユ簮琛ㄧ煭鍚',
+  `source_field` varchar(200) DEFAULT NULL COMMENT '杈撳叆瀛楁?鍚',
+  `source_alias` varchar(100) DEFAULT NULL COMMENT '琛ㄨ揪寮忎腑璇ュ瓧娈靛埆鍚',
+  `role` varchar(20) NOT NULL DEFAULT 'value' COMMENT '杈撳叆瑙掕壊:value/condition',
+  `input_order` int NOT NULL COMMENT '鍦ㄨ〃杈惧紡涓?嚭鐜伴『搴?浠?寮??)',
+  `extract_time` datetime NOT NULL COMMENT '鎻愬彇鏃堕棿',
   PRIMARY KEY (`id`),
   KEY `idx_field_mapping_id` (`field_mapping_id`),
   KEY `idx_lineage_id` (`lineage_id`),
   KEY `idx_proc_name` (`proc_name`),
   KEY `idx_source_table` (`source_table_short`)
-) ENGINE=InnoDB AUTO_INCREMENT=1366589 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Transform 输入字段';
+) ENGINE=InnoDB AUTO_INCREMENT=1366589 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='Transform 杈撳叆瀛楁?';
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
@@ -366,9 +364,4 @@ CREATE TABLE `table_transform_input` (
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
-
--- 脚本转换可视化菜单（字段名参照 sql/migration/V2026_10_13__user_auth.sql 中 sys_menu 既有行样式）
-INSERT INTO sys_menu (id, menu_code, menu_name, path, icon, parent_id, sort_order, type) VALUES
-  (13, 'transform', '脚本转换', '/transform', 'Refresh', 0, 70, 'MENU')
-ON DUPLICATE KEY UPDATE menu_name = VALUES(menu_name);
 

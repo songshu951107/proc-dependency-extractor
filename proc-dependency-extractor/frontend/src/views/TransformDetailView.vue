@@ -1,6 +1,9 @@
 <template>
   <div class="page">
     <!-- 概要条 -->
+    <el-alert v-if="convertedMissing" type="error" show-icon
+              :closable="false" style="margin-bottom:12px"
+              :title="report?.error || '转换产物缺失，仅展示转换前脚本与报告'" />
     <el-alert v-if="report?.residues?.length" type="warning" show-icon
               :closable="false" style="margin-bottom:12px"
               :title="`存在 ${report.residues.length} 处残留，请人工排查（黄色高亮行）`" />
@@ -35,7 +38,6 @@
         </el-tabs>
         <div class="code" ref="codeBox">
           <div v-for="(line, idx) in lines" :key="idx" class="code-line"
-               :ref="'row' + (idx + 1)"
                :class="rowClass(idx + 1)">
             <span class="no">{{ idx + 1 }}</span>
             <span class="txt">{{ line || ' ' }}</span>
@@ -57,6 +59,7 @@ const name = decodeURIComponent(route.params.name)
 const report = ref(null)
 const sourceLines = ref([])
 const convertedLines = ref([])
+const convertedMissing = ref(false)
 const tab = ref('source')
 const filterType = ref('')
 const activeEdit = ref(null)
@@ -139,14 +142,20 @@ async function onTabChange() {
 }
 
 // request.js 响应拦截器返回 response.data（即 Result 对象）；
-// { data: rep } 解构出的 rep 已是 Result.data（业务数据），不要再 .data
+// 各项 value.data 已是 Result.data（业务数据），不要再 .data
+// converted 缺失（FAILED 脚本无产物，后端 400）时降级展示 report+source，
+// 由顶部 el-alert 提示；report/source 失败仍交给拦截器 toast
 onMounted(async () => {
-  const [{ data: rep }, { data: s }, { data: c }] = await Promise.all([
+  const [repR, sR, cR] = await Promise.allSettled([
     getReport(name), getScriptFile(name, 'source'), getScriptFile(name, 'converted'),
   ])
-  report.value = rep
-  sourceLines.value = (s || '').split('\n')
-  convertedLines.value = (c || '').split('\n')
+  if (repR.status === 'fulfilled') report.value = repR.value.data
+  if (sR.status === 'fulfilled') sourceLines.value = (sR.value.data || '').split('\n')
+  if (cR.status === 'fulfilled') {
+    convertedLines.value = (cR.value.data || '').split('\n')
+  } else {
+    convertedMissing.value = true
+  }
 })
 </script>
 

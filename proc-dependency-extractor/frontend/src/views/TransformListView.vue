@@ -11,7 +11,11 @@
       <el-table-column prop="name" label="脚本名" min-width="260" />
       <el-table-column label="状态" width="140">
         <template #default="{ row }">
-          <el-tag :type="tagType(row)" effect="dark">{{ tagText(row) }}</el-tag>
+          <el-tooltip v-if="row.status === 'FAILED' && row.errorMsg"
+                      :content="row.errorMsg" placement="top">
+            <el-tag :type="tagType(row)" effect="dark">{{ tagText(row) }}</el-tag>
+          </el-tooltip>
+          <el-tag v-else :type="tagType(row)" effect="dark">{{ tagText(row) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="oldTable" label="旧表" min-width="200" />

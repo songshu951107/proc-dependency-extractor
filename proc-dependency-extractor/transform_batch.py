@@ -15,6 +15,7 @@ import argparse
 import json
 import shutil
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from transform_table_mapping import convert_one
@@ -33,6 +34,19 @@ def main():
         print('input 目录无 .py 脚本：%s' % in_dir)
         return
     ok = fail = 0
+    # 引擎异常兜底 report 用的映射快照，与正常路径 report 的 config 字段同构
+    # （见 transform_table_mapping.build_report_json）；配置本身加载失败
+    # （常见异常根因）时退化为 {}
+    try:
+        _tables = json.loads(
+            Path(args.config).read_text(encoding='utf-8')).get('tables', {})
+        _t = next(iter(_tables))
+        cfg_snapshot = {'old_db': _tables[_t].get('old_db', ''),
+                        'old_table': _t,
+                        'new_db': _tables[_t].get('new_db', ''),
+                        'new_table': _tables[_t].get('new_table', '')}
+    except Exception:
+        cfg_snapshot = {}
     for src in scripts:
         name = src.stem
         d = out_dir / name
@@ -42,9 +56,12 @@ def main():
         try:
             rep = convert_one(src, d / 'converted.py', args.config)
         except Exception as e:  # 转换引擎异常也兜底成 report.json
-            rep = {'script': src.name, 'py_compile': 'FAIL', 'error': str(e),
+            rep = {'script': src.name,
+                   'converted_at': datetime.now().isoformat(timespec='seconds'),
+                   'config': dict(cfg_snapshot),
+                   'py_compile': 'FAIL', 'error': str(e),
                    'summary': {'total': 0, 'residues': 0},
-                   'edits': [], 'residues': [], 'config': {}}
+                   'edits': [], 'residues': []}
             (d / 'report.json').write_text(
                 json.dumps(rep, ensure_ascii=False, indent=2),
                 encoding='utf-8')

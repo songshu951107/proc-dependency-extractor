@@ -1,6 +1,6 @@
 import request from './request'
 
-// 脚本转换：列表 / 报告 / 全文 / 上传 / 下载地址
+// 脚本转换：列表 / 报告 / 全文 / 上传
 export function listScripts() {
   return request.get('/transform/scripts')
 }
@@ -21,8 +21,4 @@ export function uploadScript(file) {
   return request.post('/transform/upload', fd, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
-}
-
-export function downloadUrl(name, type) {
-  return `/api/transform/scripts/${encodeURIComponent(name)}/download?type=${type}`
 }

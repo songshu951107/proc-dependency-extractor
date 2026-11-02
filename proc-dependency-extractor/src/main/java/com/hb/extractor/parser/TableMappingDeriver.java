@@ -133,6 +133,19 @@ public final class TableMappingDeriver {
         return m.find() ? shortTableName(m.group(1)) : null;
     }
 
+    /** 首个 INSERT INTO 的库名（schema 段，去 {} 与引号，大写）；无则返回 null */
+    public static String detectInsertSchema(String script) {
+        if (script == null || script.isEmpty()) return null;
+        Matcher m = Pattern.compile(
+                "(?is)\\bINSERT\\s+INTO\\s+(" + TABLE_NAME.pattern() + ")").matcher(script);
+        if (!m.find()) return null;
+        String clean = m.group(1).replaceAll("[`\"\\[\\]]", "");
+        int dot = clean.indexOf('.');
+        if (dot <= 0) return null;
+        String schema = clean.substring(0, dot).replace("{", "").replace("}", "");
+        return schema.isEmpty() ? null : schema.toUpperCase(Locale.ROOT);
+    }
+
     /** schema.表名 / {SCHEMA}.表名 / 带引号 → 表短名（大写） */
     private static String shortTableName(String id) {
         String table = id.replaceAll("[`\"\\[\\]]", "");

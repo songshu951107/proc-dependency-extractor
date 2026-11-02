@@ -61,21 +61,16 @@
     <!-- 批量导入 -->
     <el-divider />
     <div class="section-head">
-      <span class="section-title">批量导入（按 T 层源列自动推导列映射）</span>
+      <span class="section-title">批量导入（全自动识别，无需填写表名）</span>
     </div>
-    <el-form inline size="small">
-      <el-form-item label="旧表(F)"><el-input v-model="imp.oldTable" style="width:180px" placeholder="必填" /></el-form-item>
-      <el-form-item label="新表(O)"><el-input v-model="imp.newTable" style="width:180px" placeholder="必填" /></el-form-item>
-      <el-form-item label="旧库"><el-input v-model="imp.oldDb" style="width:80px" /></el-form-item>
-      <el-form-item label="新库"><el-input v-model="imp.newDb" style="width:80px" /></el-form-item>
-    </el-form>
     <el-upload :auto-upload="false" multiple :file-list="imp.fileList"
                :on-change="onPick" :on-remove="onRemove" accept=".sql,.txt,.py,.xlsx,.xls"
                drag style="width:100%">
       <div style="padding:8px 0">
         <el-button size="small" type="primary">选择文件（可多选）</el-button>
         <div class="muted" style="margin-top:6px">
-          一次拖入 4 类文件即可：O/F 表建表语句或表结构（.sql/.txt/.xlsx/.xls）、O/F 表从 T 层加工的脚本，后端自动识别
+          一次拖入 O/F 表建表语句或表结构（.sql/.txt/.xlsx/.xls）、O/F 表从 T 层加工的脚本即可，
+          后端按表名前缀（F_/O_）与 INSERT/CREATE 内容自动识别配对
         </div>
       </div>
     </el-upload>
@@ -84,31 +79,37 @@
                  :disabled="!imp.fileList.length" @click="doPreview">解析预览</el-button>
     </div>
 
-    <!-- 预览结果 -->
-    <template v-if="preview">
-      <el-alert v-if="preview.matched_count === 0" type="error" :closable="false" style="margin-top:10px"
-                title="未推导出任何列映射，请检查脚本中的 INSERT INTO 目标表与 SELECT 列" />
-      <el-alert v-else type="success" :closable="false" style="margin-top:10px"
-                :title="`推导出 ${preview.matched_count} 条列映射；请人工确认后导入`" />
-      <div v-if="preview.recognized && preview.recognized.length" class="muted" style="margin-top:6px">
-        文件识别：<div v-for="r in preview.recognized" :key="r">· {{ r }}</div>
-      </div>
-      <el-table :data="previewRows" border size="small" max-height="220" style="margin-top:10px">
-        <el-table-column prop="f" label="F 表列" min-width="160" />
-        <el-table-column prop="o" label="O 表列" min-width="160" />
-      </el-table>
-      <template v-if="preview.unmatched_f.length || preview.unmatched_o.length">
-        <div class="section-title" style="margin-top:8px">未匹配清单（人工处理，不阻断导入）</div>
-        <el-table :data="unmatchedRows" border size="small" max-height="180">
-          <el-table-column prop="side" label="侧" width="50" />
-          <el-table-column prop="target_col" label="目标列" min-width="140" />
-          <el-table-column prop="reason" label="原因" min-width="240" />
-          <el-table-column prop="expr" label="原始片段" min-width="200" show-overflow-tooltip />
+    <!-- 预览结果：逐表对卡片 -->
+    <template v-if="previews.length">
+      <div v-for="p in previews" :key="p.old_table" class="preview-card">
+        <div class="section-head">
+          <span class="section-title">
+            {{ p.old_db ? p.old_db + '.' : '' }}{{ p.old_table }}
+            → {{ p.new_db ? p.new_db + '.' : '' }}{{ p.new_table }}
+          </span>
+          <el-tag :type="p.matched_count > 0 ? 'success' : 'danger'" effect="plain">
+            {{ p.matched_count }} 条映射
+          </el-tag>
+        </div>
+        <el-table :data="pairRows(p)" border size="small" max-height="200">
+          <el-table-column prop="f" label="F 表列" min-width="150" />
+          <el-table-column prop="o" label="O 表列" min-width="150" />
         </el-table>
-      </template>
+        <template v-if="p.unmatched_f.length || p.unmatched_o.length">
+          <div class="muted" style="margin-top:4px">未匹配清单（人工处理，不阻断导入）</div>
+          <el-table :data="unmatchedRows(p)" border size="small" max-height="150">
+            <el-table-column prop="side" label="侧" width="50" />
+            <el-table-column prop="target_col" label="目标列" min-width="130" />
+            <el-table-column prop="reason" label="原因" min-width="220" />
+            <el-table-column prop="expr" label="原始片段" min-width="180" show-overflow-tooltip />
+          </el-table>
+        </template>
+      </div>
+      <el-alert v-for="w in preview.warnings" :key="w" type="warning" :closable="false"
+                :title="w" style="margin-top:6px" />
       <div style="margin-top:10px">
-        <el-button type="success" :loading="applying" :disabled="preview.matched_count === 0"
-                   @click="doApply">确认导入该表对</el-button>
+        <el-button type="success" :loading="applying" :disabled="!importable"
+                   @click="doApply">确认导入全部表对（{{ importable.length }}）</el-button>
       </div>
     </template>
   </el-dialog>
@@ -131,18 +132,24 @@ const editMode = ref('hidden')   // hidden | add | edit
 const saving = ref(false)
 const form = ref({ oldTable: '', newTable: '', oldDb: '', newDb: '' })
 
-// 批量导入（单入口多文件，后端自动识别）
-const imp = ref({ oldTable: '', newTable: '', oldDb: '', newDb: '', fileList: [] })
+// 批量导入（单入口多文件，后端全自动识别 F/O 层并配对，无需填表名）
+const imp = ref({ fileList: [] })
 const parsing = ref(false)
 const applying = ref(false)
 const preview = ref(null)
 
-const previewRows = computed(() =>
-  Object.entries(preview.value?.column_mapping || {}).map(([f, o]) => ({ f, o })))
-const unmatchedRows = computed(() => [
-  ...(preview.value?.unmatched_f || []).map((u) => ({ ...u, side: 'F' })),
-  ...(preview.value?.unmatched_o || []).map((u) => ({ ...u, side: 'O' })),
-])
+const previews = computed(() => preview.value?.previews || [])
+const importable = computed(() => previews.value.filter((p) => p.matched_count > 0))
+
+function pairRows(p) {
+  return Object.entries(p.column_mapping || {}).map(([f, o]) => ({ f, o }))
+}
+function unmatchedRows(p) {
+  return [
+    ...(p.unmatched_f || []).map((u) => ({ ...u, side: 'F' })),
+    ...(p.unmatched_o || []).map((u) => ({ ...u, side: 'O' })),
+  ]
+}
 
 function open() {
   visible.value = true
@@ -220,18 +227,10 @@ function onRemove(file, fileList) {
 }
 
 async function doPreview() {
-  if (!imp.value.oldTable || !imp.value.newTable) {
-    ElMessage.warning('请先填写旧表/新表名')
-    return
-  }
   parsing.value = true
   preview.value = null
   try {
-    const { data } = await importPreview({
-      files: imp.value.fileList.map((f) => f.raw),
-      oldTable: imp.value.oldTable, newTable: imp.value.newTable,
-      oldDb: imp.value.oldDb, newDb: imp.value.newDb,
-    })
+    const { data } = await importPreview(imp.value.fileList.map((f) => f.raw))
     preview.value = data
   } finally {
     parsing.value = false
@@ -239,17 +238,17 @@ async function doPreview() {
 }
 
 async function doApply() {
-  if (!preview.value) return
+  if (!importable.value.length) return
   applying.value = true
   try {
-    const entry = {
-      old_table: preview.value.old_table,
-      new_table: preview.value.new_table,
-      column_mapping: preview.value.column_mapping,
-    }
-    if (preview.value.old_db) entry.old_db = preview.value.old_db
-    if (preview.value.new_db) entry.new_db = preview.value.new_db
-    const { data } = await applyConfigEntries([entry])
+    const entries = importable.value.map((p) => {
+      const e = { old_table: p.old_table, new_table: p.new_table,
+                  column_mapping: p.column_mapping }
+      if (p.old_db) e.old_db = p.old_db
+      if (p.new_db) e.new_db = p.new_db
+      return e
+    })
+    const { data } = await applyConfigEntries(entries)
     ElMessage.success(data)
     preview.value = null
     fetchConfig()

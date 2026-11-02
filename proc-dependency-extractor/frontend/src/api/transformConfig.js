@@ -17,15 +17,10 @@ export function deleteConfigEntry(oldTable) {
   return request.delete(`/transform/config/${encodeURIComponent(oldTable)}`)
 }
 
-// 批量导入预览：一次上传多个文件（顺序随意），后端按内容自动识别 O/F DDL 与加工脚本，
-// 推导 column_mapping（不落库）
-export function importPreview({ files, oldTable, newTable, oldDb, newDb }) {
+// 批量导入预览（全自动）：一次上传多个文件，后端自动识别 F/O 层、配对、推导 column_mapping
+export function importPreview(files) {
   const fd = new FormData()
   files.forEach((f) => fd.append('files', f))
-  fd.append('oldTable', oldTable)
-  fd.append('newTable', newTable)
-  if (oldDb) fd.append('oldDb', oldDb)
-  if (newDb) fd.append('newDb', newDb)
   return request.post('/transform/config/import', fd, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })

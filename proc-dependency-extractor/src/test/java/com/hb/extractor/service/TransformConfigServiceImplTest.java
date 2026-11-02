@@ -77,8 +77,9 @@ class TransformConfigServiceImplTest {
     }
 
     @Test
-    void importPreviewDerivesMapping() {
-        // 单入口多文件：顺序随意，后端按内容自动识别
+    @SuppressWarnings("unchecked")
+    void importPreviewAutoDerivesMapping() {
+        // 单入口多文件：顺序随意，后端按内容自动识别 F/O 层并配对，无需传表名
         String fFile = """
                 CREATE TABLE FDM.F_T (cust_no VARCHAR(32), org_type_cd VARCHAR(10), rmk VARCHAR(99));
                 INSERT INTO {FDM}.F_T (cust_no, org_type_cd, rmk)
@@ -91,19 +92,24 @@ class TransformConfigServiceImplTest {
                   FROM {TDM}.T_CUST T;
                 """;
         String noise = "SELECT 1;";
-        Map<String, Object> preview = service().importPreview(
+        Map<String, Object> out = service().importPreviewAuto(
                 List.of(Map.of("name", "o.sql", "content", oFile),
                         Map.of("name", "f.sql", "content", fFile),
-                        Map.of("name", "x.sql", "content", noise)),
-                "F_T", "O_T", "FDM", "ODM");
+                        Map.of("name", "x.sql", "content", noise)));
+        List<Map<String, Object>> previews = (List<Map<String, Object>>) out.get("previews");
+        assertEquals(1, previews.size());
+        Map<String, Object> preview = previews.get(0);
+        assertEquals("F_T", preview.get("old_table"));
+        assertEquals("O_T", preview.get("new_table"));
+        // 库名从 INSERT INTO {FDM}/{ODM} 的 schema 段自动提取
+        assertEquals("FDM", preview.get("old_db"));
+        assertEquals("ODM", preview.get("new_db"));
         assertEquals(3, ((Number) preview.get("matched_count")).intValue());
-        @SuppressWarnings("unchecked")
         Map<String, String> cm = (Map<String, String>) preview.get("column_mapping");
         assertEquals("cust_id", cm.get("cust_no"));
         assertEquals("org_cust_type", cm.get("org_type_cd"));
         assertEquals("remarks", cm.get("rmk"));
-        @SuppressWarnings("unchecked")
-        List<String> recognized = (List<String>) preview.get("recognized");
+        List<String> recognized = (List<String>) out.get("recognized");
         assertTrue(recognized.get(1).contains("F 表加工脚本"));
         assertTrue(recognized.get(0).contains("O 表加工脚本"));
         assertTrue(recognized.get(2).contains("未识别"));
@@ -112,19 +118,40 @@ class TransformConfigServiceImplTest {
     }
 
     @Test
-    void importPreviewRequiresScriptsAndTarget() {
+    @SuppressWarnings("unchecked")
+    void importPreviewAutoPairsMultipleTables() {
+        // 两对 F/O 脚本乱序上传：按 T 层源列交集自动配对（F_A→O_A、F_B→O_B）
+        String f1 = "INSERT INTO {FDM}.F_A (c1, c2) SELECT T.a, T.b FROM {TDM}.T1 T";
+        String f2 = "INSERT INTO {FDM}.F_B (c1) SELECT T.x FROM {TDM}.T2 T";
+        String o1 = "INSERT INTO {ODM}.O_B (c1) SELECT T.x FROM {TDM}.T2 T";
+        String o2 = "INSERT INTO {ODM}.O_A (c1, c2) SELECT T.a, T.b FROM {TDM}.T1 T";
+        Map<String, Object> out = service().importPreviewAuto(List.of(
+                Map.of("name", "o1.sql", "content", o1),
+                Map.of("name", "f1.sql", "content", f1),
+                Map.of("name", "f2.sql", "content", f2),
+                Map.of("name", "o2.sql", "content", o2)));
+        List<Map<String, Object>> previews = (List<Map<String, Object>>) out.get("previews");
+        assertEquals(2, previews.size());
+        Map<String, String> pairByOld = new java.util.LinkedHashMap<>();
+        Map<String, String> dbByOld = new java.util.LinkedHashMap<>();
+        for (Map<String, Object> p : previews) {
+            pairByOld.put((String) p.get("old_table"), (String) p.get("new_table"));
+            dbByOld.put((String) p.get("old_table"), p.get("old_db") + ">" + p.get("new_db"));
+        }
+        assertEquals("O_A", pairByOld.get("F_A"));
+        assertEquals("O_B", pairByOld.get("F_B"));
+        assertEquals("FDM>ODM", dbByOld.get("F_A"));
+        assertEquals(0, ((List<String>) out.get("warnings")).size());
+    }
+
+    @Test
+    void importPreviewAutoRequiresBothSides() {
         // 缺少 O 侧脚本 → 报错并列出识别结果
-        assertThrows(Exception.class, () -> service().importPreview(
+        assertThrows(Exception.class, () -> service().importPreviewAuto(
                 List.of(Map.of("name", "f.sql",
-                        "content", "INSERT INTO F_T (a) SELECT T.a FROM T T")),
-                "F_T", "O_T", null, null));
-        // 表名非法
-        assertThrows(Exception.class, () -> service().importPreview(
-                List.of(Map.of("name", "f.sql",
-                                "content", "INSERT INTO F_T (a) SELECT T.a FROM T T"),
-                        Map.of("name", "o.sql",
-                                "content", "INSERT INTO O_T (a) SELECT T.a FROM T T")),
-                "F_T", "O;T", null, null));
+                        "content", "INSERT INTO F_T (a) SELECT T.a FROM T T"))));
+        // 空文件列表 → 报错
+        assertThrows(Exception.class, () -> service().importPreviewAuto(List.of()));
     }
 
     @Test

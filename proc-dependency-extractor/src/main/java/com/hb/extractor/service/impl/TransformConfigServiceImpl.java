@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -86,82 +87,153 @@ public class TransformConfigServiceImpl implements TransformConfigService {
     }
 
     @Override
-    public Map<String, Object> importPreview(List<Map<String, String>> files,
-                                             String oldTable, String newTable,
-                                             String oldDb, String newDb) {
-        if (oldTable == null || newTable == null
-                || !TABLE_KEY_RE.matcher(oldTable).matches()
-                || !TABLE_KEY_RE.matcher(newTable).matches()) {
-            throw new BusinessException("oldTable / newTable 必填且限字母数字下划线$");
-        }
-        String oldUp = oldTable.toUpperCase(Locale.ROOT);
-        String newUp = newTable.toUpperCase(Locale.ROOT);
-
-        // 按内容自动识别：INSERT 目标=旧表 → F 脚本；=新表 → O 脚本；仅 CREATE TABLE → 对应侧 DDL
-        String fScript = null, oScript = null, fDdl = null, oDdl = null;
+    public Map<String, Object> importPreviewAuto(List<Map<String, String>> files) {
+        // 1. 按内容分类：脚本（含 INSERT）按目标表前缀 F_/O_ 归层；DDL 按表名归层
+        List<Map<String, Object>> fScripts = new ArrayList<>();   // {table, schema, content}
+        List<Map<String, Object>> oScripts = new ArrayList<>();
+        Map<String, String> fDdls = new LinkedHashMap<>();        // 表名(大写) → DDL 文本
+        Map<String, String> oDdls = new LinkedHashMap<>();
         List<String> recognized = new ArrayList<>();
+        boolean hasAny = false;
+
         if (files != null) {
             for (Map<String, String> f : files) {
                 String content = f.get("content");
                 if (content == null || content.isBlank()) continue;
                 String name = f.getOrDefault("name", "");
+                hasAny = true;
                 String insTarget = TableMappingDeriver.detectInsertTarget(content);
+                if (insTarget != null) {
+                    List<Map<String, Object>> side = insTarget.startsWith("F_") ? fScripts : oScripts;
+                    side.add(Map.of("table", insTarget,
+                            "schema", String.valueOf(TableMappingDeriver.detectInsertSchema(content)),
+                            "content", content, "name", name));
+                    recognized.add(name + " → " + (insTarget.startsWith("F_") ? "F" : "O")
+                            + " 表加工脚本（INSERT " + insTarget + "）");
+                    continue;
+                }
                 List<String> created = TableMappingDeriver.extractCreateTableNames(content);
-                if (oldUp.equals(insTarget) && fScript == null) {
-                    fScript = content;
-                    recognized.add(name + " → F 表加工脚本（INSERT " + insTarget + "）");
-                } else if (newUp.equals(insTarget) && oScript == null) {
-                    oScript = content;
-                    recognized.add(name + " → O 表加工脚本（INSERT " + insTarget + "）");
-                } else if (!created.isEmpty()) {
-                    if (created.contains(oldUp) && fDdl == null) {
-                        fDdl = content;
-                        recognized.add(name + " → F 表 DDL（CREATE " + created + "）");
-                    } else if (created.contains(newUp) && oDdl == null) {
-                        oDdl = content;
-                        recognized.add(name + " → O 表 DDL（CREATE " + created + "）");
-                    } else {
-                        recognized.add(name + " → 未匹配到当前表对的 DDL（CREATE " + created + "）");
+                if (!created.isEmpty()) {
+                    for (String table : created) {
+                        if (table.startsWith("F_")) {
+                            fDdls.putIfAbsent(table, content);
+                        } else if (table.startsWith("O_")) {
+                            oDdls.putIfAbsent(table, content);
+                        }
                     }
+                    recognized.add(name + " → 表结构 DDL（CREATE " + created + "）");
                 } else {
                     recognized.add(name + " → 未识别（无 CREATE TABLE / INSERT INTO）");
                 }
             }
         }
-        List<String> missing = new ArrayList<>();
-        if (fScript == null) missing.add("F 表加工脚本（应含 INSERT INTO " + oldTable + "）");
-        if (oScript == null) missing.add("O 表加工脚本（应含 INSERT INTO " + newTable + "）");
-        if (!missing.isEmpty()) {
-            throw new BusinessException("文件识别失败，缺少 " + String.join("、", missing)
-                    + "；识别结果：" + String.join("；", recognized));
+        if (!hasAny) {
+            throw new BusinessException("未上传有效文件");
+        }
+        if (fScripts.isEmpty()) {
+            throw new BusinessException("文件中未识别出 F 表加工脚本（INSERT INTO F_ 开头的目标表）；识别结果："
+                    + String.join("；", recognized));
+        }
+        if (oScripts.isEmpty()) {
+            throw new BusinessException("文件中未识别出 O 表加工脚本（INSERT INTO O_ 开头的目标表）；识别结果："
+                    + String.join("；", recognized));
         }
 
-        List<String> fDdlCols = TableMappingDeriver.parseDdlColumns(fDdl, oldTable);
-        List<String> oDdlCols = TableMappingDeriver.parseDdlColumns(oDdl, newTable);
+        // 2. 解析脚本侧映射
+        Map<String, TableMappingDeriver.ScriptMapping> fParsed = new LinkedHashMap<>();
+        Map<String, TableMappingDeriver.ScriptMapping> oParsed = new LinkedHashMap<>();
+        for (Map<String, Object> s : fScripts) {
+            fParsed.put((String) s.get("table"),
+                    TableMappingDeriver.parseScript((String) s.get("content"),
+                            (String) s.get("table"),
+                            TableMappingDeriver.parseDdlColumns(fDdls.get(s.get("table")), (String) s.get("table"))));
+        }
+        for (Map<String, Object> s : oScripts) {
+            oParsed.put((String) s.get("table"),
+                    TableMappingDeriver.parseScript((String) s.get("content"),
+                            (String) s.get("table"),
+                            TableMappingDeriver.parseDdlColumns(oDdls.get(s.get("table")), (String) s.get("table"))));
+        }
 
-        TableMappingDeriver.ScriptMapping fSide =
-                TableMappingDeriver.parseScript(fScript, oldTable, fDdlCols);
-        TableMappingDeriver.ScriptMapping oSide =
-                TableMappingDeriver.parseScript(oScript, newTable, oDdlCols);
-        if (fSide.cols.isEmpty()) {
-            throw new BusinessException("F 加工脚本中未找到 INSERT INTO " + oldTable + " 的 SELECT");
+        // 3. 配对：单对直配；多对按共同 T 层源列交集最大贪心配对
+        List<String[]> pairs = new ArrayList<>();   // {fTable, oTable}
+        List<String> warnings = new ArrayList<>();
+        if (fParsed.size() == 1 && oParsed.size() == 1) {
+            pairs.add(new String[]{fParsed.keySet().iterator().next(),
+                    oParsed.keySet().iterator().next()});
+        } else {
+            Map<String, TableMappingDeriver.ScriptMapping> fRest = new LinkedHashMap<>(fParsed);
+            Map<String, TableMappingDeriver.ScriptMapping> oRest = new LinkedHashMap<>(oParsed);
+            while (!fRest.isEmpty() && !oRest.isEmpty()) {
+                String bestF = null, bestO = null;
+                int bestScore = 0;
+                for (Map.Entry<String, TableMappingDeriver.ScriptMapping> fe : fRest.entrySet()) {
+                    for (Map.Entry<String, TableMappingDeriver.ScriptMapping> oe : oRest.entrySet()) {
+                        int score = TableMappingDeriver.derive(fe.getValue(), oe.getValue()).matchedCount;
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestF = fe.getKey();
+                            bestO = oe.getKey();
+                        }
+                    }
+                }
+                if (bestF == null) break;   // 无任何交集，剩余的放弃并告警
+                pairs.add(new String[]{bestF, bestO});
+                fRest.remove(bestF);
+                oRest.remove(bestO);
+            }
+            for (String f : fRest.keySet()) {
+                warnings.add("F 表 " + f + " 未找到有共同 T 层源列的 O 脚本，已跳过");
+            }
+            for (String o : oRest.keySet()) {
+                warnings.add("O 表 " + o + " 未找到有共同 T 层源列的 F 脚本，已跳过");
+            }
         }
-        if (oSide.cols.isEmpty()) {
-            throw new BusinessException("O 加工脚本中未找到 INSERT INTO " + newTable + " 的 SELECT");
+
+        // 4. 逐对推导预览
+        List<Map<String, Object>> previews = new ArrayList<>();
+        for (String[] pair : pairs) {
+            TableMappingDeriver.ScriptMapping fSide = fParsed.get(pair[0]);
+            TableMappingDeriver.ScriptMapping oSide = oParsed.get(pair[1]);
+            TableMappingDeriver.DeriveResult r = TableMappingDeriver.derive(fSide, oSide);
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("old_table", pair[0]);
+            entry.put("new_table", pair[1]);
+            String oldDb = schemaOf(fScripts, pair[0], fDdls.get(pair[0]));
+            String newDb = schemaOf(oScripts, pair[1], oDdls.get(pair[1]));
+            if (oldDb != null) entry.put("old_db", oldDb);
+            if (newDb != null) entry.put("new_db", newDb);
+            entry.put("column_mapping", r.columnMapping);
+            entry.put("matched_count", r.matchedCount);
+            entry.put("unmatched_f", r.unmatchedF);
+            entry.put("unmatched_o", r.unmatchedO);
+            previews.add(entry);
         }
-        TableMappingDeriver.DeriveResult r = TableMappingDeriver.derive(fSide, oSide);
 
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("old_table", oldTable);
-        out.put("new_table", newTable);
-        if (oldDb != null) out.put("old_db", oldDb);
-        if (newDb != null) out.put("new_db", newDb);
+        out.put("previews", previews);
         out.put("recognized", recognized);
-        out.put("column_mapping", r.columnMapping);
-        out.put("matched_count", r.matchedCount);
-        out.put("unmatched_f", r.unmatchedF);
-        out.put("unmatched_o", r.unmatchedO);
+        out.put("warnings", warnings);
         return out;
+    }
+
+    /** 表对侧的库名：优先该侧脚本的 INSERT schema，回退 DDL 中 CREATE 的 schema */
+    private static String schemaOf(List<Map<String, Object>> scripts, String table, String ddl) {
+        for (Map<String, Object> s : scripts) {
+            if (table.equals(s.get("table"))) {
+                String schema = (String) s.get("schema");
+                if (schema != null && !"null".equals(schema) && !schema.isEmpty()) return schema;
+            }
+        }
+        if (ddl != null) {
+            Matcher m = Pattern.compile(
+                    "(?is)CREATE\\s+TABLE\\s+([A-Za-z0-9_$#{}]+)\\s*\\.\\s*[`\"\\[]?"
+                            + Pattern.quote(table)).matcher(ddl);
+            if (m.find()) {
+                return m.group(1).replace("{", "").replace("}", "").toUpperCase(Locale.ROOT);
+            }
+        }
+        return null;
     }
 
     @Override

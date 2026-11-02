@@ -47,18 +47,14 @@ public class TransformConfigController {
     }
 
     /**
-     * 批量导入预览：一次上传多个文件（顺序随意），后端按内容自动识别——
-     * INSERT INTO 旧表 → F 加工脚本、INSERT INTO 新表 → O 加工脚本、
-     * CREATE TABLE → 对应侧建表 DDL；.xlsx/.xls 表结构文件自动转合成 DDL。
-     * 返回推导的 column_mapping 与未匹配清单，不落库。
+     * 批量导入预览（全自动）：一次上传多个文件（顺序随意），无需填写表名——
+     * 后端按内容识别 F/O 层（表名前缀 F_/O_）、建表 DDL/Excel 表结构、
+     * 按 T 层源列交集配对并推导 column_mapping，库名从 INSERT schema 提取。
+     * 返回 previews（逐表对）+ recognized（识别明细），不落库。
      */
     @PostMapping("/import")
     public Result<Map<String, Object>> importPreview(
-            @RequestParam("files") List<MultipartFile> files,
-            @RequestParam("oldTable") String oldTable,
-            @RequestParam("newTable") String newTable,
-            @RequestParam(value = "oldDb", required = false) String oldDb,
-            @RequestParam(value = "newDb", required = false) String newDb) throws Exception {
+            @RequestParam("files") List<MultipartFile> files) throws Exception {
 
         List<Map<String, String>> fs = new ArrayList<>();
         for (MultipartFile f : files) {
@@ -78,7 +74,7 @@ public class TransformConfigController {
             }
             fs.add(Map.of("name", name, "content", content));
         }
-        return Result.success(configService.importPreview(fs, oldTable, newTable, oldDb, newDb));
+        return Result.success(configService.importPreviewAuto(fs));
     }
 
     /** 确认导入：把预览确认后的表对（可多对批量）合并写入 transform_config.json */

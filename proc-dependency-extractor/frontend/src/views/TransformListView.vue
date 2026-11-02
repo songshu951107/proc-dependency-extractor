@@ -6,7 +6,9 @@
         <el-button type="primary">上传脚本</el-button>
       </el-upload>
       <el-button @click="fetchData" style="margin-left:12px">刷新</el-button>
+      <el-button style="margin-left:12px" @click="openConfig">映射配置</el-button>
     </div>
+    <TransformConfigDialog ref="configDialog" />
     <el-table :data="list" v-loading="loading" border>
       <el-table-column prop="name" label="脚本名" min-width="260" />
       <el-table-column label="状态" width="140">
@@ -56,10 +58,13 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listScripts, uploadScript, convertScript, deleteScript } from '@/api/transform'
 import request from '@/api/request'
+import TransformConfigDialog from '@/components/TransformConfigDialog.vue'
 
 const list = ref([])
 const loading = ref(false)
 const converting = ref('') // 正在转换的脚本名（行级 loading）
+const configDialog = ref(null)
+const openConfig = () => configDialog.value.open()
 
 const tagType = (row) => ({
   PENDING: 'info', CONVERTED: 'success',

@@ -70,12 +70,12 @@
       <el-form-item label="新库"><el-input v-model="imp.newDb" style="width:80px" /></el-form-item>
     </el-form>
     <el-upload :auto-upload="false" multiple :file-list="imp.fileList"
-               :on-change="onPick" :on-remove="onRemove" accept=".sql,.txt,.py"
+               :on-change="onPick" :on-remove="onRemove" accept=".sql,.txt,.py,.xlsx,.xls"
                drag style="width:100%">
       <div style="padding:8px 0">
         <el-button size="small" type="primary">选择文件（可多选）</el-button>
         <div class="muted" style="margin-top:6px">
-          一次拖入 4 类文件即可：O/F 表建表语句（或表结构）、O/F 表从 T 层加工的脚本，后端自动识别
+          一次拖入 4 类文件即可：O/F 表建表语句或表结构（.sql/.txt/.xlsx/.xls）、O/F 表从 T 层加工的脚本，后端自动识别
         </div>
       </div>
     </el-upload>

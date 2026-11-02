@@ -1,6 +1,7 @@
 package com.hb.extractor.controller;
 
 import com.hb.extractor.dto.Result;
+import com.hb.extractor.parser.TableStructureExcelParser;
 import com.hb.extractor.service.TransformConfigService;
 import com.hb.extractor.service.impl.TransformConfigServiceImpl;
 import lombok.RequiredArgsConstructor;
@@ -48,7 +49,8 @@ public class TransformConfigController {
     /**
      * 批量导入预览：一次上传多个文件（顺序随意），后端按内容自动识别——
      * INSERT INTO 旧表 → F 加工脚本、INSERT INTO 新表 → O 加工脚本、
-     * CREATE TABLE → 对应侧建表 DDL。返回推导的 column_mapping 与未匹配清单，不落库。
+     * CREATE TABLE → 对应侧建表 DDL；.xlsx/.xls 表结构文件自动转合成 DDL。
+     * 返回推导的 column_mapping 与未匹配清单，不落库。
      */
     @PostMapping("/import")
     public Result<Map<String, Object>> importPreview(
@@ -61,13 +63,20 @@ public class TransformConfigController {
         List<Map<String, String>> fs = new ArrayList<>();
         for (MultipartFile f : files) {
             if (f == null || f.isEmpty()) continue;
-            byte[] bytes = f.getBytes();
-            if (bytes.length > 10L * 1024 * 1024) {
-                throw new IllegalArgumentException(
-                        "文件超过 10MB 上限: " + f.getOriginalFilename());
+            String name = f.getOriginalFilename() == null ? "" : f.getOriginalFilename();
+            String lower = name.toLowerCase();
+            String content;
+            if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+                // 表结构 Excel → 合成 DDL（仅列名参与推导）
+                content = TableStructureExcelParser.toDdl(f.getInputStream());
+            } else {
+                byte[] bytes = f.getBytes();
+                if (bytes.length > 10L * 1024 * 1024) {
+                    throw new IllegalArgumentException("文件超过 10MB 上限: " + name);
+                }
+                content = TransformConfigServiceImpl.decode(bytes);   // UTF-8 优先，失败回退 GBK
             }
-            fs.add(Map.of("name", f.getOriginalFilename() == null ? "" : f.getOriginalFilename(),
-                    "content", TransformConfigServiceImpl.decode(bytes)));   // UTF-8 优先，失败回退 GBK
+            fs.add(Map.of("name", name, "content", content));
         }
         return Result.success(configService.importPreview(fs, oldTable, newTable, oldDb, newDb));
     }

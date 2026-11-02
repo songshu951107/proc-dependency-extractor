@@ -54,7 +54,26 @@ public class TransformController {
     @PostMapping("/scripts/{name}/convert")
     public Result<String> convert(@PathVariable String name) {
         transformService.convert(name);
-        return Result.success("转换完成 " + name);
+        return Result.success(convertMessage(name));
+    }
+
+    /** 转换结果提示：带出转换点数；0 处时明示「脚本未引用映射表」避免误判为未生效 */
+    private String convertMessage(String name) {
+        try {
+            Map<String, Object> r = transformService.getReport(name);
+            Map<String, Object> sum = (Map<String, Object>) r.get("summary");
+            int total = sum == null ? 0 : ((Number) sum.getOrDefault("total", 0)).intValue();
+            Map<String, Object> cfg = (Map<String, Object>) r.get("config");
+            if (total == 0) {
+                return "转换完成 " + name + "：0 处修改——脚本未引用映射中的 F 表（"
+                        + (cfg == null ? "见 transform_config.json"
+                        : cfg.get("old_db") + "." + cfg.get("old_table"))
+                        + "），转换结果与原文一致";
+            }
+            return "转换完成 " + name + "：" + total + " 处转换";
+        } catch (Exception e) {
+            return "转换完成 " + name;
+        }
     }
 
     @DeleteMapping("/scripts/{name}")

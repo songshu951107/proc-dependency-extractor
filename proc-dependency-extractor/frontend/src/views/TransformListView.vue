@@ -31,14 +31,20 @@
       </el-table-column>
       <el-table-column prop="pyCompile" label="py_compile" width="110" />
       <el-table-column prop="convertedAt" label="转换时间" width="170" />
-      <el-table-column label="操作" width="220" fixed="right">
+      <el-table-column label="操作" width="300" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" :disabled="row.status === 'PENDING'"
                      @click="$router.push(`/transform/${encodeURIComponent(row.name)}`)">
             查看对比
           </el-button>
+          <el-button link type="success" :disabled="converting === row.name"
+                     @click="doConvert(row)">
+            {{ converting === row.name ? '转换中…' : (row.status === 'PENDING' ? '开始转换' : '重新转换') }}
+          </el-button>
           <el-button link :disabled="row.status === 'PENDING'"
                      @click="doDownload(row)">下载</el-button>
+          <el-button link type="danger" :disabled="converting === row.name"
+                     @click="doDelete(row)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -48,11 +54,12 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { listScripts, uploadScript } from '@/api/transform'
+import { listScripts, uploadScript, convertScript, deleteScript } from '@/api/transform'
 import request from '@/api/request'
 
 const list = ref([])
 const loading = ref(false)
+const converting = ref('') // 正在转换的脚本名（行级 loading）
 
 const tagType = (row) => ({
   PENDING: 'info', CONVERTED: 'success',
@@ -87,11 +94,36 @@ async function doUpload({ file }) {
   if (exists && exists.status !== 'PENDING') {
     try {
       await ElMessageBox.confirm(
-        `已存在同名脚本 ${file.name}，替换后需重新离线转换。继续？`, '替换确认',
+        `已存在同名脚本 ${file.name}，替换后需重新转换。继续？`, '替换确认',
         { type: 'warning' })
     } catch { return }
   }
   const { data } = await uploadScript(file)
+  ElMessage.success(data)
+  fetchData()
+}
+
+// 触发转换：同步接口，成功后刷新列表展示新状态
+async function doConvert(row) {
+  converting.value = row.name
+  try {
+    const { data } = await convertScript(row.name)
+    ElMessage.success(data)
+  } catch {
+    // 拦截器已提示错误
+  } finally {
+    converting.value = ''
+    fetchData()
+  }
+}
+
+async function doDelete(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除 ${row.name} 吗？源脚本与全部转换产物将一并删除，不可恢复。`,
+      '删除确认', { type: 'warning' })
+  } catch { return }
+  const { data } = await deleteScript(row.name)
   ElMessage.success(data)
   fetchData()
 }

@@ -10,11 +10,11 @@ ROOT = Path(__file__).parent
 TMP = ROOT / '.tmp_batch_test'
 
 
-def _batch():
+def _batch(extra=()):
     r = subprocess.run(
         [sys.executable, str(ROOT / 'transform_batch.py'),
          '--input', str(TMP / 'input'), '--output', str(TMP / 'output'),
-         '--config', str(ROOT / 'transform_config.json')],
+         '--config', str(ROOT / 'transform_config.json'), *extra],
         capture_output=True, text=True, cwd=ROOT)
     return r
 
@@ -84,8 +84,29 @@ def test_batch_blacklist_skip():
     shutil.rmtree(TMP, ignore_errors=True)
 
 
+def test_batch_only_filter():
+    """--only 指定单脚本：只转换它，其余不动；指定不存在的脚本退出码 1。"""
+    shutil.rmtree(TMP, ignore_errors=True)
+    (TMP / 'input').mkdir(parents=True)
+    shutil.copy(ROOT / 'tmp1030' / 'dwa_c_agt_deposit_acct_inf.py',
+                TMP / 'input' / 'dwa_c_agt_deposit_acct_inf.py')
+    (TMP / 'input' / 'other.py').write_text(
+        '#更新对象 X\nbsql="""SELECT 1"""\n', encoding='utf-8')
+
+    r = _batch(('--only', 'dwa_c_agt_deposit_acct_inf'))
+    assert r.returncode == 0, r.stderr
+    assert (TMP / 'output' / 'dwa_c_agt_deposit_acct_inf' / 'report.json').exists()
+    assert not (TMP / 'output' / 'other').exists()
+    assert '共 1' in r.stdout
+
+    r2 = _batch(('--only', 'ghost'))
+    assert r2.returncode == 1 and '未找到指定脚本' in r2.stderr
+    shutil.rmtree(TMP, ignore_errors=True)
+
+
 if __name__ == '__main__':
     test_batch_end_to_end()
     test_batch_idempotent()
     test_batch_blacklist_skip()
+    test_batch_only_filter()
     print('ALL PASS')

@@ -59,6 +59,11 @@ transform:
   # 文件名主干黑名单前缀（逗号分隔，不区分大小写）：命中则不上架、不转换
   # —— F/O 层自身加工脚本（dwa_f_* / dwa_o_* 开头）是装载脚本，无需 F→O 转换
   name-blacklist: dwa_f,dwa_o
+  # 网页触发转换所需：Python 可执行文件与转换引擎目录
+  # （engine-dir 下需有 transform_batch.py / transform_table_mapping.py / transform_config.json）
+  python: ${TRANSFORM_PYTHON:python}
+  engine-dir: ${TRANSFORM_ENGINE_DIR:.}
+  convert-timeout-seconds: 120
 
 impact:
   analysis:

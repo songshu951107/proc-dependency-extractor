@@ -18,7 +18,9 @@ class TransformServiceImplTest {
     Path tmp;
 
     private TransformServiceImpl service() {
-        return new TransformServiceImpl(tmp.toString(), "dwa_f,dwa_o");
+        // engine-dir=项目根：JUnit 工作目录即项目根，transform_batch.py / transform_config.json 在此
+        return new TransformServiceImpl(tmp.toString(), "dwa_f,dwa_o",
+                "python", ".", 120);
     }
 
     private void putInput(String name) throws Exception {
@@ -108,5 +110,39 @@ class TransformServiceImplTest {
         MockMultipartFile file = new MockMultipartFile(
                 "file", "DWA_O_DEMO.py", "text/plain", "#x\n".getBytes());
         assertThrows(Exception.class, () -> service().upload(file));
+    }
+
+    @Test
+    void convertProducesArtifacts() throws Exception {
+        // 真实调用 Python 引擎：含 JOIN 注入场景的脚本应转为 CONVERTED
+        putInput("inj_ui.py");
+        String py = "#更新对象 CDM.T_OUT\n"
+                + "bsql=\"\"\"\n"
+                + "INSERT INTO {CDM}.T_OUT\n"
+                + "SELECT A.cust_no, A.core_cust_no, A.uscc_cd\n"
+                + "  FROM {FDM}.F_PT_ECIF_PUB_CUST_INF A\n"
+                + " WHERE A.del_flag <> 'D';\n"
+                + "\"\"\"\n";
+        Files.writeString(tmp.resolve("input").resolve("inj_ui.py"), py);
+        service().convert("inj_ui.py");
+        TransformScriptVO vo = service().listScripts().get(0);
+        assertEquals("inj_ui.py", vo.getName());
+        assertEquals("CONVERTED", vo.getStatus());
+    }
+
+    @Test
+    void convertRejectsMissingAndIllegal() {
+        assertThrows(Exception.class, () -> service().convert("nope.py"));
+        assertThrows(Exception.class, () -> service().convert("../etc.py"));
+    }
+
+    @Test
+    void deleteRemovesInputAndOutput() throws Exception {
+        putInput("a.py");
+        putOutput("a", OK_REPORT);
+        service().delete("a.py");
+        assertTrue(!Files.exists(tmp.resolve("input/a.py")));
+        assertTrue(!Files.exists(tmp.resolve("output/a")));
+        assertTrue(service().listScripts().isEmpty());
     }
 }

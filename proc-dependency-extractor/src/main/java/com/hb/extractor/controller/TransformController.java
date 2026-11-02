@@ -47,8 +47,20 @@ public class TransformController {
                 .anyMatch(v -> v.getName().equals(saved.getFileName().toString())
                         && !"PENDING".equals(v.getStatus()));
         return Result.success(replaced
-                ? "已替换 " + saved.getFileName() + "，需重新离线转换"
-                : "已上传 " + saved.getFileName());
+                ? "已替换 " + saved.getFileName() + "，可点击「重新转换」"
+                : "已上传 " + saved.getFileName() + "，可点击「开始转换」");
+    }
+
+    @PostMapping("/scripts/{name}/convert")
+    public Result<String> convert(@PathVariable String name) {
+        transformService.convert(name);
+        return Result.success("转换完成 " + name);
+    }
+
+    @DeleteMapping("/scripts/{name}")
+    public Result<String> delete(@PathVariable String name) {
+        transformService.delete(name);
+        return Result.success("已删除 " + name);
     }
 
     @GetMapping("/scripts/{name}/download")

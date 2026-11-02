@@ -22,3 +22,13 @@ export function uploadScript(file) {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
+
+// 触发单脚本转换（PENDING→开始转换，STALE/FAILED→重新转换）
+export function convertScript(name) {
+  return request.post(`/transform/scripts/${encodeURIComponent(name)}/convert`)
+}
+
+// 删除源脚本与产物
+export function deleteScript(name) {
+  return request.delete(`/transform/scripts/${encodeURIComponent(name)}`)
+}

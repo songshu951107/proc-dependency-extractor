@@ -29,11 +29,21 @@ def main():
     ap.add_argument('--blacklist', default='dwa_f,dwa_o',
                     help='文件名主干黑名单前缀（逗号分隔，不区分大小写），'
                          '命中则跳过不转换——F/O 层自身加工脚本无需转换')
+    ap.add_argument('--only', default='',
+                    help='仅转换指定脚本（文件名或主干，逗号分隔），'
+                         '供网页单脚本触发转换使用；留空=转换全部')
     args = ap.parse_args()
 
     blacklist = [p.strip().lower() for p in args.blacklist.split(',') if p.strip()]
+    only = {o.strip().lower() for o in args.only.split(',') if o.strip()}
     in_dir, out_dir = Path(args.input), Path(args.output)
     scripts = sorted(in_dir.glob('*.py'))
+    if only:
+        scripts = [s for s in scripts
+                   if s.name.lower() in only or s.stem.lower() in only]
+        if not scripts:
+            print('未找到指定脚本：%s' % args.only, file=sys.stderr)
+            sys.exit(1)
     if not scripts:
         print('input 目录无 .py 脚本：%s' % in_dir)
         return

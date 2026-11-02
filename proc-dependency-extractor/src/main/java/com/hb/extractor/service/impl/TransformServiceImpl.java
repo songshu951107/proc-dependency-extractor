@@ -22,15 +22,25 @@ public class TransformServiceImpl implements TransformService {
     private final Path baseDir;
     /** 文件名主干黑名单前缀（不区分大小写）：F/O 层自身加工脚本不上架、不转换 */
     private final List<String> blacklist;
+    /** 网页触发转换所需：Python 可执行文件、引擎目录、单脚本超时秒数 */
+    private final String python;
+    private final Path engineDir;
+    private final long convertTimeoutSeconds;
     private final ObjectMapper om = new ObjectMapper();
 
     public TransformServiceImpl(
             @Value("${transform.base-dir:./transforms}") String baseDir,
-            @Value("${transform.name-blacklist:dwa_f,dwa_o}") String blacklist) {
+            @Value("${transform.name-blacklist:dwa_f,dwa_o}") String blacklist,
+            @Value("${transform.python:python}") String python,
+            @Value("${transform.engine-dir:.}") String engineDir,
+            @Value("${transform.convert-timeout-seconds:120}") long convertTimeoutSeconds) {
         this.baseDir = Path.of(baseDir);
         this.blacklist = Arrays.stream(blacklist.split(","))
                 .map(String::trim).filter(s -> !s.isEmpty())
                 .map(String::toLowerCase).toList();
+        this.python = python;
+        this.engineDir = Path.of(engineDir);
+        this.convertTimeoutSeconds = convertTimeoutSeconds;
     }
 
     /** 黑名单前缀匹配（按去 .py 的文件名主干，不区分大小写） */
@@ -174,5 +184,77 @@ public class TransformServiceImpl implements TransformService {
         };
         if (!Files.exists(p)) throw new BusinessException("产物不存在: " + type);
         return p;
+    }
+
+    @Override
+    public void convert(String name) {
+        if (!NAME_RE.matcher(name).matches() || !name.endsWith(".py")) {
+            throw new BusinessException("非法脚本名: " + name);
+        }
+        if (blacklisted(name)) {
+            throw new BusinessException("F/O 层自身加工脚本（"
+                    + String.join("/", blacklist) + " 开头）无需转换");
+        }
+        Path src = inputDir().resolve(name);
+        if (!Files.exists(src)) throw new BusinessException("input 中不存在该脚本: " + name);
+        Path batch = engineDir.resolve("transform_batch.py");
+        Path config = engineDir.resolve("transform_config.json");
+        if (!Files.exists(batch)) {
+            throw new BusinessException("转换引擎不存在: " + batch.toAbsolutePath()
+                    + "（需部署 transform_batch.py / transform_table_mapping.py / transform_config.json）");
+        }
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                    python, batch.toAbsolutePath().toString(),
+                    "--input", inputDir().toAbsolutePath().toString(),
+                    "--output", outputDir().toAbsolutePath().toString(),
+                    "--config", config.toAbsolutePath().toString(),
+                    "--only", name.replace(".py", ""))
+                    .redirectErrorStream(true);
+            pb.environment().put("PYTHONIOENCODING", "utf-8");
+            Process proc = pb.start();
+            // 先读完输出再等待，避免管道缓冲区写满导致死锁
+            String out;
+            try (var is = proc.getInputStream()) {
+                out = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+            if (!proc.waitFor(convertTimeoutSeconds, java.util.concurrent.TimeUnit.SECONDS)) {
+                proc.destroyForcibly();
+                throw new BusinessException("转换超时（>" + convertTimeoutSeconds + "s）");
+            }
+            if (proc.exitValue() != 0) {
+                throw new BusinessException("转换失败: " + tail(out));
+            }
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException("转换执行失败: " + e.getMessage());
+        }
+    }
+
+    /** 取子进程输出末尾作为错误信息（截 400 字符，压平换行） */
+    private static String tail(String out) {
+        if (out == null || out.isBlank()) return "无输出";
+        String s = out.strip().replaceAll("\\s+", " ");
+        return s.length() > 400 ? "..." + s.substring(s.length() - 400) : s;
+    }
+
+    @Override
+    public void delete(String name) {
+        if (!NAME_RE.matcher(name).matches() || !name.endsWith(".py")) {
+            throw new BusinessException("非法脚本名: " + name);
+        }
+        try {
+            Files.deleteIfExists(inputDir().resolve(name));
+            Path out = safe(name.replace(".py", ""));
+            if (Files.isDirectory(out)) {
+                try (var walk = Files.walk(out)) {
+                    walk.sorted(java.util.Comparator.reverseOrder())
+                            .forEach(p -> p.toFile().delete());
+                }
+            }
+        } catch (Exception e) {
+            throw new BusinessException("删除失败: " + e.getMessage());
+        }
     }
 }

@@ -4,6 +4,7 @@ import com.hb.extractor.dto.TransformScriptVO;
 import com.hb.extractor.service.impl.TransformServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,7 +18,7 @@ class TransformServiceImplTest {
     Path tmp;
 
     private TransformServiceImpl service() {
-        return new TransformServiceImpl(tmp.toString());
+        return new TransformServiceImpl(tmp.toString(), "dwa_f,dwa_o");
     }
 
     private void putInput(String name) throws Exception {
@@ -89,5 +90,23 @@ class TransformServiceImplTest {
         putOutput("a", OK_REPORT);
         assertEquals("orig\n", service().readFile("a", "source"));
         assertEquals("conv\n", service().readFile("a", "converted"));
+    }
+
+    @Test
+    void blacklistFilteredFromList() throws Exception {
+        // F 层自身加工脚本：input 与 output 都不上架（页面上看不到）
+        putInput("a.py");
+        putInput("dwa_f_pt_ecif_pub_cust_inf.py");
+        putOutput("dwa_f_pt_ecif_pub_cust_inf", OK_REPORT);
+        List<TransformScriptVO> list = service().listScripts();
+        assertEquals(1, list.size());
+        assertEquals("a.py", list.get(0).getName());
+    }
+
+    @Test
+    void uploadRejectsBlacklistedName() {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "DWA_O_DEMO.py", "text/plain", "#x\n".getBytes());
+        assertThrows(Exception.class, () -> service().upload(file));
     }
 }

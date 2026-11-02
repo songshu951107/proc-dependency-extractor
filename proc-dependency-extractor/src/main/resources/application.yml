@@ -32,7 +32,7 @@ mybatis-plus:
   type-aliases-package: com.hb.extractor.entity
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
   global-config:
     db-config:
       id-type: auto
@@ -43,6 +43,11 @@ extractor:
     # 物理表字段元数据 xlsx 来源（information_schema.columns 导出）
     # 调用 POST /api/meta/columns/import 不传 path 时使用此默认值
     excel-path: d:/HB/work_zuoye/jiaoben/columns0818.xlsx
+  meta:
+    # 内网业务元数据 schema（跨库查询用），如 metadata；用环境变量 EXTRACTOR_META_SCHEMA 覆盖
+    schema: ${EXTRACTOR_META_SCHEMA:}
+    # 可选：仅导入指定数据源（data_source_name），留空则导入全部
+    data-source: ${EXTRACTOR_META_DATA_SOURCE:}
   report:
     # 报表脚本目录（重新解析 / 上传落地都放这里）。服务器部署时改为实际路径，
     # 例如 /data/reports，用外部配置或环境变量 EXTRACTOR_REPORT_DIR 覆盖。
@@ -51,6 +56,9 @@ extractor:
 # 脚本转换产物根目录（input/ 待转换，output/ 产物；可用 TRANSFORM_BASE_DIR 环境变量覆盖）
 transform:
   base-dir: ${TRANSFORM_BASE_DIR:./transforms}
+  # 文件名主干黑名单前缀（逗号分隔，不区分大小写）：命中则不上架、不转换
+  # —— F/O 层自身加工脚本（dwa_f_* / dwa_o_* 开头）是装载脚本，无需 F→O 转换
+  name-blacklist: dwa_f,dwa_o
 
 impact:
   analysis:
@@ -62,17 +70,6 @@ impact:
     retry-interval: 300000
     max-retry-count: 3
 
-nl2sql:
-  # 密钥一律走环境变量注入，代码库不保存明文（值缺失时调用方会明确报“未配置密钥”）
-  api-key: ${NL2SQL_API_KEY:}
-  base-url: ${NL2SQL_BASE_URL:https://api.deepseek.com/v1}
-  model: deepseek-v4-flash
-  temperature: 0
-  max-candidate-tables: 10
-  max-fields-per-table: 15
-  max-retries: 2
-  eval-file: docs/nl2sql/questions.json
-
 scheduler:
   neo4j-retry:
     enabled: true
@@ -80,6 +77,9 @@ scheduler:
 logging:
   level:
     com.hb.extractor: debug
+    # 关闭 Neo4j 笛卡尔积性能通知（Neo.ClientNotification.Statement.CartesianProduct）的刷屏日志。
+    # 该通知无害：MATCH 均命中唯一约束/索引，实际为 1x1，不影响正确性与性能。
+    org.springframework.data.neo4j.cypher.performance: 'OFF'
 
 jwt:
   # HMAC-SHA256 密钥，长度需 >= 32 字节；生产用环境变量 JWT_SECRET 覆盖

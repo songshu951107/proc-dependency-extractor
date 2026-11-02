@@ -65,7 +65,27 @@ def test_batch_idempotent():
     shutil.rmtree(TMP, ignore_errors=True)
 
 
+def test_batch_blacklist_skip():
+    """黑名单前缀（dwa_f/dwa_o，不区分大小写）跳过不转换，不产产物目录。"""
+    shutil.rmtree(TMP, ignore_errors=True)
+    (TMP / 'input').mkdir(parents=True)
+    shutil.copy(ROOT / 'tmp1030' / 'dwa_c_agt_deposit_acct_inf.py',
+                TMP / 'input' / 'dwa_c_agt_deposit_acct_inf.py')
+    (TMP / 'input' / 'dwa_f_pt_ecif_pub_cust_inf.py').write_text(
+        '#更新对象 FDM.T\nbsql="""SELECT 1"""\n', encoding='utf-8')
+    (TMP / 'input' / 'DWA_O_DEMO.py').write_text('#x\n', encoding='utf-8')
+
+    r = _batch()
+    assert r.returncode == 0, r.stderr
+    assert (TMP / 'output' / 'dwa_c_agt_deposit_acct_inf' / 'report.json').exists()
+    assert not (TMP / 'output' / 'dwa_f_pt_ecif_pub_cust_inf').exists()
+    assert not (TMP / 'output' / 'DWA_O_DEMO').exists()
+    assert '跳过 2' in r.stdout
+    shutil.rmtree(TMP, ignore_errors=True)
+
+
 if __name__ == '__main__':
     test_batch_end_to_end()
     test_batch_idempotent()
+    test_batch_blacklist_skip()
     print('ALL PASS')

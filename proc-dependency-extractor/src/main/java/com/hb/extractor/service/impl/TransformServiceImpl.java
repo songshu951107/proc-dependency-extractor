@@ -20,11 +20,25 @@ public class TransformServiceImpl implements TransformService {
     private static final long MAX_UPLOAD = 10L * 1024 * 1024;
 
     private final Path baseDir;
+    /** 文件名主干黑名单前缀（不区分大小写）：F/O 层自身加工脚本不上架、不转换 */
+    private final List<String> blacklist;
     private final ObjectMapper om = new ObjectMapper();
 
     public TransformServiceImpl(
-            @Value("${transform.base-dir:./transforms}") String baseDir) {
+            @Value("${transform.base-dir:./transforms}") String baseDir,
+            @Value("${transform.name-blacklist:dwa_f,dwa_o}") String blacklist) {
         this.baseDir = Path.of(baseDir);
+        this.blacklist = Arrays.stream(blacklist.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty())
+                .map(String::toLowerCase).toList();
+    }
+
+    /** 黑名单前缀匹配（按去 .py 的文件名主干，不区分大小写） */
+    private boolean blacklisted(String fileName) {
+        String stem = fileName.endsWith(".py")
+                ? fileName.substring(0, fileName.length() - 3) : fileName;
+        String low = stem.toLowerCase();
+        return blacklist.stream().anyMatch(low::startsWith);
     }
 
     private Path inputDir() { return baseDir.resolve("input"); }
@@ -46,6 +60,7 @@ public class TransformServiceImpl implements TransformService {
         if (Files.isDirectory(inputDir())) {
             try (DirectoryStream<Path> ds = Files.newDirectoryStream(inputDir(), "*.py")) {
                 for (Path p : ds) {
+                    if (blacklisted(p.getFileName().toString())) continue;
                     TransformScriptVO vo = new TransformScriptVO();
                     vo.setName(p.getFileName().toString());
                     vo.setStatus("PENDING");
@@ -60,6 +75,7 @@ public class TransformServiceImpl implements TransformService {
                 for (Path d : ds) {
                     if (!Files.isDirectory(d)) continue;
                     String stem = d.getFileName().toString();
+                    if (blacklisted(stem + ".py")) continue;
                     Path report = d.resolve("report.json");
                     TransformScriptVO vo = map.computeIfAbsent(stem + ".py", n -> {
                         TransformScriptVO v = new TransformScriptVO();
@@ -132,6 +148,10 @@ public class TransformServiceImpl implements TransformService {
         String name = file.getOriginalFilename();
         if (name == null || !name.endsWith(".py") || !NAME_RE.matcher(name).matches()) {
             throw new BusinessException("仅支持上传 .py 脚本，且文件名限字母数字下划线点横线");
+        }
+        if (blacklisted(name)) {
+            throw new BusinessException("F/O 层自身加工脚本（"
+                    + String.join("/", blacklist) + " 开头）无需转换，拒绝上传");
         }
         try {
             if (file.getSize() > MAX_UPLOAD) throw new BusinessException("文件超过 10MB 上限");

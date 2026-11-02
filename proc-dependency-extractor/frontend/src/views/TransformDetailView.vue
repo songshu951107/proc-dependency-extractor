@@ -22,7 +22,7 @@
         </el-radio-group>
         <div v-for="(e, i) in shownEdits" :key="i" class="edit-item"
              :class="{ active: activeEdit === e }" @click="locate(e)">
-          <el-tag size="small" :type="typeTag(e.type)">{{ typeLabel(e.type) }}</el-tag>
+          <el-tag size="small" :type="typeTag(e.type)" :effect="typeEffect(e.type)">{{ typeLabel(e.type) }}</el-tag>
           <span class="ln">L{{ e.line }}</span>
           <span class="diff-text">{{ e.old }} → {{ e.new }}</span>
         </div>
@@ -47,7 +47,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { getReport, getScriptFile } from '@/api/transform'
 
@@ -62,17 +62,26 @@ const filterType = ref('')
 const activeEdit = ref(null)
 const codeBox = ref(null)
 
+// 后端 transform_table_mapping.py 实际发出的 6 种 edit type 全量映射
+// join_inject_failed 用 danger+dark（实底红）与 table_ref 的浅色 danger 区分；
+// 6 类型 > el-tag 5 内置色，故用 effect 维度避免颜色冲突
 const TYPE = {
   table_ref: { label: '表引用', tag: 'danger' },
   rename: { label: '列改名', tag: 'primary' },
-  join_inject: { label: 'JOIN 注入', tag: 'warning' },
+  join_inject: { label: 'JOIN注入', tag: 'warning' },
+  join_ref: { label: 'JOIN引用', tag: 'success' },
+  join_inject_failed: { label: '注入失败', tag: 'danger', effect: 'dark' },
+  subquery_prop: { label: '子查询下推', tag: 'info' },
 }
 const typeLabel = (t) => TYPE[t]?.label || t
 const typeTag = (t) => TYPE[t]?.tag || 'info'
+const typeEffect = (t) => TYPE[t]?.effect || 'light'
+// 基于实际 edits 中出现过的 type 动态枚举筛选按钮；未在 TYPE 中的新类型
+// 以 key 原文作 label 兜底，免疫后端新增类型
 const typeNames = computed(() => {
   const c = {}
   edits.value.forEach((e) => { c[e.type] = (c[e.type] || 0) + 1 })
-  return Object.keys(TYPE).filter((k) => c[k]).map((k) => ({ key: k, label: TYPE[k].label, count: c[k] }))
+  return Object.keys(c).map((k) => ({ key: k, label: TYPE[k]?.label || k, count: c[k] }))
 })
 
 const edits = computed(() => report.value?.edits || [])
@@ -121,7 +130,13 @@ function locate(e) {
     setTimeout(() => row.classList.remove('flash'), 1600)
   }
 }
-function onTabChange() { if (activeEdit.value) locate(activeEdit.value) }
+// tab 切换后需等 Vue 应用完 lines 的 DOM 补丁再查行元素，否则查到的是旧 tab
+// 的行（转换后行数更多时目标行在旧 DOM 不存在），且重渲染会抹掉 flash class
+async function onTabChange() {
+  if (!activeEdit.value) return
+  await nextTick()
+  locate(activeEdit.value)
+}
 
 // request.js 响应拦截器返回 response.data（即 Result 对象）；
 // { data: rep } 解构出的 rep 已是 Result.data（业务数据），不要再 .data
@@ -142,7 +157,9 @@ onMounted(async () => {
 .edit-item:hover, .edit-item.active { background: #ecf5ff; }
 .edit-item .ln { color: #909399; margin: 0 8px; }
 .code-pane { flex: 1; border: 1px solid #ebeef5; overflow: hidden; display: flex; flex-direction: column; }
-.code { flex: 1; overflow: auto; font-family: Consolas, Monaco, monospace; font-size: 12px; background: #fafafa; }
+/* position:relative 使行元素 offsetTop 以本容器为 offsetParent，
+   locate() 的 scrollTop 数学才成立（否则相对 body，目标行会滚出视口） */
+.code { position: relative; flex: 1; overflow: auto; font-family: Consolas, Monaco, monospace; font-size: 12px; background: #fafafa; }
 .code-line { display: flex; white-space: pre; line-height: 20px; }
 .code-line .no { width: 56px; text-align: right; padding-right: 10px; color: #c0c4cc; user-select: none; flex: none; }
 .code-line.marked { background: #d9ecff; }

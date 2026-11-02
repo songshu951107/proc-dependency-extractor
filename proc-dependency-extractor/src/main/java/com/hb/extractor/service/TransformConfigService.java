@@ -19,14 +19,17 @@ public interface TransformConfigService {
     void deleteTable(String oldTable);
 
     /**
-     * 批量导入预览：解析 F/O 两侧 DDL 与加工脚本，按 T 层源列交集推导 column_mapping。
+     * 批量导入预览：上传文件列表（顺序随意），后端按内容自动识别——
+     * 含 INSERT INTO 旧表的为 F 加工脚本、INSERT INTO 新表的为 O 加工脚本、
+     * 含 CREATE TABLE 的为对应侧建表 DDL；按 T 层源列交集推导 column_mapping。
      * 只返回预览结果，不落盘。
      *
-     * @param req 字段：oldTable/newTable（必填）、oldDb/newDb（可选）、
-     *            fDdl/oDdl（可选，无显式列清单时作对齐基准）、fScript/oScript（必填）
-     * @return column_mapping + matched_count + unmatched_f + unmatched_o
+     * @param files 每项 {name, content}
+     * @return column_mapping + matched_count + unmatched_f + unmatched_o + recognized（识别结果）
      */
-    Map<String, Object> importPreview(Map<String, Object> req);
+    Map<String, Object> importPreview(List<Map<String, String>> files,
+                                      String oldTable, String newTable,
+                                      String oldDb, String newDb);
 
     /** 确认落库：把预览确认后的表对合并写入配置（保留已有 join_columns/special_columns） */
     void applyTables(List<Map<String, Object>> entries);

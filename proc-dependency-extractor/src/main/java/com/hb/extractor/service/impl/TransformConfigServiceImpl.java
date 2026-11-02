@@ -86,21 +86,58 @@ public class TransformConfigServiceImpl implements TransformConfigService {
     }
 
     @Override
-    public Map<String, Object> importPreview(Map<String, Object> req) {
-        String oldTable = str(req.get("oldTable"));
-        String newTable = str(req.get("newTable"));
+    public Map<String, Object> importPreview(List<Map<String, String>> files,
+                                             String oldTable, String newTable,
+                                             String oldDb, String newDb) {
         if (oldTable == null || newTable == null
                 || !TABLE_KEY_RE.matcher(oldTable).matches()
                 || !TABLE_KEY_RE.matcher(newTable).matches()) {
             throw new BusinessException("oldTable / newTable 必填且限字母数字下划线$");
         }
-        String fScript = str(req.get("fScript"));
-        String oScript = str(req.get("oScript"));
-        if (fScript == null || fScript.isBlank() || oScript == null || oScript.isBlank()) {
-            throw new BusinessException("F 表与 O 表的 T 层加工脚本均为必填");
+        String oldUp = oldTable.toUpperCase(Locale.ROOT);
+        String newUp = newTable.toUpperCase(Locale.ROOT);
+
+        // 按内容自动识别：INSERT 目标=旧表 → F 脚本；=新表 → O 脚本；仅 CREATE TABLE → 对应侧 DDL
+        String fScript = null, oScript = null, fDdl = null, oDdl = null;
+        List<String> recognized = new ArrayList<>();
+        if (files != null) {
+            for (Map<String, String> f : files) {
+                String content = f.get("content");
+                if (content == null || content.isBlank()) continue;
+                String name = f.getOrDefault("name", "");
+                String insTarget = TableMappingDeriver.detectInsertTarget(content);
+                List<String> created = TableMappingDeriver.extractCreateTableNames(content);
+                if (oldUp.equals(insTarget) && fScript == null) {
+                    fScript = content;
+                    recognized.add(name + " → F 表加工脚本（INSERT " + insTarget + "）");
+                } else if (newUp.equals(insTarget) && oScript == null) {
+                    oScript = content;
+                    recognized.add(name + " → O 表加工脚本（INSERT " + insTarget + "）");
+                } else if (!created.isEmpty()) {
+                    if (created.contains(oldUp) && fDdl == null) {
+                        fDdl = content;
+                        recognized.add(name + " → F 表 DDL（CREATE " + created + "）");
+                    } else if (created.contains(newUp) && oDdl == null) {
+                        oDdl = content;
+                        recognized.add(name + " → O 表 DDL（CREATE " + created + "）");
+                    } else {
+                        recognized.add(name + " → 未匹配到当前表对的 DDL（CREATE " + created + "）");
+                    }
+                } else {
+                    recognized.add(name + " → 未识别（无 CREATE TABLE / INSERT INTO）");
+                }
+            }
         }
-        List<String> fDdlCols = TableMappingDeriver.parseDdlColumns(str(req.get("fDdl")));
-        List<String> oDdlCols = TableMappingDeriver.parseDdlColumns(str(req.get("oDdl")));
+        List<String> missing = new ArrayList<>();
+        if (fScript == null) missing.add("F 表加工脚本（应含 INSERT INTO " + oldTable + "）");
+        if (oScript == null) missing.add("O 表加工脚本（应含 INSERT INTO " + newTable + "）");
+        if (!missing.isEmpty()) {
+            throw new BusinessException("文件识别失败，缺少 " + String.join("、", missing)
+                    + "；识别结果：" + String.join("；", recognized));
+        }
+
+        List<String> fDdlCols = TableMappingDeriver.parseDdlColumns(fDdl, oldTable);
+        List<String> oDdlCols = TableMappingDeriver.parseDdlColumns(oDdl, newTable);
 
         TableMappingDeriver.ScriptMapping fSide =
                 TableMappingDeriver.parseScript(fScript, oldTable, fDdlCols);
@@ -117,10 +154,9 @@ public class TransformConfigServiceImpl implements TransformConfigService {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("old_table", oldTable);
         out.put("new_table", newTable);
-        String oldDb = str(req.get("oldDb"));
-        String newDb = str(req.get("newDb"));
         if (oldDb != null) out.put("old_db", oldDb);
         if (newDb != null) out.put("new_db", newDb);
+        out.put("recognized", recognized);
         out.put("column_mapping", r.columnMapping);
         out.put("matched_count", r.matchedCount);
         out.put("unmatched_f", r.unmatchedF);

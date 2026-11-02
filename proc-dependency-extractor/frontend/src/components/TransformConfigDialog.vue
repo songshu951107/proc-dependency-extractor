@@ -69,24 +69,19 @@
       <el-form-item label="旧库"><el-input v-model="imp.oldDb" style="width:80px" /></el-form-item>
       <el-form-item label="新库"><el-input v-model="imp.newDb" style="width:80px" /></el-form-item>
     </el-form>
-    <el-upload :auto-upload="false" :on-change="(f, fl) => onPick(f, fl, 'fScript')" :show-file-list="false" accept=".sql,.txt,.py">
-      <el-button size="small">F 表加工脚本 *</el-button>
-      <span class="file-name">{{ imp.fScript ? imp.fScript.name : '未选择' }}</span>
-    </el-upload>
-    <el-upload :auto-upload="false" :on-change="(f, fl) => onPick(f, fl, 'oScript')" :show-file-list="false" accept=".sql,.txt,.py">
-      <el-button size="small">O 表加工脚本 *</el-button>
-      <span class="file-name">{{ imp.oScript ? imp.oScript.name : '未选择' }}</span>
-    </el-upload>
-    <el-upload :auto-upload="false" :on-change="(f, fl) => onPick(f, fl, 'fDdl')" :show-file-list="false" accept=".sql,.txt">
-      <el-button size="small">F 表建表 DDL</el-button>
-      <span class="file-name">{{ imp.fDdl ? imp.fDdl.name : '未选择（可选）' }}</span>
-    </el-upload>
-    <el-upload :auto-upload="false" :on-change="(f, fl) => onPick(f, fl, 'oDdl')" :show-file-list="false" accept=".sql,.txt">
-      <el-button size="small">O 表建表 DDL</el-button>
-      <span class="file-name">{{ imp.oDdl ? imp.oDdl.name : '未选择（可选）' }}</span>
+    <el-upload :auto-upload="false" multiple :file-list="imp.fileList"
+               :on-change="onPick" :on-remove="onRemove" accept=".sql,.txt,.py"
+               drag style="width:100%">
+      <div style="padding:8px 0">
+        <el-button size="small" type="primary">选择文件（可多选）</el-button>
+        <div class="muted" style="margin-top:6px">
+          一次拖入 4 类文件即可：O/F 表建表语句（或表结构）、O/F 表从 T 层加工的脚本，后端自动识别
+        </div>
+      </div>
     </el-upload>
     <div style="margin-top:8px">
-      <el-button type="primary" size="small" :loading="parsing" @click="doPreview">解析预览</el-button>
+      <el-button type="primary" size="small" :loading="parsing"
+                 :disabled="!imp.fileList.length" @click="doPreview">解析预览</el-button>
     </div>
 
     <!-- 预览结果 -->
@@ -95,6 +90,9 @@
                 title="未推导出任何列映射，请检查脚本中的 INSERT INTO 目标表与 SELECT 列" />
       <el-alert v-else type="success" :closable="false" style="margin-top:10px"
                 :title="`推导出 ${preview.matched_count} 条列映射；请人工确认后导入`" />
+      <div v-if="preview.recognized && preview.recognized.length" class="muted" style="margin-top:6px">
+        文件识别：<div v-for="r in preview.recognized" :key="r">· {{ r }}</div>
+      </div>
       <el-table :data="previewRows" border size="small" max-height="220" style="margin-top:10px">
         <el-table-column prop="f" label="F 表列" min-width="160" />
         <el-table-column prop="o" label="O 表列" min-width="160" />
@@ -133,9 +131,8 @@ const editMode = ref('hidden')   // hidden | add | edit
 const saving = ref(false)
 const form = ref({ oldTable: '', newTable: '', oldDb: '', newDb: '' })
 
-// 批量导入
-const imp = ref({ oldTable: '', newTable: '', oldDb: '', newDb: '',
-                  fScript: null, oScript: null, fDdl: null, oDdl: null })
+// 批量导入（单入口多文件，后端自动识别）
+const imp = ref({ oldTable: '', newTable: '', oldDb: '', newDb: '', fileList: [] })
 const parsing = ref(false)
 const applying = ref(false)
 const preview = ref(null)
@@ -154,7 +151,8 @@ defineExpose({ open })
 
 async function fetchConfig() {
   const { data } = await getConfig()
-  const tables = data?.tables || {}
+  // 后端直接返回表对映射：{ F表名: {new_table, old_db, ...} }
+  const tables = data || {}
   tableRows.value = Object.entries(tables).map(([oldTable, conf]) => ({
     oldTable,
     newTable: conf.new_table || '',
@@ -214,8 +212,11 @@ async function doDelete(row) {
   fetchConfig()
 }
 
-function onPick(file, fileList, key) {
-  imp.value[key] = file.raw
+function onPick(file, fileList) {
+  imp.value.fileList = fileList
+}
+function onRemove(file, fileList) {
+  imp.value.fileList = fileList
 }
 
 async function doPreview() {
@@ -223,16 +224,11 @@ async function doPreview() {
     ElMessage.warning('请先填写旧表/新表名')
     return
   }
-  if (!imp.value.fScript || !imp.value.oScript) {
-    ElMessage.warning('F 表与 O 表加工脚本为必选')
-    return
-  }
   parsing.value = true
   preview.value = null
   try {
     const { data } = await importPreview({
-      fScriptFile: imp.value.fScript, oScriptFile: imp.value.oScript,
-      fDdlFile: imp.value.fDdl, oDdlFile: imp.value.oDdl,
+      files: imp.value.fileList.map((f) => f.raw),
       oldTable: imp.value.oldTable, newTable: imp.value.newTable,
       oldDb: imp.value.oldDb, newDb: imp.value.newDb,
     })
@@ -270,6 +266,5 @@ async function doApply() {
 .mapping-expand { padding: 4px 16px; max-height: 200px; overflow: auto; }
 .mapping-line { line-height: 1.8; }
 .muted { color: #999; font-size: 12px; margin: 4px 0; }
-.file-name { margin-left: 8px; font-size: 12px; color: #666; }
 .el-upload { text-align: left; margin: 3px 0; }
 </style>

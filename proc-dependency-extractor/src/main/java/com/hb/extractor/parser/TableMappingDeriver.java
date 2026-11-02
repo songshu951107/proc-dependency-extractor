@@ -83,8 +83,16 @@ public final class TableMappingDeriver {
 
     /** 解析建表 DDL，返回列名清单（小写、DDL 顺序）。忽略约束行；解析不出返回空列表 */
     public static List<String> parseDdlColumns(String ddl) {
+        return parseDdlColumns(ddl, null);
+    }
+
+    /**
+     * 解析建表 DDL，返回指定表的列名清单（小写、DDL 顺序）。
+     * @param tableName 只取该表（短名，忽略大小写）；null 取首个 CREATE TABLE
+     */
+    public static List<String> parseDdlColumns(String ddl, String tableName) {
         List<String> cols = new ArrayList<>();
-        String body = ddlBody(ddl);
+        String body = ddlBody(ddl, tableName);
         if (body == null) return cols;
         for (String part : splitTopLevel(body, ',')) {
             String trimmed = stripComments(part).trim();
@@ -101,22 +109,52 @@ public final class TableMappingDeriver {
         return cols;
     }
 
-    /** 提取 CREATE TABLE ... ( ... ) 的括号体（含类型中 DECIMAL(10,2) 等嵌套括号） */
-    private static String ddlBody(String ddl) {
+    /** 表名（可含 schema 点分、{SCHEMA} 占位、反引号/双引号/方括号） */
+    private static final Pattern TABLE_NAME = Pattern.compile(
+            "[`\"\\[]?[A-Za-z0-9_$#{}]+[`\"\\]]?(?:\\s*\\.\\s*[`\"\\[]?[A-Za-z0-9_$#{}]+[`\"\\]]?)*");
+
+    /** 提取 SQL 中所有 CREATE TABLE 的表短名（大写，用于自动识别文件类型） */
+    public static List<String> extractCreateTableNames(String sql) {
+        List<String> names = new ArrayList<>();
+        if (sql == null) return names;
+        Matcher m = Pattern.compile(
+                "(?is)CREATE\\s+TABLE\\s+(" + TABLE_NAME.pattern() + ")").matcher(sql);
+        while (m.find()) {
+            names.add(shortTableName(m.group(1)));
+        }
+        return names;
+    }
+
+    /** 首个 INSERT INTO 的目标表短名（大写）；无则返回 null */
+    public static String detectInsertTarget(String script) {
+        if (script == null || script.isEmpty()) return null;
+        Matcher m = Pattern.compile(
+                "(?is)\\bINSERT\\s+INTO\\s+(" + TABLE_NAME.pattern() + ")").matcher(script);
+        return m.find() ? shortTableName(m.group(1)) : null;
+    }
+
+    /** schema.表名 / {SCHEMA}.表名 / 带引号 → 表短名（大写） */
+    private static String shortTableName(String id) {
+        String table = id.replaceAll("[`\"\\[\\]]", "");
+        int dot = table.lastIndexOf('.');
+        String shortName = (dot >= 0 ? table.substring(dot + 1) : table);
+        return shortName.toUpperCase(Locale.ROOT).replace("{", "").replace("}", "");
+    }
+
+    /** 提取指定表的 CREATE TABLE ( ... ) 括号体；tableName 为 null 取首个 */
+    private static String ddlBody(String ddl, String tableName) {
         if (ddl == null) return null;
         String s = stripComments(ddl);
-        Matcher m = Pattern.compile("(?is)CREATE\\s+TABLE\\b").matcher(s);
-        if (!m.find()) return null;
-        int open = s.indexOf('(', m.end());
-        if (open < 0) return null;
-        int depth = 0;
-        for (int i = open; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (c == '(') depth++;
-            else if (c == ')') {
-                depth--;
-                if (depth == 0) return s.substring(open + 1, i);
-            }
+        Matcher m = Pattern.compile(
+                "(?is)CREATE\\s+TABLE\\s+(" + TABLE_NAME.pattern() + ")").matcher(s);
+        String want = tableName == null ? null : shortTableName(tableName);
+        while (m.find()) {
+            if (want != null && !want.equals(shortTableName(m.group(1)))) continue;
+            int open = s.indexOf('(', m.end());
+            if (open < 0) continue;
+            int close = matchParen(s, open);
+            if (close < 0) continue;
+            return s.substring(open + 1, close);
         }
         return null;
     }
@@ -143,14 +181,10 @@ public final class TableMappingDeriver {
     /** 找出所有 INSERT INTO <target> 语句：定位 SELECT 列表区间与显式列清单 */
     private static List<InsertSpan> findInserts(String script, String targetUpper) {
         List<InsertSpan> spans = new ArrayList<>();
-        Matcher m = Pattern.compile("(?is)\\bINSERT\\s+INTO\\s+([`\"\\[]?[A-Za-z0-9_$#.{}]+[`\"\\]]?)")
-                .matcher(script);
+        Matcher m = Pattern.compile(
+                "(?is)\\bINSERT\\s+INTO\\s+(" + TABLE_NAME.pattern() + ")").matcher(script);
         while (m.find()) {
-            String table = stripQuotes(m.group(1));
-            int dot = table.lastIndexOf('.');
-            String shortName = (dot >= 0 ? table.substring(dot + 1) : table)
-                    .toUpperCase(Locale.ROOT).replace("{", "").replace("}", "");
-            if (!shortName.equals(targetUpper)) continue;
+            if (!shortTableName(m.group(1)).equals(targetUpper)) continue;
             int cursor = m.end();
             // 可选的 (列清单)
             List<String> explicitCols = null;

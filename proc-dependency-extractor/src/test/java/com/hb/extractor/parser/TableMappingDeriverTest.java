@@ -152,6 +152,30 @@ class TableMappingDeriverTest {
         assertTrue(r.unmatchedO.isEmpty());
     }
 
+    // ------------------------------------------------------ 文件自动识别
+
+    @Test
+    void detectCreateAndInsertTargets() {
+        String ddl = "CREATE TABLE `FDM`.`F_T` (a INT);\nCREATE TABLE O_T (b INT);";
+        assertEquals(List.of("F_T", "O_T"),
+                TableMappingDeriver.extractCreateTableNames(ddl));
+        String script = "-- c\nINSERT INTO {ODM}.O_T (x) SELECT T.a FROM T T;";
+        assertEquals("O_T", TableMappingDeriver.detectInsertTarget(script));
+        assertNull(TableMappingDeriver.detectInsertTarget("SELECT 1"));
+    }
+
+    @Test
+    void ddlColumnsByTableName() {
+        String sql = """
+                CREATE TABLE F_T (a INT, b INT);
+                CREATE TABLE O_T (c INT, d INT, e INT);
+                """;
+        assertEquals(List.of("c", "d", "e"),
+                TableMappingDeriver.parseDdlColumns(sql, "o_t"));
+        assertEquals(List.of("a", "b"),
+                TableMappingDeriver.parseDdlColumns(sql, "F_T"));
+    }
+
     // ------------------------------------------------------ 字符串字面量
 
     @Test

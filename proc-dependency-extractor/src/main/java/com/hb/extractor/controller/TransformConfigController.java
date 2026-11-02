@@ -46,34 +46,30 @@ public class TransformConfigController {
     }
 
     /**
-     * 批量导入预览：上传 F/O 两侧 DDL 与 T 层加工脚本（fScript/oScript 必填，DDL 可选），
-     * 返回推导的 column_mapping 与未匹配清单，不落库。
+     * 批量导入预览：一次上传多个文件（顺序随意），后端按内容自动识别——
+     * INSERT INTO 旧表 → F 加工脚本、INSERT INTO 新表 → O 加工脚本、
+     * CREATE TABLE → 对应侧建表 DDL。返回推导的 column_mapping 与未匹配清单，不落库。
      */
     @PostMapping("/import")
     public Result<Map<String, Object>> importPreview(
-            @RequestParam("fScriptFile") MultipartFile fScriptFile,
-            @RequestParam("oScriptFile") MultipartFile oScriptFile,
-            @RequestParam(value = "fDdlFile", required = false) MultipartFile fDdlFile,
-            @RequestParam(value = "oDdlFile", required = false) MultipartFile oDdlFile,
+            @RequestParam("files") List<MultipartFile> files,
             @RequestParam("oldTable") String oldTable,
             @RequestParam("newTable") String newTable,
             @RequestParam(value = "oldDb", required = false) String oldDb,
             @RequestParam(value = "newDb", required = false) String newDb) throws Exception {
 
-        Map<String, Object> req = new LinkedHashMap<>();
-        req.put("oldTable", oldTable);
-        req.put("newTable", newTable);
-        req.put("oldDb", oldDb);
-        req.put("newDb", newDb);
-        req.put("fScript", text(fScriptFile, "F 表加工脚本"));
-        req.put("oScript", text(oScriptFile, "O 表加工脚本"));
-        if (fDdlFile != null && !fDdlFile.isEmpty()) {
-            req.put("fDdl", text(fDdlFile, "F 表 DDL"));
+        List<Map<String, String>> fs = new ArrayList<>();
+        for (MultipartFile f : files) {
+            if (f == null || f.isEmpty()) continue;
+            byte[] bytes = f.getBytes();
+            if (bytes.length > 10L * 1024 * 1024) {
+                throw new IllegalArgumentException(
+                        "文件超过 10MB 上限: " + f.getOriginalFilename());
+            }
+            fs.add(Map.of("name", f.getOriginalFilename() == null ? "" : f.getOriginalFilename(),
+                    "content", TransformConfigServiceImpl.decode(bytes)));   // UTF-8 优先，失败回退 GBK
         }
-        if (oDdlFile != null && !oDdlFile.isEmpty()) {
-            req.put("oDdl", text(oDdlFile, "O 表 DDL"));
-        }
-        return Result.success(configService.importPreview(req));
+        return Result.success(configService.importPreview(fs, oldTable, newTable, oldDb, newDb));
     }
 
     /** 确认导入：把预览确认后的表对（可多对批量）合并写入 transform_config.json */
@@ -85,16 +81,5 @@ public class TransformConfigController {
             names.add(String.valueOf(e.get("old_table")));
         }
         return Result.success("已导入表对: " + String.join(", ", names));
-    }
-
-    private String text(MultipartFile file, String label) throws Exception {
-        if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException(label + "为空");
-        }
-        byte[] bytes = file.getBytes();
-        if (bytes.length > 10L * 1024 * 1024) {
-            throw new IllegalArgumentException(label + "超过 10MB 上限");
-        }
-        return TransformConfigServiceImpl.decode(bytes);   // UTF-8 优先，失败回退 GBK
     }
 }

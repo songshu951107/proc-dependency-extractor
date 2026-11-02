@@ -78,41 +78,53 @@ class TransformConfigServiceImplTest {
 
     @Test
     void importPreviewDerivesMapping() {
-        String fDdl = """
-                CREATE TABLE F_T (cust_no VARCHAR(32), org_type_cd VARCHAR(10), rmk VARCHAR(99));
-                """;
-        String fScript = """
+        // 单入口多文件：顺序随意，后端按内容自动识别
+        String fFile = """
+                CREATE TABLE FDM.F_T (cust_no VARCHAR(32), org_type_cd VARCHAR(10), rmk VARCHAR(99));
                 INSERT INTO {FDM}.F_T (cust_no, org_type_cd, rmk)
                 SELECT T.cust_id, T.org_type, T.note
                   FROM {TDM}.T_CUST T;
                 """;
-        String oScript = """
+        String oFile = """
                 INSERT INTO {ODM}.O_T (cust_id, org_cust_type, remarks)
                 SELECT T.cust_id, T.org_type, T.note
                   FROM {TDM}.T_CUST T;
                 """;
-        Map<String, Object> preview = service().importPreview(Map.of(
-                "oldTable", "F_T", "newTable", "O_T",
-                "oldDb", "FDM", "newDb", "ODM",
-                "fDdl", fDdl, "fScript", fScript, "oScript", oScript));
+        String noise = "SELECT 1;";
+        Map<String, Object> preview = service().importPreview(
+                List.of(Map.of("name", "o.sql", "content", oFile),
+                        Map.of("name", "f.sql", "content", fFile),
+                        Map.of("name", "x.sql", "content", noise)),
+                "F_T", "O_T", "FDM", "ODM");
         assertEquals(3, ((Number) preview.get("matched_count")).intValue());
         @SuppressWarnings("unchecked")
         Map<String, String> cm = (Map<String, String>) preview.get("column_mapping");
         assertEquals("cust_id", cm.get("cust_no"));
         assertEquals("org_cust_type", cm.get("org_type_cd"));
         assertEquals("remarks", cm.get("rmk"));
+        @SuppressWarnings("unchecked")
+        List<String> recognized = (List<String>) preview.get("recognized");
+        assertTrue(recognized.get(1).contains("F 表加工脚本"));
+        assertTrue(recognized.get(0).contains("O 表加工脚本"));
+        assertTrue(recognized.get(2).contains("未识别"));
         // 预览不落盘
         assertFalse(Files.exists(tmp.resolve("transform_config.json")));
     }
 
     @Test
     void importPreviewRequiresScriptsAndTarget() {
-        assertThrows(Exception.class, () -> service().importPreview(Map.of(
-                "oldTable", "F_T", "newTable", "O_T", "fScript", "x", "oScript", "y")));
-        assertThrows(Exception.class, () -> service().importPreview(Map.of(
-                "oldTable", "F_T", "newTable", "O;T",
-                "fScript", "INSERT INTO F_T (a) SELECT T.a FROM T T",
-                "oScript", "INSERT INTO O_T (a) SELECT T.a FROM T T")));
+        // 缺少 O 侧脚本 → 报错并列出识别结果
+        assertThrows(Exception.class, () -> service().importPreview(
+                List.of(Map.of("name", "f.sql",
+                        "content", "INSERT INTO F_T (a) SELECT T.a FROM T T")),
+                "F_T", "O_T", null, null));
+        // 表名非法
+        assertThrows(Exception.class, () -> service().importPreview(
+                List.of(Map.of("name", "f.sql",
+                                "content", "INSERT INTO F_T (a) SELECT T.a FROM T T"),
+                        Map.of("name", "o.sql",
+                                "content", "INSERT INTO O_T (a) SELECT T.a FROM T T")),
+                "F_T", "O;T", null, null));
     }
 
     @Test

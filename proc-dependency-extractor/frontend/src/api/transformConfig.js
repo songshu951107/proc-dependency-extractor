@@ -17,14 +17,11 @@ export function deleteConfigEntry(oldTable) {
   return request.delete(`/transform/config/${encodeURIComponent(oldTable)}`)
 }
 
-// 批量导入预览：F/O 两侧 DDL + 加工脚本 → 推导 column_mapping（不落库）
-export function importPreview({ fScriptFile, oScriptFile, fDdlFile, oDdlFile,
-                                oldTable, newTable, oldDb, newDb }) {
+// 批量导入预览：一次上传多个文件（顺序随意），后端按内容自动识别 O/F DDL 与加工脚本，
+// 推导 column_mapping（不落库）
+export function importPreview({ files, oldTable, newTable, oldDb, newDb }) {
   const fd = new FormData()
-  fd.append('fScriptFile', fScriptFile)
-  fd.append('oScriptFile', oScriptFile)
-  if (fDdlFile) fd.append('fDdlFile', fDdlFile)
-  if (oDdlFile) fd.append('oDdlFile', oDdlFile)
+  files.forEach((f) => fd.append('files', f))
   fd.append('oldTable', oldTable)
   fd.append('newTable', newTable)
   if (oldDb) fd.append('oldDb', oldDb)
